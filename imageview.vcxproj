@@ -82,6 +82,7 @@
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
     <CodeAnalysisRuleSet>imageview.ruleset</CodeAnalysisRuleSet>
+    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
@@ -211,6 +212,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="resources\resource.h" />
     <ClInclude Include="src\app.h" />
     <ClInclude Include="src\DragDropHelpers.h" />
     <ClInclude Include="src\font_loader.h" />
@@ -247,6 +249,7 @@
     <ClCompile Include="src\wm_names.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="resources\grab.bmp" />
     <Image Include="resources\magnifying_glass.ico" />
   </ItemGroup>
   <ItemGroup>
@@ -394,6 +397,10 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resources\imageview.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\cursor1.cur" />
+    <None Include="resources\hand.cur" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

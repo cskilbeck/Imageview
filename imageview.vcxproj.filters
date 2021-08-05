@@ -52,6 +52,9 @@
     <ClInclude Include="src\hlsl.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="resources\resource.h">
+      <Filter>resources</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -84,6 +87,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="resources\magnifying_glass.ico">
+      <Filter>resources</Filter>
+    </Image>
+    <Image Include="resources\grab.bmp">
       <Filter>resources</Filter>
     </Image>
   </ItemGroup>
@@ -121,5 +127,13 @@
     <ResourceCompile Include="resources\imageview.rc">
       <Filter>resources</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\cursor1.cur">
+      <Filter>resources</Filter>
+    </None>
+    <None Include="resources\hand.cur">
+      <Filter>resources</Filter>
+    </None>
   </ItemGroup>
 </Project>

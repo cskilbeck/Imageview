@@ -85,16 +85,16 @@ static struct
 
 #define _V(A, B) A##B
 
-#define DO_CHECK(x, y)                                                                                                                          \
-    {                                                                                                                                           \
-        do {                                                                                                                                    \
-            HRESULT _V(hr, y) = (x);                                                                                                            \
-            if(FAILED(_V(hr, y))) {                                                                                                             \
-                MessageBoxW(null, format(L"Error:\n\n%s", windows_error_message(_V(hr, y)).c_str()).c_str(), L"ImageView", MB_ICONEXCLAMATION); \
-                log_win32_error(_V(hr, y), TEXT(#x));                                                                                           \
-                return 1;                                                                                                                       \
-            }                                                                                                                                   \
-        } while(false);                                                                                                                         \
+#define DO_CHECK(x, y)                                                                                                                                     \
+    {                                                                                                                                                      \
+        do {                                                                                                                                               \
+            HRESULT _V(hr, y) = (x);                                                                                                                       \
+            if(FAILED(_V(hr, y))) {                                                                                                                        \
+                MessageBoxW(null, format(L"Error:\n\n%s\n\n%s", L#x, windows_error_message(_V(hr, y)).c_str()).c_str(), L"ImageView", MB_ICONEXCLAMATION); \
+                log_win32_error(_V(hr, y), TEXT(#x));                                                                                                      \
+                return 1;                                                                                                                                  \
+            }                                                                                                                                              \
+        } while(false);                                                                                                                                    \
     }
 
 #define DO_HR(x, y)                                   \
@@ -120,17 +120,18 @@ static struct
         } while(false);                                \
     }
 
-#define DO_NULL(x, y)                                  \
-    {                                                  \
-        do {                                           \
-            auto _V(hr, y) = (x);                      \
-            if(_V(hr, y) == null) {                    \
-                DWORD _V(gle, y) = GetLastError();     \
-                log_win32_error(_V(gle, y), TEXT(#x)); \
-                return HRESULT_FROM_WIN32(_V(gle, y)); \
-            }                                          \
-        } while(false);                                \
-    } 
+#define DO_NULL(x, y)                                                                                                                                      \
+    {                                                                                                                                                      \
+        do {                                                                                                                                               \
+            auto _V(hr, y) = (x);                                                                                                                          \
+            if(_V(hr, y) == (decltype(x))null) {                                                                                                                        \
+                DWORD _V(gle, y) = GetLastError();                                                                                                         \
+                MessageBoxW(null, format(L"Error:\n\n%s\n\n%s", L#x, windows_error_message(_V(gle, y)).c_str()).c_str(), L"ImageView", MB_ICONEXCLAMATION); \
+                log_win32_error(_V(gle, y), TEXT(#x));                                                                                                     \
+                return HRESULT_FROM_WIN32(_V(gle, y));                                                                                                     \
+            }                                                                                                                                              \
+        } while(false);                                                                                                                                    \
+    }
 
 #define CHECK(x) DO_CHECK(x, __COUNTER__)
 #define CHK_HR(x) DO_HR(x, __COUNTER__)
@@ -157,18 +158,23 @@ std::wstring const &str_local(uint id);
 //////////////////////////////////////////////////////////////////////
 // folder scanner
 
-enum class scan_folder_sort_order
+enum class scan_folder_sort_field
 {
     name,
-    modified,
-    created
+    date,
 };
 
-HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_order order, std::vector<std::wstring> &results);
+enum class scan_folder_sort_order
+{
+    ascending,
+    descending
+};
+
+HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<std::wstring> &results);
 
 //////////////////////////////////////////////////////////////////////
 
-template <typename T> T clamp(T a, T min, T max)
+template <typename T> T clamp(T min, T a, T max)
 {
     return std::max(min, std::min(a, max));
 }
@@ -177,20 +183,28 @@ template <typename T> T clamp(T a, T min, T max)
 
 template <typename T> T sub_point(T a, T b)
 {
-    T r;
-    r.x = a.x - b.x;
-    r.y = a.y - b.y;
-    return r;
+    return { a.x - b.x, a.y - b.y };
 }
 
 //////////////////////////////////////////////////////////////////////
 
 template <typename T> T add_point(T a, T b)
 {
-    T r;
-    r.x = a.x + b.x;
-    r.y = a.y + b.y;
-    return r;
+    return { a.x + b.x, a.y + b.y };
+}
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T> T mul_point(T a, T b)
+{
+    return { a.x * b.x, a.y * b.y };
+}
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T> T div_point(T a, T b)
+{
+    return { a.x / b.x, a.y / b.y };
 }
 
 //////////////////////////////////////////////////////////////////////

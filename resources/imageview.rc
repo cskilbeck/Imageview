@@ -13,6 +13,78 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
+// English resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_AppName             "ImageView"
+    IDS_OldCpu              "Your computer is too old to run %s"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_SelectFile          "Select file"
+END
+
+#endif    // English resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// French resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_FRA)
+LANGUAGE LANG_FRENCH, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_AppName             "L'ImageVieweur"
+    IDS_OldCpu              "Votre ordinateur est trop vieux pour exécuter %s"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_SelectFile          "Choisir le dossier"
+END
+
+#endif    // French resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Cursor
+//
+
+IDC_CURSOR_HAND         CURSOR                  "hand.cur"
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
 // English (United Kingdom) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
@@ -52,7 +124,7 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-IDI_ICON2               ICON                    "magnifying_glass.ico"
+IDI_ICON_DEFAULT        ICON                    "magnifying_glass.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -60,9 +132,9 @@ IDI_ICON2               ICON                    "magnifying_glass.ico"
 // Font
 //
 
-IDR_FONT1               FONT                    "NotoSans-Regular.ttf"
+IDR_FONT_NOTO           FONT                    "NotoSans-Regular.ttf"
 
-IDR_FONT2               FONT                    "RobotoMono-Regular.ttf"
+IDR_FONT_ROBOTO         FONT                    "RobotoMono-Regular.ttf"
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -70,21 +142,10 @@ IDR_FONT2               FONT                    "RobotoMono-Regular.ttf"
 // Accelerator
 //
 
-IDR_ACCELERATOR1 ACCELERATORS
+IDR_ACCELERATORS_EN_UK ACCELERATORS
 BEGIN
     "V",            ID_ACCELERATOR_PASTE,   VIRTKEY, CONTROL, NOINVERT
     "C",            ID_ACCELERATOR_COPY,    VIRTKEY, CONTROL, NOINVERT
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// String Table
-//
-
-STRINGTABLE
-BEGIN
-    IDS_AppName             "ImageView"
 END
 
 #endif    // English (United Kingdom) resources

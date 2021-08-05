@@ -1,6 +1,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "pch.h"
+#include "../resources/resource.h"
 #include "app.h"
 
 #if !defined(UNICODE)
@@ -34,8 +35,7 @@ namespace
     std::atomic_bool file_load_complete{ false };
     HRESULT file_load_hresult = S_OK;
 
-    LPCWSTR app_name = L"ImageView";
-    LPCWSTR app_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
+    LPCWSTR app_name = localize(IDS_AppName);
 
     WINDOWPLACEMENT window_placement{ sizeof(WINDOWPLACEMENT) };
 
@@ -48,25 +48,27 @@ namespace
     {
         return (int)(short)HIWORD(lp);
     }
-}
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-//////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 // Indicates to hybrid graphics systems to prefer the discrete part by default
+// disabled because we don't need to use the fancy GPU to draw an image
 
-extern "C" {
-__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
+// extern "C" {
+//__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+//__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+//}
 
 //////////////////////////////////////////////////////////////////////
 
 HRESULT check_heif_support(bool &heif_is_supported)
 {
     CHK_HR(MFStartup(MF_VERSION));
+    defer(MFShutdown());
 
     IMFActivate **activate{};
     uint32_t count{};
@@ -76,13 +78,11 @@ HRESULT check_heif_support(bool &heif_is_supported)
     input.guidSubtype = MFVideoFormat_HEVC;
 
     CHK_HR(MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SYNCMFT, &input, null, &activate, &count));
+    defer(CoTaskMemFree(activate));
 
     for(uint32_t i = 0; i < count; i++) {
         activate[i]->Release();
     }
-
-    CoTaskMemFree(activate);
-    CHK_HR(MFShutdown());
 
     heif_is_supported = count > 0;
 
@@ -94,30 +94,32 @@ HRESULT check_heif_support(bool &heif_is_supported)
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
     if(!XMVerifyCPUSupport()) {
-        MessageBox(null, L"Your computer is too old and crappy to run ImageView", L"ImageView", MB_ICONEXCLAMATION);
+        std::wstring message = format(localize(IDS_OldCpu), localize(IDS_AppName));
+        MessageBox(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
         return 1;
     }
 
     CHECK(application.init());
 
-    HICON icon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON2));
-    HCURSOR cursor = LoadCursor(null, IDC_ARROW);
-
     wchar_t *cmd_line = GetCommandLineW();
 
-    if(application.settings.reuse_window) {
-        HWND existing_window = FindWindow(app_class, null);
-        if(existing_window != null) {
-            COPYDATASTRUCT c;
-            c.cbData = (DWORD)(wcslen(cmd_line) + 1) * sizeof(wchar_t);
-            c.lpData = reinterpret_cast<void *>(cmd_line);
-            c.dwData = (DWORD)App::copydata_t::commandline;
-            SendMessage(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
-            return 0;
-        }
+    HRESULT hr = application.reuse_window(cmd_line);
+    if(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
+        return 0;
     }
+    CHECK(hr);
 
-    CHECK(application.on_command_line(cmd_line));
+    // start file load asap (or show OpenFileDialog, or reuse existing window)
+    hr = application.on_command_line(cmd_line);
+
+    // quit if OpenFileDialog was shown and cancelled by the user
+    if(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
+        return 0;
+    }
+    CHECK(hr);
+
+    HICON icon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
+    HCURSOR cursor = LoadCursor(null, IDC_ARROW);
 
     WNDCLASSEXW wcex = {};
     wcex.cbSize = sizeof(WNDCLASSEXW);
@@ -126,12 +128,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     wcex.hInstance = hInstance;
     wcex.hIcon = icon;
     wcex.hCursor = cursor;
-    wcex.lpszClassName = app_class;
+    wcex.lpszClassName = App::window_class;
     wcex.hIconSm = icon;
 
-    if(!RegisterClassExW(&wcex)) {
-        return 1;
-    }
+    CHK_BOOL(RegisterClassExW(&wcex));
 
     // styles will also be different depending on fullscreen setting
     DWORD window_style;
@@ -139,19 +139,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     rect rc;
     CHECK(application.get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
-    HWND hwnd = CreateWindowExW(window_ex_style, app_class, app_name, window_style, rc.x(), rc.y(), rc.w(), rc.h(), null, null, hInstance, &application);
-
-    if(hwnd == null) {
-        return 1;
-    }
+    HWND hwnd;
+    CHK_NULL(hwnd = CreateWindowExW(window_ex_style, App::window_class, app_name, window_style, rc.x(), rc.y(), rc.w(), rc.h(), null, null, hInstance, &application));
 
     application.check_image_loader();
 
-    if(!application.settings.first_run && !application.settings.fullscreen) {
-        WINDOWPLACEMENT w{ application.settings.window_placement };
-        w.showCmd = 0;
-        SetWindowPlacement(hwnd, &w);
-    }
+    application.set_windowplacement();
 
     RAWINPUTDEVICE Rid[1];
     Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
@@ -160,10 +153,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     Rid[0].hwndTarget = hwnd;
     RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
-    HACCEL haccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR1));
-    if(haccel == null) {
-        CHECK(HRESULT_FROM_WIN32(GetLastError()));
-    }
+    HACCEL haccel;
+
+    CHK_NULL(haccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
 
     MSG msg = {};
     while(WM_QUIT != msg.message) {
@@ -241,13 +233,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if(c != null) {
             switch((App::copydata_t)c->dwData) {
             case App::copydata_t::commandline:
-                app->on_command_line(reinterpret_cast<wchar_t const *>(c->lpData));
+                if(s_minimized) {
+                    ShowWindow(hWnd, SW_RESTORE);
+                }
+                SetForegroundWindow(hWnd);
+                SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                app->on_command_line(reinterpret_cast<wchar_t *>(c->lpData));
                 break;
             default:
                 break;
             }
         }
     } break;
+
+    case WM_SETCURSOR:
+        if(LOWORD(lParam) != HTCLIENT || !app->on_setcursor()) {
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+        break;
 
     case WM_DPICHANGED:
         app->on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<rect *>(lParam));
@@ -392,11 +395,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         PostQuitMessage(0);
         break;
 
-    case WM_SYSKEYDOWN:
-        if(wParam == VK_RETURN && (lParam & 0x60000000) == 0x20000000) {
-            app->toggle_fullscreen();
+    case WM_SYSKEYDOWN: {
+        uint flags = HIWORD(lParam);
+        bool key_up = (flags & KF_UP) == KF_UP;                // transition-state flag, 1 on keyup
+        bool repeat = (flags & KF_REPEAT) == KF_REPEAT;        // previous key-state flag, 1 on autorepeat
+        bool alt_down = (flags & KF_ALTDOWN) == KF_ALTDOWN;    // ALT key was pressed
+
+        if(!key_up && !repeat && alt_down) {
+            switch(wParam) {
+            case VK_RETURN:
+                app->toggle_fullscreen();
+                break;
+            case VK_F4:
+                DestroyWindow(hWnd);
+            }
         }
-        break;
+    } break;
 
     case WM_MENUCHAR:
         return MAKELRESULT(0, MNC_CLOSE);

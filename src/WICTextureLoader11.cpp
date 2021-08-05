@@ -26,11 +26,12 @@
 
 #define INITGUID
 
+#include <wincodec.h>
+
 #include "WICTextureLoader11.h"
 #include <d3dcommon.h>
 #include <dxgiformat.h>
-
-#include <wincodec.h>
+#include <propkey.h>
 
 #include <wrl\client.h>
 
@@ -58,7 +59,36 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
-    //--------------------------------------------------------------------------------------
+    struct exif_transform_translator_t
+    {
+        WICBitmapTransformOptions opt;
+        uint32_t orientation;
+    };
+
+    // note exif is counter clockwise, WIC is clockwise, so 90/270 swapped
+    // also transpose/transverse not supported, but seem to be rarely used
+ 
+    exif_transform_translator_t exif_transform_translation[] =
+    {
+        { WICBitmapTransformRotate0, PHOTO_ORIENTATION_NORMAL },
+        { WICBitmapTransformRotate90, PHOTO_ORIENTATION_ROTATE270 },
+        { WICBitmapTransformRotate180, PHOTO_ORIENTATION_ROTATE180 },
+        { WICBitmapTransformRotate270, PHOTO_ORIENTATION_ROTATE90 },
+        { WICBitmapTransformFlipHorizontal, PHOTO_ORIENTATION_FLIPHORIZONTAL },
+        { WICBitmapTransformFlipVertical, PHOTO_ORIENTATION_FLIPVERTICAL }
+    };
+
+    WICBitmapTransformOptions convert_exif_to_wic_transform(uint32_t exif)
+    {
+        for(auto const &t : exif_transform_translation) {
+            if(t.orientation == exif) {
+                return t.opt;
+            }
+        }
+        return WICBitmapTransformRotate0;
+    }
+    
+        //--------------------------------------------------------------------------------------
     template<UINT TNameLength>
     inline void SetDebugObjectName(_In_ ID3D11DeviceChild* resource, _In_ const char(&name)[TNameLength]) noexcept
     {
@@ -567,6 +597,20 @@ namespace
             }
         }
 
+        WICBitmapTransformOptions transform{ WICBitmapTransformRotate0 };
+
+        ComPtr<IWICMetadataQueryReader> metareader;
+        if(SUCCEEDED(frame->GetMetadataQueryReader(metareader.GetAddressOf()))) {
+            wchar_t const *orientation_flag = L"/app1/ifd/{ushort=274}";    // EXIF tag for image orientation
+            PROPVARIANT var;
+            PropVariantInit(&var);
+            if(SUCCEEDED(metareader->GetMetadataByName(orientation_flag, &var))) {
+                if(var.vt == VT_UI2) {
+                    transform = convert_exif_to_wic_transform(var.uiVal);
+                }
+            }
+        }
+
         // Verify our target format is supported by the current device
         // (handles WDDM 1.0 or WDDM 1.1 device driver cases as well as DirectX 11.0 Runtime without 16bpp format support)
         UINT support = 0;
@@ -579,19 +623,7 @@ namespace
             bpp = 32;
         }
 
-        // Allocate temporary memory for image
-        uint64_t rowBytes = (uint64_t(twidth) * uint64_t(bpp) + 7u) / 8u;
-        uint64_t numBytes = rowBytes * uint64_t(theight);
-
-        if (rowBytes > UINT32_MAX || numBytes > UINT32_MAX)
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-
-        auto rowPitch = static_cast<size_t>(rowBytes);
-        auto imageSize = static_cast<size_t>(numBytes);
-
-        std::unique_ptr<uint8_t[]> temp(new (std::nothrow) uint8_t[imageSize]);
-        if (!temp)
-            return E_OUTOFMEMORY;
+        ComPtr<IWICBitmapSource> bitmap_source;
 
         // Load image data
         if (memcmp(&convertGUID, &pixelFormat, sizeof(GUID)) == 0
@@ -599,9 +631,7 @@ namespace
             && theight == height)
         {
             // No format conversion or resize needed
-            hr = frame->CopyPixels(nullptr, static_cast<UINT>(rowPitch), static_cast<UINT>(imageSize), temp.get());
-            if (FAILED(hr))
-                return hr;
+            bitmap_source.Attach(frame);
         }
         else if (twidth != width || theight != height)
         {
@@ -627,9 +657,7 @@ namespace
             if (memcmp(&convertGUID, &pfScaler, sizeof(GUID)) == 0)
             {
                 // No format conversion needed
-                hr = scaler->CopyPixels(nullptr, static_cast<UINT>(rowPitch), static_cast<UINT>(imageSize), temp.get());
-                if (FAILED(hr))
-                    return hr;
+                bitmap_source.Attach(scaler.Detach());
             }
             else
             {
@@ -649,9 +677,7 @@ namespace
                 if (FAILED(hr))
                     return hr;
 
-                hr = FC->CopyPixels(nullptr, static_cast<UINT>(rowPitch), static_cast<UINT>(imageSize), temp.get());
-                if (FAILED(hr))
-                    return hr;
+                bitmap_source.Attach(FC.Detach());
             }
         }
         else
@@ -677,10 +703,46 @@ namespace
             if (FAILED(hr))
                 return hr;
 
-            hr = FC->CopyPixels(nullptr, static_cast<UINT>(rowPitch), static_cast<UINT>(imageSize), temp.get());
-            if (FAILED(hr))
-                return hr;
+            bitmap_source.Attach(FC.Detach());
         }
+
+        auto pWIC = _GetWIC();
+        if(!pWIC)
+            return E_NOINTERFACE;
+
+        // handle exif
+
+        ComPtr<IWICBitmapFlipRotator> flip_rotater;
+
+        hr = pWIC->CreateBitmapFlipRotator(&flip_rotater);
+        if(FAILED(hr))
+            return hr;
+
+        flip_rotater->Initialize(bitmap_source.Get(), transform);
+
+        hr = flip_rotater->GetSize(&twidth, &theight);
+        if(FAILED(hr)) {
+            return hr;
+        }
+
+        // Allocate temporary memory for image
+        uint64_t rowBytes = (uint64_t(twidth) * uint64_t(bpp) + 7u) / 8u;
+        uint64_t numBytes = rowBytes * uint64_t(theight);
+
+        if(rowBytes > UINT32_MAX || numBytes > UINT32_MAX)
+            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+
+        auto rowPitch = static_cast<size_t>(rowBytes);
+        auto imageSize = static_cast<size_t>(numBytes);
+
+        std::unique_ptr<uint8_t[]> temp(new(std::nothrow) uint8_t[imageSize]);
+        if(!temp)
+            return E_OUTOFMEMORY;
+
+        hr = flip_rotater->CopyPixels(nullptr, static_cast<UINT>(rowPitch), static_cast<UINT>(imageSize), temp.get());
+
+        if (FAILED(hr))
+           return hr;
 
         // See if format is supported for auto-gen mipmaps (varies by feature level)
         bool autogen = false;

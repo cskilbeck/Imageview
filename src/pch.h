@@ -42,8 +42,9 @@
 #include <strsafe.h>
 #include <shobjidl_core.h>
 #include <winhttp.h>
+#include <wincodec.h>
 
-// All the old std lib
+// Old std lib
 
 #include <stdio.h>
 #include <math.h>
@@ -69,7 +70,7 @@
 
 #include "../resources/resource.h"
 
-// Local stuff
+// Local
 
 #include "util.h"
 #include "log.h"
@@ -78,3 +79,4 @@
 #include "DragDropHelpers.h"
 #include "font_loader.h"
 #include "new_windows.h"
+#include "timer.h"

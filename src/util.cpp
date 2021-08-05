@@ -80,12 +80,14 @@ HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
 HRESULT load_file(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event, HANDLE complete_event)
 {
     // if we error out for any reason, free the buffer
-    auto cleanup_buffer = deferrer << [&]() { buffer.clear(); };
+    auto cleanup_buffer = deferred([&] { buffer.clear(); });
 
     // check args
     if(filename.empty()) {
         return ERROR_BAD_ARGUMENTS;
     }
+
+    defer(if(complete_event != null) { SetEvent(complete_event); });
 
     // create an async file handle
     HANDLE file_handle = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
@@ -144,10 +146,6 @@ HRESULT load_file(std::wstring const &filename, std::vector<byte> &buffer, HANDL
         }
         // don't clean up the buffer, it's full of good stuff now
         cleanup_buffer.cancel();
-
-        if(complete_event != null) {
-            SetEvent(complete_event);
-        }
         return S_OK;
 
     // cancel requested, cancel the IO and return operation aborted
@@ -251,7 +249,8 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
 // this doesn't do the thing Windows Explorer does where it examines photo metadata and uses the date the picture was taken as the 'date'.
 // In this case 'date' means the earliest of created/modified (which, come to think of it, will always be created, so....)
 
-HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_order order, std::vector<std::wstring> &results)
+HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order,
+                    std::vector<std::wstring> &results)
 {
     WIN32_FIND_DATA ffd;
 
@@ -260,37 +259,8 @@ HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions
 
     auto filetime_to_uint64 = [](FILETIME const &f) { return f.dwLowDateTime + ((uint64_t)f.dwHighDateTime << 32); };
 
-    auto cmp = [=](WIN32_FIND_DATA const *a, WIN32_FIND_DATA const *b) {
-
-        uint64_t fa = 0;
-        uint64_t fb = 0;
-
-        switch(order) {
-
-        case scan_folder_sort_order::modified:
-            fa = filetime_to_uint64(a->ftLastWriteTime);
-            fb = filetime_to_uint64(b->ftLastWriteTime);
-            break;
-
-        case scan_folder_sort_order::created:
-            fa = filetime_to_uint64(a->ftCreationTime);
-            fb = filetime_to_uint64(b->ftCreationTime);
-            break;
-
-        case scan_folder_sort_order::name:
-            break;
-        }
-
-        int64_t diff = fa - fb;
-
-        if(diff == 0) {
-            diff = StrCmpLogicalW(a->cFileName, b->cFileName);
-        }
-        return diff <= 0;
-    };
-
     std::wstring str_path(path);
-    if(str_path.back() != '\\') {
+    if(!str_path.empty() && str_path.back() != '\\') {
         str_path.append(L"\\*");
     } else {
         str_path.append(L"*");
@@ -336,7 +306,30 @@ HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions
         file_ptrs.push_back(&f);
     }
 
-    std::sort(file_ptrs.begin(), file_ptrs.end(), cmp);
+    std::sort(file_ptrs.begin(), file_ptrs.end(), [=](WIN32_FIND_DATA const *a, WIN32_FIND_DATA const *b) {
+        uint64_t fa = 0;
+        uint64_t fb = 0;
+
+        WIN32_FIND_DATA const *pa = a;
+        WIN32_FIND_DATA const *pb = b;
+
+        if(order == scan_folder_sort_order::descending) {
+            pa = b;
+            pb = a;
+        }
+
+        if(sort_field == scan_folder_sort_field::date) {
+            fa = filetime_to_uint64(pa->ftLastWriteTime);
+            fb = filetime_to_uint64(pb->ftLastWriteTime);
+        }
+
+        int64_t diff = fa - fb;
+
+        if(diff == 0) {
+            diff = StrCmpLogicalW(pa->cFileName, pb->cFileName);
+        }
+        return diff <= 0;
+    });
 
     for(auto f : file_ptrs) {
         results.push_back(f->cFileName);
@@ -362,7 +355,7 @@ HRESULT select_file_dialog(std::wstring &path)
     CHK_HR(pfd->SetFileTypes((uint)std::size(file_types), file_types));
     CHK_HR(pfd->SetFileTypeIndex(2));
     CHK_HR(pfd->SetOkButtonLabel(L"View"));
-    CHK_HR(pfd->SetTitle(format(L"%s%s%s", localize(IDS_AppName), L" : ", L"Select file").c_str()));
+    CHK_HR(pfd->SetTitle(format(L"%s%s%s", localize(IDS_AppName), L" : ", localize(IDS_SelectFile)).c_str()));
     CHK_HR(pfd->Show(null));
     CHK_HR(pfd->GetResult(&psiResult));
     CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
@@ -386,6 +379,8 @@ std::wstring const &str_local(uint id)
     if(f != localized_strings.end()) {
         return f->second;
     }
+
+    // SetThreadUILanguage(MAKELCID(LANG_FRENCH, SUBLANG_NEUTRAL));
 
     wchar_t *str;
     int len = LoadString(GetModuleHandle(null), id, reinterpret_cast<wchar_t *>(&str), 0);

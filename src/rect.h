@@ -59,33 +59,64 @@ struct rect : RECT
 
 //////////////////////////////////////////////////////////////////////
 
-struct point_f
+struct vec2
 {
     float x;
     float y;
 
-    point_f() = default;
+    vec2() = default;
 
-    point_f(float x, float y) : x(x), y(y)
+    vec2(float x, float y) : x(x), y(y)
     {
     }
 
-    explicit point_f(POINT p) : x((float)p.x), y((float)p.y)
+    explicit vec2(POINT p) : x((float)p.x), y((float)p.y)
     {
     }
 
-    explicit point_f(POINTS p) : x((float)p.x), y((float)p.y)
+    explicit vec2(POINTS p) : x((float)p.x), y((float)p.y)
     {
     }
 
-    static point_f min(point_f const &a, point_f const &b)
+    static vec2 min(vec2 const &a, vec2 const &b)
     {
         return { std::min(a.x, b.x), std::min(a.y, b.y) };
     }
 
-    static point_f max(point_f const &a, point_f const &b)
+    static vec2 max(vec2 const &a, vec2 const &b)
     {
         return { std::max(a.x, b.x), std::max(a.y, b.y) };
+    }
+
+    static vec2 floor(vec2 const &a)
+    {
+        return { floorf(a.x), floorf(a.y) };
+    }
+
+    static vec2 round(vec2 const &a)
+    {
+        return { roundf(a.x), roundf(a.y) };
+    }
+
+    static vec2 clamp(vec2 const &min, vec2 const &a, vec2 const &max)
+    {
+        return { ::clamp(min.x, a.x, max.x), ::clamp(min.y, a.y, max.y) };
+    }
+
+};
+
+//////////////////////////////////////////////////////////////////////
+
+struct size : vec2
+{
+    size() = default;
+
+    explicit size(float x, float y) : vec2(x, y)
+    {
+    }
+
+    explicit size(vec2 v) : vec2(v)
+    {
     }
 };
 
@@ -130,14 +161,46 @@ struct rect_f
     float w;
     float h;
 
-    point_f top_left() const
+    rect_f() = default;
+
+    rect_f(float _x, float _y, float _w, float _h) : x(_x), y(_y), w(_w), h(_h)
     {
-        return point_f(x, y);
     }
 
-    point_f bottom_right() const
+    rect_f(vec2 topleft, size wh) : x(topleft.x), y(topleft.y), w(wh.x), h(wh.y)
     {
-        return point_f(x + w - 1, y + h - 1);
+    }
+
+    rect_f(vec2 a, vec2 b)
+    {
+        vec2 min = vec2::min(a, b);
+        vec2 max = vec2::max(a, b);
+        vec2 diff = sub_point(b, a);
+        x = min.x;
+        y = min.y;
+        w = diff.x;
+        h = diff.y;
+    }
+
+    vec2 top_left() const
+    {
+        return { x, y };
+    }
+
+    vec2 bottom_right() const
+    {
+        return { x + w, y + h };
+    }
+
+    vec2 size() const
+    {
+        return { w, h };
+    }
+
+    bool contains(vec2 p) const
+    {
+        vec2 br = bottom_right();
+        return p.x >= x && p.y >= y && p.x <= br.x && p.y <= br.y;
     }
 };
 

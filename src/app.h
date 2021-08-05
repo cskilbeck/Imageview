@@ -1,7 +1,5 @@
 #pragma once
 
-#include "timer.h"
-
 struct App : public CDragDropHelper
 {
     // mouse buttons
@@ -20,81 +18,15 @@ struct App : public CDragDropHelper
         btn_up = 1
     };
 
-    // what should reset_zoom do
-    enum class reset_zoom_mode
-    {
-        one_to_one,
-        fit_to_window,
-        shrink_to_fit
-    };
-
-    enum class fullscreen_startup_option
-    {
-        start_windowed,      // start up windowed
-        start_fullscreen,    // start up fullscreen
-        start_remember       // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
-    };
-
-    // whether to remember the window position or not
-    enum class window_position_option
-    {
-        window_pos_remember,    // restore last window position
-        window_pos_default      // reset window position to default each time
-    };
-
-    // how to show the filename overlay
-    enum class show_filename_option : uint
-    {
-        always,
-        briefly,
-        never
-    };
-
-    // these are things that can be activated with a key
-    enum class action : uint
-    {
-        zoom_to_selection = 0,
-        shrink_to_fit,
-        fit_to_window,
-        toggle_fullscreen,
-        quit,
-        copy,
-        paste,
-        open_file,
-        options
-    };
-
     // types of WM_COPYDATA messages that can be sent
     enum class copydata_t : DWORD
     {
         commandline = 1
     };
 
-    // settings get serialized/deserialized to/from the registry
-    struct settings_t
-    {
-        // use a header so we can implement the serializer more easily
-#define DECL_SETTING(type, name, ...) type name{ __VA_ARGS__ };
-#include "settings.h"
-
-        HRESULT save();
-        HRESULT load();
-
-        // where in the registry to put the settings. this does not need to be localized... right?
-        static wchar_t constexpr *key_name{ L"Software\\ImageView" };
-
-        enum class serialize_action
-        {
-            save,
-            load
-        };
-
-        HRESULT serialize(serialize_action action, wchar_t const *save_key_name);
-    };
-
     App() = default;
 
-    ~App() = default;
+    ~App();
 
     // singletonish, but not checked
     App(App &&) = delete;
@@ -123,6 +55,8 @@ struct App : public CDragDropHelper
     // setup after window has been created
     HRESULT set_window(HWND window);
 
+    void set_windowplacement();
+
     // window handlers
 
     HRESULT on_window_size_changed(int width, int height);
@@ -140,7 +74,9 @@ struct App : public CDragDropHelper
     void on_mouse_wheel(point_s pos, int delta);
     void on_key_down(int vk_key, LPARAM flags);
     void on_key_up(int vk_key);
-    
+
+    bool on_setcursor();
+
     HRESULT on_closing();
 
     // copy current selection to CF_DIBV5 clipboard
@@ -153,22 +89,133 @@ struct App : public CDragDropHelper
     void toggle_fullscreen();
 
     // handle this command line either because it's the command line or another instance
-    // of the application was run and it's in single window mode
-    HRESULT on_command_line(wchar_t const *cmd_line);
+    // of the application was run and it's in single window mode (settings.reuse_window == true)
+    HRESULT on_command_line(wchar_t *cmd_line);
+
+    // if settings.reuse_window and an existing window is found, send it the command line
+    // with WM_COPYDATA and return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)
+    // else return S_OK
+    HRESULT reuse_window(wchar_t *cmd_line);
 
     // some thing(s) was/were dropped onto the window, try to load the first one
     HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) override;
     HRESULT on_drop_string(wchar_t const *str) override;
-
-    settings_t settings;
-    settings_t default_settings;
 
     // IUnknown for the DragDropHelper stuff
     IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv);
     IFACEMETHODIMP_(ULONG) AddRef();
     IFACEMETHODIMP_(ULONG) Release();
 
+    // public so DEFINE_ENUM_OPERATORS can see it
+    enum selection_hover_t : uint
+    {
+        sel_hover_inside = 0,
+        sel_hover_left = 1,
+        sel_hover_right = 2,
+        sel_hover_top = 4,
+        sel_hover_bottom = 8,
+        sel_hover_outside = 0x80000000
+    };
+
+    static LPCWSTR window_class;
+
 private:
+    //////////////////////////////////////////////////////////////////////
+    //
+    // ENUMS which need localized names
+    //
+    // Each enum needs a header name (the name of the enum)
+    // and a localized string for each one
+    // They must be contiguous, ascending, zero-based
+    //
+    // But... how to know the enum from the settings field? not clear...
+    //////////////////////////////////////////////////////////////////////
+
+    // what should reset_zoom do
+    enum class reset_zoom_mode : uint
+    {
+        one_to_one,
+        fit_to_window,
+        shrink_to_fit
+    };
+
+    enum class fullscreen_startup_option : uint
+    {
+        start_windowed,      // start up windowed
+        start_fullscreen,    // start up fullscreen
+        start_remember       // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
+    };
+
+    // whether to remember the window position or not
+    enum class window_position_option : uint
+    {
+        window_pos_remember,    // restore last window position
+        window_pos_default      // reset window position to default each time
+    };
+
+    // how to show the filename overlay
+    enum class show_filename_option : uint
+    {
+        always,
+        briefly,
+        never
+    };
+
+    // what to do about exif rotation/flip data
+    enum class exif_option : uint
+    {
+        ignore,    // always ignore it
+        apply,     // always apply it
+        prompt     // prompt if it's anything other than default 0 rotation
+    };
+
+    // these are things that can be activated with a key
+    enum class action : uint
+    {
+        zoom_to_selection = 0,
+        shrink_to_fit,
+        fit_to_window,
+        toggle_fullscreen,
+        quit,
+        copy,
+        paste,
+        open_file,
+        options
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    //
+    // END of enums which need localized names
+    //
+    //////////////////////////////////////////////////////////////////////
+
+    // settings get serialized/deserialized to/from the registry
+    struct settings_t
+    {
+        // use a header so we can implement the serializer more easily
+#define DECL_SETTING(type, name, ...) type name{ __VA_ARGS__ };
+#include "settings.h"
+
+        HRESULT save();
+        HRESULT load();
+
+        // where in the registry to put the settings. this does not need to be localized... right?
+        static wchar_t constexpr *key_name{ L"Software\\ImageView" };
+
+        enum class serialize_action
+        {
+            save,
+            load
+        };
+
+        HRESULT serialize(serialize_action action, wchar_t const *save_key_name);
+    };
+
+    static HRESULT serialize_setting(settings_t::serialize_action action, wchar_t const *key_name, wchar_t const *name, byte *var, DWORD size);
+
+    settings_t settings;
+    settings_t default_settings;
+
     // file loading admin - file loader can be cancelled so a new request
     // can interrupt an existing one
     std::thread loader_thread;
@@ -206,6 +253,8 @@ private:
     // send the shader constants to the GPU
     HRESULT update_constants();
 
+    void set_cursor(HCURSOR c);
+
     // mouse button admin
     void set_grab(int button);
     void clear_grab(int button);
@@ -221,17 +270,31 @@ private:
     void select_all();
 
     // converting to/from screen/texel coords
-    point_f screen_to_texture_pos(point_f pos);
-    point_f screen_to_texture_pos(point_s pos);
-    point_f texel_to_screen_pos(point_f pos);
+    vec2 screen_to_texture_pos(vec2 pos);
+    vec2 screen_to_texture_pos(point_s pos);
+    vec2 texture_to_screen_pos(vec2 pos);
 
-    point_f clamp_to_texture(point_f pos);
+    vec2 texels_to_pixels(vec2 pos);
+    vec2 pixels_to_texels(vec2 pos);
+
+    vec2 texel_size() const;
+    vec2 texture_size() const;
+    vec2 window_size() const;
+
+    vec2 clamp_to_texture(vec2 pos);
 
     // draw a string with a border and background fill
-    HRESULT draw_string(std::wstring const &text, IDWriteTextFormat *format, point_f pos, point_f pivot, float opacity = 1.0f, float corner_radius = 4.0f, float padding = 4.0f);
-    HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, point_f &size);
+    HRESULT draw_string(std::wstring const &text, IDWriteTextFormat *format, vec2 pos, vec2 pivot, float opacity = 1.0f, float corner_radius = 4.0f, float padding = 4.0f);
+    HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size);
 
-    point_f small_label_size{ 0, 0 };
+    // admin for showing a message
+    std::wstring current_message;
+    double message_timestamp{ 0 };
+    double message_fade_time{ 0 };
+
+    void set_message(wchar_t const *message, double fade_time);
+
+    vec2 small_label_size{ 0, 0 };
     float small_label_padding{ 2.0f };
 
     // for IUnknown
@@ -324,6 +387,10 @@ private:
     // how the file load went
     HRESULT file_load_hresult{ S_OK };
 
+    // how many files loaded in this run
+    // which is used to decide whether to MessageBox and DestroyWindow when load_file() fails
+    int files_loaded{ 0 };
+
     // have we attempted to decode the loaded file?
     bool image_decode_complete{ false };
 
@@ -349,15 +416,42 @@ private:
 
     float shift_snap_radius{ 8 };
 
+    void check_selection_hover(vec2 pos);
+
+    enum class cursor_type
+    {
+        system,
+        user
+    };
+
+    struct cursor_def
+    {
+        cursor_type type;
+        short id;
+
+        cursor_def(cursor_type _type, wchar_t const *_id) : type(_type), id((short)((intptr_t)_id & 0xffff))
+        {
+        }
+    };
+
+    // selection_hover_t bitmask maps into these cursors
+    static cursor_def sel_hover_cursors[16];
+
     // selection admin
-    bool selecting{ false };
-    bool selection_active{ false };
+    bool selecting{ false };              // dragging new selection rectangle
+    bool selection_active{ false };       // a selection rectangle exists
+    bool drag_selection{ false };         // dragging the selection rectangle
+    selection_hover_t selection_hover;    // which part of the selection rectangle being dragged (all, corner, edge)
+    vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
+    vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
+
+    HCURSOR current_cursor;
 
     // the point they first clicked
-    point_f select_anchor;
+    vec2 select_anchor;
 
     // the point where the mouse is now (could be above, below, left, right of anchor)
-    point_f select_current;
+    vec2 select_current;
 
     // sticky zoom mode on window resize
     bool has_been_zoomed_or_dragged{ false };
@@ -382,8 +476,10 @@ private:
 
     // when was the selection copied for animating flash
     double copy_timestamp{ 0 };
-    double file_load_timestamp{ 0 };
 
     // which frame rendering
     int m_frame{ 0 };
 };
+
+DEFINE_ENUM_FLAG_OPERATORS(App::selection_hover_t);
+
