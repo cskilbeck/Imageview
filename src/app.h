@@ -24,9 +24,25 @@ struct App : public CDragDropHelper
         commandline = 1
     };
 
+    // a file that has maybe been loaded, successfully or not
+    struct file_loader
+    {
+        std::wstring filename;      // file path, relative to scanned folder - use this as key for map
+        std::vector<byte> bytes;    // data, once it has been loaded
+        HRESULT hresult{ S_OK };    // error code or S_OK from load_file()
+    };
+
     App() = default;
 
     ~App();
+
+    // WM_USER messages for main window
+    static constexpr uint WM_FILE_LOAD_COMPLETE = WM_USER;
+    static constexpr uint WM_FOLDER_SCAN_COMPLETE = WM_USER + 1;
+
+    // WM_USER messages for scanner thread
+    static constexpr uint WM_SCAN_FOLDER = WM_USER;
+    static constexpr uint WM_EXIT_THREAD = WM_USER + 1;
 
     // singletonish, but not checked
     App(App &&) = delete;
@@ -44,7 +60,9 @@ struct App : public CDragDropHelper
     HRESULT load_image(wchar_t const *filepath);
 
     // if file was loaded, try to decode it
-    void check_image_loader();
+    void decode_image(file_loader *f);
+
+    void on_file_load_complete(LPARAM lparam);
 
     // actual image decoder uses WIC
     HRESULT initialize_image_from_buffer(std::vector<byte> const &buffer);
@@ -74,8 +92,9 @@ struct App : public CDragDropHelper
     void on_mouse_wheel(point_s pos, int delta);
     void on_key_down(int vk_key, LPARAM flags);
     void on_key_up(int vk_key);
-
     bool on_setcursor();
+
+    void on_folder_scanned(folder_scan_result *scan_result);
 
     HRESULT on_closing();
 
@@ -216,14 +235,50 @@ private:
     settings_t settings;
     settings_t default_settings;
 
-    // file loading admin - file loader can be cancelled so a new request
-    // can interrupt an existing one
-    std::thread loader_thread;
+    // most recent filename requested to view
+    std::wstring filename;
+
+    // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
+    std::wstring current_folder;
+
+    folder_scan_result *current_folder_scan{ null };
+    int current_file_cursor{ 0 };
+
+    void move_file_cursor(int movement);
+
+    // how many files loaded in this run
+    // which is used to decide whether to MessageBox and DestroyWindow when load_file() fails
+    // if files_loaded == 0 and load fails, show messagebox and bomb
+    // else just show error as text in the window
+    // increment files_loaded when a file load succeeds
+    // note that this does not account for failing to decode the image....
+    int files_loaded{ 0 };
+
+    // have we attempted to decode the loaded file?
+    bool image_decode_complete{ false };
+
+    // thread admin
+
+    // persistent folder scanner thread
     std::thread scanner_thread;
+    HANDLE scanner_thread_handle{ null };
+    DWORD scanner_thread_id{ 0 };
+
+    void scanner_function();
+    HRESULT do_folder_scan(wchar_t const *path);
+
+    // set this to cancel all async file loading activity
     HANDLE cancel_loader_event;
-    HANDLE loader_complete_event;
-    HANDLE scanner_complete_event;
+
+    // set this to signal that the application is exiting
+    HANDLE quit_event;
+
+    // # of file loader threads in flight, set cancel event then wait for this to fall to 0
     LONG thread_count;
+
+    static std::unordered_map<std::wstring, file_loader *> loaded_files;
+
+    file_loader *most_recently_loaded_file{ null };
 
     void cancel_loader();
 
@@ -282,6 +337,8 @@ private:
     vec2 window_size() const;
 
     vec2 clamp_to_texture(vec2 pos);
+
+    HANDLE window_created_event{ null };
 
     // draw a string with a border and background fill
     HRESULT draw_string(std::wstring const &text, IDWriteTextFormat *format, vec2 pos, vec2 pivot, float opacity = 1.0f, float corner_radius = 4.0f, float padding = 4.0f);
@@ -377,22 +434,6 @@ private:
 
     // see font_loader.h
     ResourceFontContext font_context;
-
-    // filename requested to load
-    std::wstring filename;
-
-    // bytes loaded from the file
-    std::vector<byte> file_load_buffer;
-
-    // how the file load went
-    HRESULT file_load_hresult{ S_OK };
-
-    // how many files loaded in this run
-    // which is used to decide whether to MessageBox and DestroyWindow when load_file() fails
-    int files_loaded{ 0 };
-
-    // have we attempted to decode the loaded file?
-    bool image_decode_complete{ false };
 
     // mouse admin
     int mouse_grab{ 0 };

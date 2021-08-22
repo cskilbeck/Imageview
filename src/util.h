@@ -6,12 +6,14 @@
 
 using namespace DirectX;
 
+struct vec2;
+
 // share some types with the HLSL header
 using matrix = XMMATRIX;
 using vec4 = XMVECTOR;
 using uint = uint32_t;
 using float4 = vec4;
-using float2 = float[2];
+using float2 = vec2;
 using int4 = int[4];
 
 using Microsoft::WRL::ComPtr;
@@ -120,17 +122,17 @@ static struct
         } while(false);                                \
     }
 
-#define DO_NULL(x, y)                                                                                                                                      \
-    {                                                                                                                                                      \
-        do {                                                                                                                                               \
-            auto _V(hr, y) = (x);                                                                                                                          \
-            if(_V(hr, y) == (decltype(x))null) {                                                                                                                        \
-                DWORD _V(gle, y) = GetLastError();                                                                                                         \
+#define DO_NULL(x, y)                                                                                                                                       \
+    {                                                                                                                                                       \
+        do {                                                                                                                                                \
+            auto _V(hr, y) = (x);                                                                                                                           \
+            if(_V(hr, y) == (decltype(x))null) {                                                                                                            \
+                DWORD _V(gle, y) = GetLastError();                                                                                                          \
                 MessageBoxW(null, format(L"Error:\n\n%s\n\n%s", L#x, windows_error_message(_V(gle, y)).c_str()).c_str(), L"ImageView", MB_ICONEXCLAMATION); \
-                log_win32_error(_V(gle, y), TEXT(#x));                                                                                                     \
-                return HRESULT_FROM_WIN32(_V(gle, y));                                                                                                     \
-            }                                                                                                                                              \
-        } while(false);                                                                                                                                    \
+                log_win32_error(_V(gle, y), TEXT(#x));                                                                                                      \
+                return HRESULT_FROM_WIN32(_V(gle, y));                                                                                                      \
+            }                                                                                                                                               \
+        } while(false);                                                                                                                                     \
     }
 
 #define CHECK(x) DO_CHECK(x, __COUNTER__)
@@ -141,13 +143,20 @@ static struct
 //////////////////////////////////////////////////////////////////////
 // general utility functions
 
-HRESULT load_file(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event = null, HANDLE complete_event = null);
+HRESULT load_file(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event = null);
 HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format);
+HRESULT get_file_id(wchar_t const *filename, uint32_t *volume_id, uint64_t *id);
 HRESULT load_resource(DWORD id, wchar_t const *type, void **buffer, size_t *size);
 HRESULT load_bitmap(wchar_t const *filename, IWICBitmapFrameDecode **decoder);
 HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv);
 HRESULT select_file_dialog(std::wstring &path);
 RECT center_rect_on_default_monitor(RECT const &r);
+
+HRESULT file_get_full_path(wchar_t const *filename, std::wstring &fullpath);
+
+HRESULT file_get_path(wchar_t const *filename, std::wstring &path);
+HRESULT file_get_filename(wchar_t const *filename, std::wstring &name);
+HRESULT file_get_extension(wchar_t const *filename, std::wstring &extension);
 
 //////////////////////////////////////////////////////////////////////
 // localization
@@ -170,7 +179,24 @@ enum class scan_folder_sort_order
     descending
 };
 
-HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<std::wstring> &results);
+struct file_info
+{
+    file_info(std::wstring const &n, uint64_t d) throw() : name(n), date(d)
+    {
+    }
+
+    std::wstring name;
+    uint64_t date;
+};
+
+struct folder_scan_result
+{
+    std::wstring path;
+    std::vector<file_info> files;
+};
+
+HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, folder_scan_result **result, HANDLE cancel_event);
+HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<file_info> &files);
 
 //////////////////////////////////////////////////////////////////////
 
@@ -230,6 +256,16 @@ inline std::wstring wide_from_str(char const *s, size_t len)
 inline std::string str_from_wide(wchar_t const *s, size_t len)
 {
     return wstr_converter.to_bytes(s, s + len);
+}
+
+inline std::wstring wide_from_str(char const *s)
+{
+    return wstr_converter.from_bytes(s, s + strlen(s));
+}
+
+inline std::string str_from_wide(wchar_t const *s)
+{
+    return wstr_converter.to_bytes(s, s + wcslen(s));
 }
 
 //////////////////////////////////////////////////////////////////////

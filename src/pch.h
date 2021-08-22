@@ -13,8 +13,10 @@
 
 // Big hassle but if there's a compelling feature then it might be worth it I guess?
 
-#define _WIN32_WINNT _WIN32_WINNT_WIN7
-#define NTDDI_VERSION NTDDI_WIN7
+// _WIN32_WINNT/NTDDI_VERSION are defined at project scope because some modules don't use PCH
+
+//#define _WIN32_WINNT _WIN32_WINNT_WIN7
+//#define NTDDI_VERSION NTDDI_WIN7
 
 // MediaFoundation guids are required for checking HEIF support
 

@@ -88,6 +88,11 @@ struct vec2
         return { std::max(a.x, b.x), std::max(a.y, b.y) };
     }
 
+    static vec2 mod(vec2 const &a, vec2 const &b)
+    {
+        return { fmodf(a.x, b.x), fmodf(a.y, b.y) };
+    }
+
     static vec2 floor(vec2 const &a)
     {
         return { floorf(a.x), floorf(a.y) };

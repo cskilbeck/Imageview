@@ -142,8 +142,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     HWND hwnd;
     CHK_NULL(hwnd = CreateWindowExW(window_ex_style, App::window_class, app_name, window_style, rc.x(), rc.y(), rc.w(), rc.h(), null, null, hInstance, &application));
 
-    application.check_image_loader();
-
     application.set_windowplacement();
 
     RAWINPUTDEVICE Rid[1];
@@ -357,9 +355,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_EXITSIZEMOVE:
         s_in_sizemove = false;
-        RECT rc;
+        rect rc;
         GetClientRect(hWnd, &rc);
-        app->on_window_size_changed(rc.right - rc.left, rc.bottom - rc.top);
+        app->on_window_size_changed(rc.w(), rc.h());
         break;
 
     case WM_ACTIVATEAPP:
@@ -414,6 +412,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_MENUCHAR:
         return MAKELRESULT(0, MNC_CLOSE);
+
+    case App::WM_FILE_LOAD_COMPLETE:
+        app->on_file_load_complete(lParam);
+        break;
+
+    case App::WM_FOLDER_SCAN_COMPLETE:
+        app->on_folder_scanned(reinterpret_cast<folder_scan_result *>(lParam));
+        break;
 
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);

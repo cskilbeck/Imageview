@@ -55,3 +55,26 @@ struct timer_t
     double last_time;
     double current_time;
 };
+
+struct stopwatch : timer_t
+{
+    wchar_t const *name;
+
+    explicit stopwatch(wchar_t const *name) : timer_t(), name(name)
+    {
+        reset();
+    }
+
+    ~stopwatch()
+    {
+        double t = elapsed();
+        (void)t;
+        Log(L"Stopwatch %s : %f", name, t);
+    }
+
+    double elapsed()
+    {
+        update();
+        return wall_time();
+    }
+};

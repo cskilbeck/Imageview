@@ -60,7 +60,6 @@
 // + drag edges and corners of selection around
 //
 //////////////////////////////////////////////////////////////////////
-//
 
 #include "pch.h"
 #include "app.h"
@@ -70,36 +69,6 @@
 #include "shader_inc/ps_drawrect.h"
 #include "shader_inc/ps_solid.h"
 #include "shader_inc/ps_drawgrid.h"
-
-// we may be loading many files at once
-// this is how we keep track of them
-
-struct file_loader
-{
-    std::wstring filename;      // file path, relative to scanned folder - use this as key for map
-    std::vector<byte> bytes;    // data, once it has been loaded
-    HRESULT hresult{ S_OK };    // error code or S_OK from load_file()
-    std::thread thread;         // the thread doing the loading
-    HANDLE complete_event;      // it signals this when it's done (regardless of hresult)
-};
-
-std::unordered_map<std::wstring, file_loader *> loaded_files;
-
-// Version 1
-
-// Left, Right: load previous, next file, no caching
-
-// Version 2
-
-// when we want to view a file (each frame check this request)
-// 1. is it already loaded? if so, decode it and we're done
-// 2. is it being loaded? if so, wait until complete_event, check hresult
-// 3. otherwise kick it off
-
-// when we load a file, if it's in a new folder, scan the folder
-// when folder scan complete (which might be straight away), find the file by ordinal position in the list
-// kick off loads of N surrounding files (those which are not already being loaded)
-//
 
 //////////////////////////////////////////////////////////////////////
 
@@ -137,6 +106,8 @@ namespace
 LPCWSTR App::window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
 ComPtr<ID3D11Debug> App::d3d_debug;
+
+std::unordered_map<std::wstring, App::file_loader *> App::loaded_files;
 
 //////////////////////////////////////////////////////////////////////
 // cursors for hovering over rectangle interior/corners/edges
@@ -315,16 +286,18 @@ HRESULT App::on_paste()
     if(IsClipboardFormatAvailable(CF_DIBV5)) {
 
         // if clipboard contains a DIB, make it look like a file we just loaded
-        file_load_buffer.resize(sizeof(BITMAPFILEHEADER));
-        CHK_HR(append_clipboard_to_buffer(file_load_buffer, CF_DIBV5));
+        file_loader *fl = new file_loader();
+        fl->bytes.resize(sizeof(BITMAPFILEHEADER));
+        fl->filename = L"Clipboard";
+        CHK_HR(append_clipboard_to_buffer(fl->bytes, CF_DIBV5));
 
-        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(file_load_buffer.data());
+        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(fl->bytes.data());
 
         BITMAPV5HEADER *i = reinterpret_cast<BITMAPV5HEADER *>(b + 1);
 
         memset(b, 0, sizeof(*b));
         b->bfType = 'MB';
-        b->bfSize = (DWORD)file_load_buffer.size();
+        b->bfSize = (DWORD)fl->bytes.size();
         b->bfOffBits = sizeof(BITMAPV5HEADER) + sizeof(BITMAPFILEHEADER) + i->bV5ProfileSize;
 
         if(i->bV5Compression == BI_BITFIELDS) {
@@ -332,10 +305,9 @@ HRESULT App::on_paste()
         }
 
         filename = L"Clipboard";
-        file_load_hresult = S_OK;
         image_decode_complete = false;
         selection_active = false;
-        SetEvent(loader_complete_event);
+        PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
 
     } else if(IsClipboardFormatAvailable(filename_fmt)) {
 
@@ -358,49 +330,57 @@ HRESULT App::on_paste()
 
 void App::cancel_loader()
 {
+    Log(L"Cancelling loader threads");
     SetEvent(cancel_loader_event);
-    HANDLE thread_events[2] = { loader_complete_event, scanner_complete_event };
-    while(InterlockedCompareExchange(&thread_count, 0, 0) != 0) {
-        WaitForMultipleObjects(2, thread_events, false, 1000);
+    while(true) {
+        long threads = InterlockedCompareExchange(&thread_count, 0, 0);
+        Log(L"%d loaders are active", threads);
+        if(threads == 0) {
+            break;
+        }
+        Sleep(10);
     }
-    if(loader_thread.joinable()) {
-        loader_thread.join();
-    }
-    if(scanner_thread.joinable()) {
-        scanner_thread.join();
-    }
-    ResetEvent(loader_complete_event);
-    ResetEvent(scanner_complete_event);
     ResetEvent(cancel_loader_event);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void App::check_image_loader()
+void App::decode_image(file_loader *f)
 {
+    if(f == null) {
+        return;
+    }
+
     if(image_decode_complete) {
         return;
     }
-    if(WaitForSingleObject(loader_complete_event, 0) != WAIT_OBJECT_0) {
-        return;
+
+    if(most_recently_loaded_file != null) {
+        delete most_recently_loaded_file;
     }
+
+    most_recently_loaded_file = f;
+
     selection_active = false;
-    ResetEvent(loader_complete_event);
-    if(FAILED(file_load_hresult)) {
-        if(file_load_hresult != ERROR_OPERATION_ABORTED && files_loaded == 0) {
-            std::wstring load_err = windows_error_message(file_load_hresult);
+
+    HRESULT load_hr = most_recently_loaded_file->hresult;
+
+    if(FAILED(load_hr)) {
+
+        if(load_hr != ERROR_OPERATION_ABORTED && files_loaded == 0) {
+            std::wstring load_err = windows_error_message(load_hr);
             std::wstring err_msg = format(L"Error loading %s\n\n%s", filename.c_str(), load_err.c_str());
             MessageBoxW(null, err_msg.c_str(), L"ImageView", MB_ICONEXCLAMATION);
             PostMessage(window, WM_CLOSE, 0, 0);
         }
-        std::wstring err_str = windows_error_message(file_load_hresult);
+        std::wstring err_str = windows_error_message(load_hr);
         wchar_t *name = PathFindFileName(filename.c_str());
         set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
         return;
     }
     files_loaded += 1;
     image_decode_complete = true;
-    HRESULT hr = initialize_image_from_buffer(file_load_buffer);
+    HRESULT hr = initialize_image_from_buffer(most_recently_loaded_file->bytes);
     if(SUCCEEDED(hr)) {
         m_timer.reset();
         set_message(filename.c_str(), 2.0f);
@@ -423,28 +403,123 @@ void App::check_image_loader()
 
 App::~App()
 {
-    cancel_loader();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT App::do_folder_scan(wchar_t const *folder_path)
+{
+    std::wstring path;
+
+    CHK_HR(file_get_path(folder_path, path));
+
+    Log(L"Scan folder %s", path.c_str());
+
+    std::vector<wchar_t const *> extensions{ L"jpg", L"png", L"bmp", L"tiff", L"jpeg" };
+
+    scan_folder_sort_field sort_field = scan_folder_sort_field::name;
+    scan_folder_sort_order order = scan_folder_sort_order::ascending;
+
+    folder_scan_result *results;
+
+    CHK_HR(scan_folder2(path.c_str(), extensions, sort_field, order, &results, quit_event));
+
+    // send the results to the window, it will forward them to the app
+    WaitForSingleObject(window_created_event, INFINITE);
+    SendMessage(window, WM_FOLDER_SCAN_COMPLETE, 0, reinterpret_cast<LPARAM>(results));
+
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void App::scanner_function()
+{
+    MSG msg;
+    bool quit = false;
+    while(!quit && GetMessage(&msg, null, 0, 0) != 0) {
+        switch(msg.message) {
+        case WM_SCAN_FOLDER:
+            do_folder_scan(reinterpret_cast<wchar_t const *>(msg.lParam));
+            break;
+        case WM_EXIT_THREAD:
+            quit = true;
+            break;
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void App::on_folder_scanned(folder_scan_result *scan_result)
+{
+    std::vector<file_info> &results = scan_result->files;
+
+    Log(L"Folder scanned: %s", scan_result->path.c_str());
+
+    if(current_folder_scan != null) {
+        delete current_folder_scan;
+        current_folder_scan = null;
+    }
+
+    current_folder_scan = scan_result;
+
+    if(_wcsicmp(scan_result->path.c_str(), current_folder.c_str()) == 0) {
+        Log(L"We're still in the same folder as the most recently loaded image");
+        std::wstring current_filename;
+        file_get_filename(filename.c_str(), current_filename);
+
+        for(auto f = results.begin(); f != results.end(); ++f) {
+
+            std::wstring d = L"";
+
+            if(_wcsicmp(f->name.c_str(), current_filename.c_str()) == 0) {
+
+                current_file_cursor = (int)(results.size() - (results.end() - f));
+                d = format(L"<=== found it at index %d", current_file_cursor);
+            }
+
+            Log(L"file: %s %s", f->name.c_str(), d.c_str());
+            // Log(L"GOT file: %s", f->name.c_str());
+        }
+        // now load in N files before/after the cursor
+        if(current_file_cursor != -1) {
+            // update_file_cache();
+        }
+    } else {
+        Log(L"Folder scan results from an out-of-date scan (presumably a new image was loaded after this scan was started)");
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void App::move_file_cursor(int movement)
+{
+    // can't key left/right while folder is still being scanned
+    // TODO(chs): remember the moves and apply them when the scan is complete?
+    if(current_folder_scan == null) {
+        return;
+    }
+
+    int new_file_cursor = clamp(0, current_file_cursor + movement, (int)current_folder_scan->files.size() - 1);
+
+    if(new_file_cursor != current_file_cursor) {
+        current_file_cursor = new_file_cursor;
+        std::wstring pic_filename = format(L"%s\\%s", current_folder_scan->path.c_str(), current_folder_scan->files[current_file_cursor].name.c_str());
+        load_image(pic_filename.c_str());
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
 
 HRESULT App::load_image(wchar_t const *filepath)
 {
-    cancel_loader();
-
-    image_decode_complete = false;
-
     filename = (filepath == null) ? L"" : filepath;
 
     // if filename is '?clipboard', attempt to load the contents of the clipboard as a bitmap (synchronously in the UI thread, whevs)
     // if filename is '?open', show OpenFileDialog
     // else try to load it
-    if(filename.empty()) {
-
-        file_load_hresult = E_NOT_SET;
-        SetEvent(loader_complete_event);
-
-    } else if(filename.compare(L"?open") == 0) {
+    if(filename.compare(L"?open") == 0) {
 
         std::wstring selected_filename;
         CHK_HR(select_file_dialog(selected_filename));
@@ -456,53 +531,39 @@ HRESULT App::load_image(wchar_t const *filepath)
 
     } else {
 
-        InterlockedAdd(&thread_count, 2);
+        std::wstring folder;
 
-        loader_thread = std::thread([&]() {
-            file_load_hresult = load_file(filename.c_str(), file_load_buffer, cancel_loader_event, loader_complete_event);
-            InterlockedDecrement(&thread_count);
-        });
+        std::wstring fullpath;
 
-        scanner_thread = std::thread([&]() {
-            // this finds the file using a case-insensitive string compare of the filename
-            // which won't work for symbolic links etc but so what
+        CHK_HR(file_get_full_path(filepath, fullpath));
 
-            wchar_t const *loaded_filename = PathFindFileName(filename.c_str());
+        CHK_HR(file_get_path(fullpath.c_str(), folder));
 
-            wchar_t drive[MAX_PATH];
-            wchar_t dir[MAX_PATH];
-            wchar_t fname[MAX_PATH];
-            wchar_t ext[MAX_PATH];
+        if(folder.empty()) {
+            folder = L".";
+        } else if(folder.back() == '\\') {
+            folder.pop_back();
+        }
 
-            if(_wsplitpath_s(filename.c_str(), drive, dir, fname, ext) == 0) {
-                std::wstring path(drive);
-                path.append(dir);
-                if(!path.empty() && path.back() == '\\') {
-                    path = path.substr(0, path.size() - 1);
-                }
-                Log(L"FOLDER IS %s", path.c_str());
-                std::vector<std::wstring> results;
-                std::vector<wchar_t const *> extensions{ L"jpg", L"png", L"bmp", L"tiff", L"jpeg" };
-                scan_folder_sort_field sort_field = scan_folder_sort_field::name;
-                scan_folder_sort_order order = scan_folder_sort_order::ascending;
-                if(SUCCEEDED(scan_folder(path.c_str(), extensions, sort_field, order, results))) {
-                    intptr_t file_load_cursor{ -1 };
-                    for(auto f = results.begin(); f != results.end(); ++f) {
-                        std::wstring const &file = *f;
-                        Log(L"FILE: %s", file.c_str());
-                        if(_wcsicmp(file.c_str(), loaded_filename) == 0) {
-                            file_load_cursor = results.size() - (results.end() - f);
-                            Log("FOUND IT at index: %d!", file_load_cursor);
-                        }
-                    }
-                    // now load in N files before/after the cursor
-                    if(file_load_cursor != -1) {
-                    }
-                }
-            }
-            SetEvent(scanner_complete_event);
-            InterlockedDecrement(&thread_count);
-        });
+        InterlockedAdd(&thread_count, 1);
+
+        std::thread(
+            [&](wchar_t const *file) {
+                file_loader *fl = new file_loader();
+                fl->filename = std::wstring(file);
+                fl->hresult = load_file(fl->filename, fl->bytes, cancel_loader_event);
+                WaitForSingleObject(window_created_event, INFINITE);
+                PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
+                InterlockedDecrement(&thread_count);
+            },
+            filename.c_str())
+            .detach();
+
+        // if it's an image from a new folder, scan it
+        if(_wcsicmp(current_folder.c_str(), folder.c_str()) != 0) {
+            current_folder = folder;
+            PostThreadMessage(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(filepath));
+        }
     }
     return S_OK;
 }
@@ -517,6 +578,15 @@ HRESULT App::update_constants()
     memcpy(mapped_subresource.pData, &shader_constants, sizeof(shader_const_t));
     d3d_context->Unmap(constant_buffer.Get(), 0);
     return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void App::on_file_load_complete(LPARAM lparam)
+{
+    image_decode_complete = false;
+    file_loader *f = reinterpret_cast<file_loader *>(lparam);
+    decode_image(f);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -657,31 +727,36 @@ vec2 App::screen_to_texture_pos(point_s pos)
 
 vec2 App::texture_to_screen_pos(vec2 pos)
 {
-    return add_point(current_rect.top_left(), texels_to_pixels(clamp_to_texture(vec2::floor(pos))));
+    return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(clamp_to_texture(pos))));
 }
 
 //////////////////////////////////////////////////////////////////////
 
 HRESULT App::init()
 {
+    window_created_event = CreateEvent(null, true, false, null);
+
     current_cursor = LoadCursor(null, IDC_ARROW);
 
-    // remember default settings for 'reset settings to default' feature
+    // remember default settings for 'reset settings to default' feature in settings dialog
     default_settings = settings;
 
-// in debug builds, hold shift to reset settings to defaults
+    // in debug builds, hold middle mouse button at startup to reset settings to defaults
 #if defined(_DEBUG)
-    if(is_key_down(VK_SHIFT)) {
-        settings.load();
-    }
-#else
-    settings.load();
+    if(!is_key_down(VK_MBUTTON))
 #endif
-
+        settings.load();
 
     CHK_NULL(cancel_loader_event = CreateEvent(null, true, false, null));
-    CHK_NULL(loader_complete_event = CreateEvent(null, true, false, null));
-    CHK_NULL(scanner_complete_event = CreateEvent(null, true, false, null));
+    CHK_NULL(quit_event = CreateEvent(null, true, false, null));
+
+    scanner_thread = std::thread([this]() {
+        scanner_function();
+        Log(L"Scanner thread exit");
+    });
+
+    scanner_thread_handle = scanner_thread.native_handle();
+    scanner_thread_id = GetThreadId(scanner_thread_handle);
 
     return S_OK;
 }
@@ -878,6 +953,8 @@ void App::check_selection_hover(vec2 pos)
 HRESULT App::set_window(HWND hwnd)
 {
     window = hwnd;
+
+    SetEvent(window_created_event);
 
     CHK_HR(create_device());
 
@@ -1176,6 +1253,9 @@ void App::on_key_down(int vk_key, LPARAM flags)
         return;
     }
 
+    bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+
     switch(vk_key) {
 
     case ' ':
@@ -1188,6 +1268,22 @@ void App::on_key_down(int vk_key, LPARAM flags)
 
     case 'C':
         center_in_window();
+        break;
+
+    case 'A':
+        if(ctrl) {
+            select_all();
+        } else {
+            settings.grid_enabled = !settings.grid_enabled;
+        }
+        break;
+
+    case 'G':
+        if(shift) {
+            settings.fixed_grid = !settings.fixed_grid;
+        } else {
+            settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
+        }
         break;
 
     case '1':
@@ -1209,10 +1305,12 @@ void App::on_key_down(int vk_key, LPARAM flags)
         zoom_to_selection();
         break;
 
-    case 'A':
-        if((GetKeyState(VK_CONTROL) & 0x8000) != 0) {
-            select_all();
-        }
+    case VK_LEFT:
+        move_file_cursor(-1);
+        break;
+
+    case VK_RIGHT:
+        move_file_cursor(1);
         break;
 
     case 'O': {
@@ -1247,8 +1345,6 @@ void App::on_key_down(int vk_key, LPARAM flags)
 HRESULT App::update()
 {
     m_timer.update();
-
-    check_image_loader();
 
     auto lerp = [&](float &a, float &b) {
         float d = b - a;
@@ -1423,8 +1519,18 @@ HRESULT App::copy_selection()
     }
     vec2 tl = vec2::min(select_anchor, select_current);
     vec2 br = vec2::max(select_anchor, select_current);
-    int w = (int)(br.x - tl.x + 1);
-    int h = (int)(br.y - tl.y + 1);
+
+    D3D11_BOX copy_box;
+    copy_box.left = (int)tl.x;
+    copy_box.right = std::min(texture_width, (int)br.x + 1);
+    copy_box.top = (int)tl.y;
+    copy_box.bottom = std::min(texture_height, (int)br.y + 1);
+    copy_box.back = 1;
+    copy_box.front = 0;
+
+    int w = copy_box.right - copy_box.left;
+    int h = copy_box.bottom - copy_box.top;
+
     if(w < 1 || h < 1) {
         return ERROR_NO_DATA;
     }
@@ -1494,14 +1600,14 @@ HRESULT App::copy_selection()
     CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
     d3d_name(tex);
 
-    D3D11_BOX copy_box;
-    copy_box.left = (int)tl.x;
-    copy_box.right = (int)br.x + 1;
-    copy_box.top = (int)tl.y;
-    copy_box.bottom = (int)br.y + 1;
-    copy_box.back = 1;
-    copy_box.front = 0;
     d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
+
+    struct file_loader
+    {
+        std::wstring filename;      // file path, relative to scanned folder - use this as key for map
+        std::vector<byte> bytes;    // data, once it has been loaded
+        HRESULT hresult{ S_OK };    // error code or S_OK from load_file()
+    };
 
     d3d_context->Flush();
 
@@ -1604,46 +1710,53 @@ HRESULT App::render()
 
     if(image_texture.Get() != null) {
 
+        vec2 scale = div_point(vec2{ 2, 2 }, vec2{ (float)window_width, (float)window_height });
+
         float x_scale = 2.0f / window_width;
         float y_scale = 2.0f / window_height;
 
-        float gx = 0;
-        float gy = 0;
+        vec2 grid_pos{ 0, 0 };
 
-        float gs = settings.grid_size * current_rect.w / texture_width;
+        float gm = (1 << settings.grid_multiplier) / 4.0f;
+        float gs = settings.grid_size * current_rect.w / texture_width * gm;
 
         if(gs < 4) {
             gs = 0;
         }
 
         if(settings.fixed_grid) {
-            float g2 = 2.0f * gs;
-            gx = g2 - fmodf(current_rect.x, g2);
-            gy = g2 - fmodf(current_rect.y, g2);
+            vec2 g2{ 2.0f * gs, 2.0f * gs };
+            grid_pos = sub_point(g2, vec2::mod(current_rect.top_left(), g2));
+            // gx = g2 - fmodf(current_rect.x, g2);
+            // gy = g2 - fmodf(current_rect.y, g2);
         }
 
-        shader_constants.grid_color[0] = settings.grid_color_1;
-        shader_constants.grid_color[1] = settings.grid_color_2;
-        shader_constants.grid_color[2] = settings.grid_color_2;
-        shader_constants.grid_color[3] = settings.grid_color_1;
+        if(settings.grid_enabled) {
+            shader_constants.grid_color[0] = settings.grid_color_1;
+            shader_constants.grid_color[1] = settings.grid_color_2;
+            shader_constants.grid_color[2] = settings.grid_color_2;
+            shader_constants.grid_color[3] = settings.grid_color_1;
+        } else {
+            shader_constants.grid_color[0] = settings.background_color;
+            shader_constants.grid_color[1] = settings.background_color;
+            shader_constants.grid_color[2] = settings.background_color;
+            shader_constants.grid_color[3] = settings.background_color;
+        }
 
         shader_constants.select_color[0] = settings.select_fill_color;
         shader_constants.select_color[1] = settings.select_outline_color1;
         shader_constants.select_color[2] = settings.select_outline_color2;
 
-        float cx = roundf(current_rect.x);
-        float cy = roundf(current_rect.y);
-        float cw = roundf(current_rect.w);
-        float ch = roundf(current_rect.h);
+        float cx = floorf(current_rect.x);
+        float cy = floorf(current_rect.y);
+        float cw = floorf(current_rect.w);
+        float ch = floorf(current_rect.h);
 
-        shader_constants.scale[0] = cw * x_scale;
-        shader_constants.scale[1] = -ch * y_scale;
-        shader_constants.offset[0] = cx * x_scale - 1;
-        shader_constants.offset[1] = 1 - cy * y_scale;
+        shader_constants.scale = mul_point({ cw, -ch }, scale);
+        shader_constants.offset = { cx * x_scale - 1, 1 - cy * y_scale };
 
         shader_constants.grid_size = gs;
-        shader_constants.grid_offset[0] = gx;
-        shader_constants.grid_offset[1] = gy;
+        shader_constants.grid_offset = grid_pos;
 
         CHK_HR(update_constants());
 
@@ -1677,20 +1790,41 @@ HRESULT App::render()
         if(selection_active) {
 
             // convert selection to screen coords
-            vec2 s_tl = texture_to_screen_pos(vec2::min(sa, sc));
 
-            // bottom right pixel of bottom right texel
-            vec2 s_br = texture_to_screen_pos(add_point(vec2::max(sa, sc), { 1, 1 }));
+            vec2 s_tl = vec2::min(sa, sc);
+            vec2 s_br = vec2::max(sa, sc);
+
+            // using doubles here because large images
+            // at some zoom levels cause rounding errors
+            // which this doesn't completely fix but
+            // it makes it better (less shimmering on
+            // select rectangle position when zooming)
+
+            double tw = (double)texture_width;
+            double th = (double)texture_height;
+
+            double xs = cw / tw;
+            double ys = ch / th;
+
+            double tx = floorf(s_tl.x + 0) * xs + cx;
+            double ty = floorf(s_tl.y + 0) * ys + cy;
+            double bx = floorf(s_br.x + 1) * xs + cx;
+            double by = floorf(s_br.y + 1) * ys + cy;
+
+            s_tl = { (float)tx, (float)ty };
+            s_br = { (float)bx, (float)by };
+
+            float sw = (float)settings.select_border_width;
 
             // clamp to the image because zooming/rounding etc
-            float select_l = floorf(std::max(cx, s_tl.x));
-            float select_t = floorf(std::max(cy, s_tl.y));
-            float select_r = floorf(std::min(cx + cw - 1, s_br.x));
-            float select_b = floorf(std::min(cy + ch - 1, s_br.y));
+            float select_l = floorf(std::max(cx, s_tl.x)) - sw;
+            float select_t = floorf(std::max(cy, s_tl.y)) - sw;
+            float select_r = floorf(std::min(cx + cw - 1, s_br.x)) + sw;
+            float select_b = floorf(std::min(cy + ch - 1, s_br.y)) + sw;
 
             // always draw at least something
-            float select_w = std::max(1.0f, select_r - select_l);
-            float select_h = std::max(1.0f, select_b - select_t);
+            float select_w = std::max(1.0f, select_r - select_l + 0.5f);
+            float select_h = std::max(1.0f, select_b - select_t + 0.5f);
 
             // border width clamp if rectangle is too small
             int min_s = (int)std::min(select_w, select_h) - settings.select_border_width * 2;
@@ -1700,10 +1834,8 @@ HRESULT App::render()
 
             shader_constants.select_border_width = select_border_width;    // set viewport coords for the vertex shader
 
-            shader_constants.offset[0] = select_l * x_scale - 1;
-            shader_constants.offset[1] = 1 - (select_t * y_scale);
-            shader_constants.scale[0] = select_w * x_scale;
-            shader_constants.scale[1] = -select_h * y_scale;
+            shader_constants.scale = mul_point({ select_w, -select_h }, scale);
+            shader_constants.offset = { select_l * x_scale - 1, 1 - (select_t * y_scale) };
 
             // set rect coords for the pixel shader
             shader_constants.rect_f[0] = (int)select_l;
@@ -1741,10 +1873,10 @@ HRESULT App::render()
             shader_constants.grid_color[1] = settings.crosshair_color2;
             shader_constants.grid_color[2] = settings.crosshair_color2;
 
-            float crosshair_grid_size = (float)settings.dash_length / 2;
-            shader_constants.grid_size = crosshair_grid_size;
+            float crosshair_grid_size = (float)settings.dash_length;
+            shader_constants.grid_size = crosshair_grid_size / 2;
 
-            float g2 = 2.0f * crosshair_grid_size;
+            vec2 g2{ crosshair_grid_size, crosshair_grid_size };
 
             // scale from texels to pixels
             vec2 p(cur_mouse_pos);
@@ -1754,20 +1886,12 @@ HRESULT App::render()
             // draw a vertical crosshair line
 
             auto draw_vert = [&](float mx, float my) {
-                int x = (int)(mx + ((m_frame >> 0) & 31));
-                int y = (int)(my + ((m_frame >> 0) & 31));
 
-                gx = g2 - fmodf((float)x, g2);
-                gy = g2 - fmodf((float)y, g2);
-
-                shader_constants.grid_offset[0] = 0;
-                shader_constants.grid_offset[1] = gy;
-
-                shader_constants.offset[0] = mx * x_scale - 1;
-                shader_constants.offset[1] = 1;
-                shader_constants.scale[0] = 1 * x_scale;
-                shader_constants.scale[1] = -2;
-
+                float blip = (float)((m_frame >> 0) & 31);
+                grid_pos = sub_point(g2, vec2::mod({ mx + blip, my + blip }, g2));
+                shader_constants.grid_offset = { 0, grid_pos.y };
+                shader_constants.offset = { mx * x_scale - 1, 1 };
+                shader_constants.scale = { 1 * x_scale, -2 };
                 CHK_HR(update_constants());
                 d3d_context->Draw(4, 0);
                 return S_OK;
@@ -1776,20 +1900,12 @@ HRESULT App::render()
             // draw a horizontal crosshair line
 
             auto draw_horiz = [&](float mx, float my) {
-                int x = (int)(mx + ((m_frame >> 0) & 31));
-                int y = (int)(my + ((m_frame >> 0) & 31));
 
-                gx = g2 - fmodf((float)x, g2);
-                gy = g2 - fmodf((float)y, g2);
-
-                shader_constants.grid_offset[0] = gx;
-                shader_constants.grid_offset[1] = 0;
-
-                shader_constants.offset[0] = -1;
-                shader_constants.offset[1] = 1 - my * y_scale;
-                shader_constants.scale[0] = 2;
-                shader_constants.scale[1] = -1 * y_scale;
-
+                float blip = (float)((m_frame >> 0) & 31);
+                grid_pos = sub_point(g2, vec2::mod({ mx + blip, my + blip }, g2));
+                shader_constants.grid_offset = { grid_pos.x, 0 };
+                shader_constants.offset = { -1, 1 - my * y_scale };
+                shader_constants.scale = { 2, -1 * y_scale };
                 CHK_HR(update_constants());
                 d3d_context->Draw(4, 0);
                 return S_OK;
@@ -1870,7 +1986,7 @@ HRESULT App::render()
 
 void App::clear()
 {
-    d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float const *>(&settings.background_color));
+    d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float const *>(&settings.border_color));
 
     d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
@@ -2233,7 +2349,7 @@ HRESULT App::on_device_lost()
 
     CHK_HR(create_resources());
 
-    check_image_loader();
+    decode_image(most_recently_loaded_file);
 
     return S_OK;
 }
@@ -2269,6 +2385,35 @@ HRESULT App::on_drop_string(wchar_t const *str)
 
 void App::on_process_exit()
 {
-    cancel_loader();
     settings.save();
+
+    // this kills all loader threads
+    cancel_loader();
+
+    // murder the scanner thread
+
+    // tell scan_folder2 to quit
+    SetEvent(quit_event);
+
+    // tell the thread itself to quit
+    PostThreadMessage(scanner_thread_id, WM_EXIT_THREAD, 0, 0);
+
+    // wait for it to die
+    while(WaitForSingleObject(scanner_thread_handle, 100) != WAIT_OBJECT_0) {
+        Log(L"Waiting for scanner thread to exit");
+    }
+
+    // should really join() here but... whevs
+    scanner_thread.detach();
+
+    // then cleanup
+
+    if(current_folder_scan != null) {
+        delete current_folder_scan;
+        current_folder_scan = null;
+    }
+
+    CloseHandle(cancel_loader_event);
+    CloseHandle(quit_event);
+    CloseHandle(window_created_event);
 }

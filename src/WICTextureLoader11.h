@@ -55,6 +55,11 @@ namespace DirectX
 #endif
 #endif
 
+    HRESULT CreateWICFrameFromMemoryEx(
+        _In_ const uint8_t *wicData,
+        _In_ size_t wicDataSize,
+        _Outptr_opt_ IWICBitmapFrameDecode **frame) noexcept;
+
     // Standard version
     HRESULT CreateWICTextureFromMemory(
         _In_ ID3D11Device* d3dDevice,
@@ -134,6 +139,18 @@ namespace DirectX
         _In_ ID3D11Device* d3dDevice,
         _In_opt_ ID3D11DeviceContext* d3dContext,
         _In_z_ const wchar_t* szFileName,
+        _In_ size_t maxsize,
+        _In_ D3D11_USAGE usage,
+        _In_ unsigned int bindFlags,
+        _In_ unsigned int cpuAccessFlags,
+        _In_ unsigned int miscFlags,
+        _In_ WIC_LOADER_FLAGS loadFlags,
+        _Outptr_opt_ ID3D11Resource** texture,
+        _Outptr_opt_ ID3D11ShaderResourceView** textureView) noexcept;
+
+    HRESULT CreateTextureFromWIC(_In_ ID3D11Device* d3dDevice,
+        _In_opt_ ID3D11DeviceContext* d3dContext,
+        _In_ IWICBitmapFrameDecode* frame,
         _In_ size_t maxsize,
         _In_ D3D11_USAGE usage,
         _In_ unsigned int bindFlags,
