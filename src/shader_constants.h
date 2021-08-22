@@ -6,6 +6,8 @@
     float2 scale;
     float2 offset;
     float2 grid_offset;
+    float2 glowing_line_s;
+    float2 glowing_line_e;
     float grid_size;
     int frame;
     uint dash_length;

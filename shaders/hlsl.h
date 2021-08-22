@@ -1,4 +1,4 @@
-cbuffer constants : register(b0)
+cbuffer constants
 #include "..\src\shader_constants.h"
 
 struct vs_out

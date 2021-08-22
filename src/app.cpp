@@ -68,6 +68,7 @@
 #include "shader_inc/ps_drawimage.h"
 #include "shader_inc/ps_drawrect.h"
 #include "shader_inc/ps_solid.h"
+#include "shader_inc/ps_spinner.h"
 #include "shader_inc/ps_drawgrid.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -1933,6 +1934,29 @@ HRESULT App::render()
             }
         }
 
+        // spinner if file load is slow
+        if(false) {
+            float w = (float)m_timer.wall_time();
+            float t1 = w * 9 + sinf(w * 7);
+            float t2 = w * 13;
+            float r1 = 23;
+            float r2 = 19;
+            vec2 sm = mul_point(window_size(), { 0.5f, 0.5f });
+            vec2 mid = add_point(sm, { sinf(t1) * r1, cosf(t1) * r1 });
+            vec2 off = add_point(sm, { sinf(t2) * r2, cosf(t2) * r2 });
+            vec2 mn = sub_point(vec2::min(mid, off), { 12.0f, 12.0f });
+            vec2 mx = sub_point(add_point(vec2::max(mid, off), { 12.0f, 12.0f }), mn);
+
+            shader_constants.offset = { mn.x * x_scale - 1, 1 - (mn.y * y_scale) };
+            shader_constants.scale = mul_point({ mx.x, -mx.y }, scale);
+
+            shader_constants.glowing_line_s = mid;
+            shader_constants.glowing_line_e = off;
+            CHK_HR(update_constants());
+            d3d_context->PSSetShader(spinner_shader.Get(), null, 0);
+            d3d_context->Draw(4, 0);
+        }
+
         ///// draw text
 
         d2d_render_target->BeginDraw();
@@ -2134,6 +2158,7 @@ HRESULT App::create_device()
     CHK_HR(d3d_device->CreatePixelShader(ps_drawrect_shaderbin, sizeof(ps_drawrect_shaderbin), null, &rect_shader));
     CHK_HR(d3d_device->CreatePixelShader(ps_drawgrid_shaderbin, sizeof(ps_drawgrid_shaderbin), null, &grid_shader));
     CHK_HR(d3d_device->CreatePixelShader(ps_solid_shaderbin, sizeof(ps_solid_shaderbin), null, &solid_shader));
+    CHK_HR(d3d_device->CreatePixelShader(ps_spinner_shaderbin, sizeof(ps_spinner_shaderbin), null, &spinner_shader));
 
     d3d_name(pixel_shader);
     d3d_name(rect_shader);

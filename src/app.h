@@ -408,6 +408,7 @@ private:
     ComPtr<ID3D11PixelShader> grid_shader;
     ComPtr<ID3D11PixelShader> rect_shader;
     ComPtr<ID3D11PixelShader> solid_shader;
+    ComPtr<ID3D11PixelShader> spinner_shader;
     ComPtr<ID3D11VertexShader> vertex_shader;
 
     ComPtr<ID3D11ShaderResourceView> image_texture_view;

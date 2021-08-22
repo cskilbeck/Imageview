@@ -49,11 +49,11 @@
     <ClInclude Include="src\WICTextureLoader11.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\hlsl.h">
-      <Filter>Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="resources\resource.h">
       <Filter>resources</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\hlsl.h">
+      <Filter>Shaders</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -112,6 +112,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\vs_rectangle.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\ps_spinner.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
