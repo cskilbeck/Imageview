@@ -248,9 +248,6 @@ private:
     settings_t settings;
     settings_t default_settings;
 
-    // most recent filename requested to view
-    std::wstring filename;
-
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
     std::wstring current_folder;
 

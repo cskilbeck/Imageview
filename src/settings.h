@@ -29,7 +29,7 @@ DECL_SETTING(bool, first_run, true);
 DECL_SETTING(WINDOWPLACEMENT, window_placement, sizeof(WINDOWPLACEMENT));
 DECL_SETTING(rect, fullscreen_rect, 0, 0, 0, 0);
 DECL_SETTING(exif_option, image_rotation_option, exif_option::apply);
-DECL_SETTING(bool, show_full_filename_in_titlebar, true);
+DECL_SETTING(bool, show_full_filename_in_titlebar, false);
 DECL_SETTING(float, select_border_grab_size, 8.0f);
 DECL_SETTING(bool, grid_enabled, false);
 DECL_SETTING(int, grid_multiplier, 2);

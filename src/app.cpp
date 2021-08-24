@@ -309,21 +309,22 @@ HRESULT App::decode_image(file_loader *f)
 
         if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
             std::wstring load_err = windows_error_message(load_hr);
-            std::wstring err_msg = format(L"Error loading %s\n\n%s", filename.c_str(), load_err.c_str());
+            std::wstring err_msg = format(L"Error loading %s\n\n%s", f->filename.c_str(), load_err.c_str());
             MessageBoxW(null, err_msg.c_str(), L"ImageView", MB_ICONEXCLAMATION);
 
             // window might be null, that's ok
             PostMessage(window, WM_CLOSE, 0, 0);
         }
         std::wstring err_str = windows_error_message(load_hr);
-        wchar *name = PathFindFileName(filename.c_str());
-        set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
+        std::wstring name;
+        CHK_HR(file_get_filename(f->filename.c_str(), name));
+        set_message(format(L"Can't load %s - %s", name.c_str(), err_str.c_str()).c_str(), 3);
         return load_hr;
     }
     files_loaded += 1;
 
     f->view_count += 1;
-    return show_image(f->bytes, filename.c_str());
+    return show_image(f->bytes, f->filename.c_str());
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -333,7 +334,16 @@ HRESULT App::show_image(std::vector<byte> const &data, wchar const *file)
     HRESULT hr = initialize_image_from_buffer(data);
     if(SUCCEEDED(hr)) {
         m_timer.reset();
-        set_message(file, 2.0f);
+
+        std::wstring name;
+        if(settings.show_full_filename_in_titlebar) {
+            name = std::wstring(file);
+        } else {
+            CHK_HR(file_get_filename(file, name));
+        }
+        std::wstring msg = format(L"%s %dx%d", name.c_str(), texture_width, texture_height);
+        SetWindowText(window, msg.c_str());
+        set_message(msg.c_str(), 2.0f);
     } else {
 
         std::wstring err_str;
@@ -478,7 +488,7 @@ HRESULT App::load_image(wchar const *filepath)
         return E_INVALIDARG;
     }
 
-    filename = std::wstring(filepath);
+    std::wstring filename = std::wstring(filepath);
 
     // if filename is '?clipboard', attempt to load the contents of the clipboard as a bitmap (synchronously in the UI thread, whevs)
 
@@ -717,14 +727,6 @@ HRESULT App::initialize_image_from_buffer(std::vector<byte> const &buffer)
     reset_zoom(settings.zoom_mode);
 
     current_rect = target_rect;
-
-    wchar const *filename_text = filename.c_str();
-
-    if(!settings.show_full_filename_in_titlebar) {
-        filename_text = PathFindFileName(filename_text);
-    }
-
-    SetWindowText(window, format(L"%s %dx%d", filename_text, texture_width, texture_height).c_str());
 
     return S_OK;
 }
@@ -1587,7 +1589,7 @@ HRESULT App::update()
 
     CHK_HR(render());
 
-    if(m_frame > 1 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null || filename.empty())) {
+    if(m_frame > 1 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null)) {
         ShowWindow(window, SW_SHOW);
     }
 
