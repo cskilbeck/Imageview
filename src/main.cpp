@@ -103,13 +103,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
     wchar *cmd_line = GetCommandLineW();
 
-    HRESULT hr = application.reuse_window(cmd_line);
-    if(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
+    if(application.reuse_window(cmd_line) == S_FALSE) {
         return 0;
     }
 
     // start file load asap (or show OpenFileDialog)
-    hr = application.on_command_line(cmd_line);
+    HRESULT hr = application.on_command_line(cmd_line);
 
     // quit if OpenFileDialog was shown and cancelled by the user
     if(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {

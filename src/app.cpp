@@ -210,7 +210,7 @@ HRESULT App::reuse_window(wchar *cmd_line)
             // some confusion about whether this is legit but
             // BringWindowToFront doesn't work for top level windows
             SwitchToThisWindow(existing_window, TRUE);
-            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            return S_FALSE;
         }
     }
     return S_OK;
@@ -414,7 +414,7 @@ void App::scanner_function()
 
 void App::on_folder_scanned(folder_scan_result *scan_result)
 {
-    Log(L"Folder scanned: %s", scan_result->path.c_str());
+    Log(L"%llu images found in %s", scan_result->files.size(), scan_result->path.c_str());
 
     if(current_folder_scan != null) {
         delete current_folder_scan;
@@ -422,10 +422,6 @@ void App::on_folder_scanned(folder_scan_result *scan_result)
     }
 
     current_folder_scan = scan_result;
-
-    if(scan_result == null) {
-        MessageBox(null, L"!", L"!", MB_ICONEXCLAMATION);
-    }
 
     if(current_image_file != null && current_image_file->index == -1) {
         update_file_index(current_image_file);
@@ -584,23 +580,32 @@ HRESULT App::load_image(wchar const *filepath)
 }
 
 //////////////////////////////////////////////////////////////////////
+// if loaded file is in the current folder, find index with list of files
 
 HRESULT App::update_file_index(file_loader *f)
 {
     if(current_folder_scan == null) {
         return E_INVALIDARG;
     }
+    std::wstring folder;
+    CHK_HR(file_get_path(f->filename.c_str(), folder));
+
+    if(_wcsicmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
+        return E_CHANGED_STATE;
+    }
+
     std::wstring name;
     CHK_HR(file_get_filename(f->filename.c_str(), name));
     int id = 0;
     for(auto &ff : current_folder_scan->files) {
         if(_wcsicmp(ff.name.c_str(), name.c_str()) == 0) {
             f->index = id;
+            Log(L"%s is at index %d", name.c_str(), id);
             return S_OK;
         }
         id += 1;
     }
-    return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    return E_NOT_SET;
 }
 
 //////////////////////////////////////////////////////////////////////
