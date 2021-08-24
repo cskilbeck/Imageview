@@ -27,9 +27,11 @@ struct App : public CDragDropHelper
     // a file that has maybe been loaded, successfully or not
     struct file_loader
     {
-        std::wstring filename;      // file path, relative to scanned folder - use this as key for map
-        std::vector<byte> bytes;    // data, once it has been loaded
-        HRESULT hresult{ S_OK };    // error code or S_OK from load_file()
+        std::wstring filename;                                                 // file path, relative to scanned folder - use this as key for map
+        std::vector<byte> bytes;                                               // raw pixels, once it has been loaded - duplicate of texture, so...?
+        HRESULT hresult{ HRESULT_FROM_WIN32(ERROR_OPERATION_IN_PROGRESS) };    // error code or S_OK from load_file()
+        int index{ -1 };                                                       // position in the list of files
+        int view_count{ 0 };                                                   // how many times this has been viewed since being loaded
     };
 
     App() = default;
@@ -37,12 +39,19 @@ struct App : public CDragDropHelper
     ~App();
 
     // WM_USER messages for main window
-    static constexpr uint WM_FILE_LOAD_COMPLETE = WM_USER;
-    static constexpr uint WM_FOLDER_SCAN_COMPLETE = WM_USER + 1;
+    enum
+    {
+        WM_FILE_LOAD_COMPLETE = WM_USER,
+        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1,
+        WM_FILE_ALREADY_LOADED = WM_USER + 2
+    };
 
     // WM_USER messages for scanner thread
-    static constexpr uint WM_SCAN_FOLDER = WM_USER;
-    static constexpr uint WM_EXIT_THREAD = WM_USER + 1;
+    enum
+    {
+        WM_SCAN_FOLDER = WM_USER,
+        WM_EXIT_THREAD = WM_USER + 1
+    };
 
     // singletonish, but not checked
     App(App &&) = delete;
@@ -59,10 +68,18 @@ struct App : public CDragDropHelper
     // request an image file to be loaded
     HRESULT load_image(wchar_t const *filepath);
 
-    // if file was loaded, try to decode it
-    void decode_image(file_loader *f);
+    HRESULT App::show_image(std::vector<byte> const &data, wchar_t const *filename);
 
+    void load_file(file_loader *f);
+
+    // if file was loaded, try to decode it
+    HRESULT decode_image(file_loader *f);
+
+    // new file loaded
     void on_file_load_complete(LPARAM lparam);
+
+    // file found in cache, display it
+    void on_file_already_loaded(LPARAM lparam);
 
     // actual image decoder uses WIC
     HRESULT initialize_image_from_buffer(std::vector<byte> const &buffer);
@@ -254,18 +271,19 @@ private:
     // note that this does not account for failing to decode the image....
     int files_loaded{ 0 };
 
-    // have we attempted to decode the loaded file?
-    bool image_decode_complete{ false };
-
     // thread admin
+    file_loader *requested_file{ null };
 
     // persistent folder scanner thread
     std::thread scanner_thread;
     HANDLE scanner_thread_handle{ null };
     DWORD scanner_thread_id{ 0 };
+    std::atomic_bool scanner_thread_running{ false };
 
     void scanner_function();
     HRESULT do_folder_scan(wchar_t const *path);
+
+    HRESULT update_file_index(file_loader *f);
 
     // set this to cancel all async file loading activity
     HANDLE cancel_loader_event;
@@ -276,9 +294,13 @@ private:
     // # of file loader threads in flight, set cancel event then wait for this to fall to 0
     LONG thread_count;
 
+    // files which have been loaded
     static std::unordered_map<std::wstring, file_loader *> loaded_files;
 
-    file_loader *most_recently_loaded_file{ null };
+    // files which have been requested to load
+    static std::unordered_map<std::wstring, file_loader *> loading_files;
+
+    file_loader *current_image_file{ null };
 
     void cancel_loader();
 
@@ -353,6 +375,10 @@ private:
 
     vec2 small_label_size{ 0, 0 };
     float small_label_padding{ 2.0f };
+
+    uint64_t system_memory_size_kb{ 0 };
+
+    uint64_t cache_in_use{ 0 };
 
     // for IUnknown
     long refcount;
@@ -487,7 +513,7 @@ private:
     vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
     vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
 
-    HCURSOR current_cursor;
+    HCURSOR current_mouse_cursor;
 
     // the point they first clicked
     vec2 select_anchor;
@@ -524,4 +550,3 @@ private:
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(App::selection_hover_t);
-

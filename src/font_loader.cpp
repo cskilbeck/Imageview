@@ -139,7 +139,7 @@ HRESULT ResourceFontContext::CreateFontCollection(UINT const *fontCollectionKey,
     *result = NULL;
 
     if(dwrite_factory == nullptr) {
-        return ERROR_BAD_CONFIGURATION;
+        return E_UNEXPECTED;
     }
 
     return dwrite_factory->CreateCustomFontCollection(ResourceFontCollectionLoader::GetLoader(), fontCollectionKey, keySize, result);

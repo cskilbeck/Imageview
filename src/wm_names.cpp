@@ -2,9 +2,9 @@
 
 #define TRACE_ID(iD) \
     case iD:         \
-        return TEXT(#iD);
+        return L#iD;
 
-TCHAR const *get_wm_name(uint32_t uMsg)
+wchar_t const *get_wm_name(uint32_t uMsg)
 {
     switch(uMsg) {
         TRACE_ID(WM_NULL);
@@ -240,22 +240,8 @@ TCHAR const *get_wm_name(uint32_t uMsg)
 #if(WINVER >= 0x0600)
         TRACE_ID(WM_GETTITLEBARINFOEX);
 #endif /* WINVER >= 0x0600 */
-//#if(_WIN32_WINNT >= 0x0601)
-//        TRACE_ID(SPI_GETHUNGAPPTIMEOUT);            // 0x0078
-//        TRACE_ID(SPI_SETHUNGAPPTIMEOUT);            // 0x0079
-//        TRACE_ID(SPI_GETWAITTOKILLTIMEOUT);         // 0x007A
-//        TRACE_ID(SPI_SETMOUSESIDEMOVETHRESHOLD);    // 0x0089
-//        TRACE_ID(SPI_GETPENSIDEMOVETHRESHOLD);      // 0x008A
-//        TRACE_ID(SPI_SETPENSIDEMOVETHRESHOLD);      // 0x008B
-//        TRACE_ID(SPI_GETDRAGFROMMAXIMIZE);          // 0x008C
-//        TRACE_ID(SPI_SETDRAGFROMMAXIMIZE);          // 0x008D
-//        TRACE_ID(SPI_GETSNAPSIZING);                // 0x008E
-//        TRACE_ID(SPI_SETSNAPSIZING);                // 0x008F
-//        TRACE_ID(SPI_GETDOCKMOVING);                // 0x0090
-//        TRACE_ID(SPI_SETDOCKMOVING);                // 0x0091
-//#endif                                              /* _WIN32_WINNT >= 0x0601 */
 
     default:
-        return TEXT("WM_UNKNOWN???");
+        return L"WM_UNKNOWN???";
     }
 }

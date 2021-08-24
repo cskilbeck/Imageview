@@ -107,16 +107,18 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     if(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
         return 0;
     }
-    CHECK(hr);
 
-    // start file load asap (or show OpenFileDialog, or reuse existing window)
+    // start file load asap (or show OpenFileDialog)
     hr = application.on_command_line(cmd_line);
 
     // quit if OpenFileDialog was shown and cancelled by the user
     if(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
         return 0;
     }
-    CHECK(hr);
+    if(FAILED(hr)) {
+        display_error(format(L"Command line %s", cmd_line).c_str(), hr);
+        return 0;
+    }
 
     HICON icon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
     HCURSOR cursor = LoadCursor(null, IDC_ARROW);
@@ -133,7 +135,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
     CHK_BOOL(RegisterClassExW(&wcex));
 
-    // styles will also be different depending on fullscreen setting
     DWORD window_style;
     DWORD window_ex_style;
     rect rc;
@@ -415,6 +416,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case App::WM_FILE_LOAD_COMPLETE:
         app->on_file_load_complete(lParam);
+        break;
+
+    case App::WM_FILE_ALREADY_LOADED:
+        app->on_file_already_loaded(lParam);
         break;
 
     case App::WM_FOLDER_SCAN_COMPLETE:

@@ -33,3 +33,4 @@ DECL_SETTING(bool, show_full_filename_in_titlebar, true);
 DECL_SETTING(float, select_border_grab_size, 8.0f);
 DECL_SETTING(bool, grid_enabled, false);
 DECL_SETTING(int, grid_multiplier, 2);
+DECL_SETTING(size_t, cache_size, 1048576llu * 16); // 1GB memory cache by default

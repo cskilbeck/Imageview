@@ -74,10 +74,10 @@ HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
 //////////////////////////////////////////////////////////////////////
 // loads a file, size is limited to 4GB or less
 // buffer will be cleared in case of any error, on success contains file contents
-// set cancel_event to cancel the load, it will return ERROR_OPERATION_ABORTED in that case
+// set cancel_event to cancel the load, it will return E_ABORT in that case
 // cancel_event can be null, in which case the load can't be cancelled
 
-HRESULT load_file(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
+HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cancel_event)
 {
     // if we error out for any reason, free the buffer
     auto cleanup_buffer = deferred([&] { buffer.clear(); });
@@ -150,9 +150,9 @@ HRESULT load_file(std::wstring const &filename, std::vector<byte> &buffer, HANDL
     case WAIT_OBJECT_0 + 1:
         // don't check for CancelIo error status
         // if it fails, there's nothing we can do about it anyway
-        // and we want to return ERROR_OPERATION_ABORTED
+        // and we want to return E_ABORT
         CancelIo(file_handle);
-        return ERROR_OPERATION_ABORTED;
+        return E_ABORT;
 
     // this should not be possible
     case WAIT_ABANDONED:
@@ -322,7 +322,7 @@ HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extension
 
             // scan folder can be cancelled
             if(WaitForSingleObject(cancel_event, 0) == WAIT_OBJECT_0) {
-                return ERROR_OPERATION_ABORTED;
+                return E_ABORT;
             }
 
             // if it's a file
@@ -521,6 +521,63 @@ HRESULT select_file_dialog(std::wstring &path)
 }
 
 //////////////////////////////////////////////////////////////////////
+
+uint32_t color_to_uint32(vec4 color)
+{
+    float *f = reinterpret_cast<float *>(&color);
+    int a = (int)(f[0] * 255.0f) & 0xff;
+    int b = (int)(f[1] * 255.0f) & 0xff;
+    int g = (int)(f[2] * 255.0f) & 0xff;
+    int r = (int)(f[3] * 255.0f) & 0xff;
+    return (r << 24) | (g << 16) | (b << 8) | a;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+vec4 uint32_to_color(uint32_t color)
+{
+    float a = ((color >> 24) & 0xff) / 255.0f;
+    float b = ((color >> 16) & 0xff) / 255.0f;
+    float g = ((color >> 8) & 0xff) / 255.0f;
+    float r = ((color >> 0) & 0xff) / 255.0f;
+    return { r, g, b, a };
+}
+
+//////////////////////////////////////////////////////////////////////
+
+static UINT_PTR CALLBACK select_color_dialog_hook_proc(HWND hdlg, UINT uiMsg, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(wParam);
+
+    if(uiMsg == WM_INITDIALOG) {
+        CHOOSECOLOR *cc = reinterpret_cast<CHOOSECOLOR *>(lParam);
+        if(cc != null && cc->lCustData != 0) {
+            SetWindowText(hdlg, reinterpret_cast<wchar_t *>(cc->lCustData));
+        }
+    }
+    return 0;
+}
+
+HRESULT select_color_dialog(HWND window, uint32_t &color, wchar_t const *title)
+{
+    static COLORREF custom_colors[16];
+
+    CHOOSECOLOR cc{ 0 };
+    cc.lStructSize = sizeof(cc);
+    cc.hwndOwner = window;
+    cc.lpCustColors = (LPDWORD)custom_colors;
+    cc.lCustData = reinterpret_cast<LPARAM>(title);
+    cc.rgbResult = color;
+    cc.Flags = CC_FULLOPEN | CC_RGBINIT | CC_ANYCOLOR | CC_ENABLEHOOK;
+    cc.lpfnHook = select_color_dialog_hook_proc;
+    if(ChooseColor(&cc) == TRUE) {
+        color = cc.rgbResult;
+        return S_OK;
+    }
+    return E_ABORT;
+}
+
+//////////////////////////////////////////////////////////////////////
 // get a localized string by id
 
 std::wstring const &str_local(uint id)
@@ -546,11 +603,31 @@ std::wstring const &str_local(uint id)
 }
 
 //////////////////////////////////////////////////////////////////////
+
+std::wstring strip_quotes(wchar_t const *s)
+{
+    size_t len = wcslen(s);
+    if(s[0] == '"' && s[len - 1] == '"') {
+        len -= 2;
+        s += 1;
+    }
+    return std::wstring(s, len);
+}
+
+//////////////////////////////////////////////////////////////////////
 // get a null-terminated wchar_t pointer to the localized string
 
 wchar_t const *localize(uint id)
 {
     return str_local(id).c_str();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+BOOL file_exists(wchar_t const *name)
+{
+    DWORD x = GetFileAttributes(name);
+    return x != 0xffffffff && (x & FILE_ATTRIBUTE_NORMAL) != 0;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -611,8 +688,8 @@ HRESULT file_get_extension(wchar_t const *filename, std::wstring &extension)
 
 HRESULT file_get_full_path(wchar_t const *filename, std::wstring &fullpath)
 {
-    wchar_t tiny[1];
-    uint size = GetFullPathName(filename, 1, tiny, null);
+    wchar_t dummy;
+    uint size = GetFullPathName(filename, 1, &dummy, null);
     if(size == 0) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -621,5 +698,86 @@ HRESULT file_get_full_path(wchar_t const *filename, std::wstring &fullpath)
     if(size == 0) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
+    fullpath.pop_back();    // remove null-termination
     return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+std::wstring windows_error_message(uint32_t err)
+{
+    if(err == 0) {
+        err = GetLastError();
+    }
+    return _com_error(HRESULT_FROM_WIN32(err)).ErrorMessage();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+std::wstring format_v(wchar_t const *fmt, va_list v)
+{
+    size_t len = _vscwprintf(fmt, v);
+    std::wstring s;
+    s.resize(len + 1);
+    _vsnwprintf_s(&s[0], len + 1, _TRUNCATE, fmt, v);
+    return s;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+std::string format_v(char const *fmt, va_list v)
+{
+    size_t len = _vscprintf(fmt, v);
+    std::string s;
+    s.resize(len + 1);
+    vsnprintf_s(&s[0], len + 1, _TRUNCATE, fmt, v);
+    return s;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+std::string format(char const *fmt, ...)
+{
+    va_list v;
+    va_start(v, fmt);
+    return format_v(fmt, v);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+std::wstring format(wchar_t const *fmt, ...)
+{
+    va_list v;
+    va_start(v, fmt);
+    return format_v(fmt, v);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT log_win32_error(DWORD err, wchar_t const *message, va_list v)
+{
+    TCHAR buffer[4096];
+    _vsntprintf_s(buffer, _countof(buffer), message, v);
+    HRESULT r = HRESULT_FROM_WIN32(err);
+    std::wstring err_str = windows_error_message(r);
+    Log(TEXT("ERROR %08x (%s) %s"), err, buffer, err_str.c_str());
+    return r;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT log_win32_error(wchar_t const *message, ...)
+{
+    va_list v;
+    va_start(v, message);
+    return log_win32_error(GetLastError(), message, v);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT log_win32_error(DWORD err, wchar_t const *message, ...)
+{
+    va_list v;
+    va_start(v, message);
+    return log_win32_error(err, message, v);
 }

@@ -1,5 +1,11 @@
 #pragma once
 
+#if defined(_DEBUG)
+#define LOG_ENABLED 1
+#else
+#define LOG_ENABLED 0
+#endif
+
 // ImageView is tiny so stuffing all the headers into a single precompiled header makes sense
 
 #include <winsdkver.h>

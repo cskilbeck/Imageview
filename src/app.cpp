@@ -4,60 +4,15 @@
 // show message if file load is slow
 // settings dialog
 // customise keyboard shortcuts / help screen
-// file associations
 // localization
-//
-// scroll through images in folder
-// test Windows 7 support
-// think about installation
+// Windows 7 support
+// installation/file associations
+// image decode in the loader thread?
 //
 // slippery slope:
 // 'R' to rotate it and then, save?
 // heif support (https://nokiatech.github.io/heif) ? or link to store app
 // load images from URLs which are dragged/pasted?
-//
-//////////////////////////////////////////////////////////////////////
-//
-// + fullscreen toggle restores wrong windowplacement
-// + maximize from minimize makes viewport wrong
-// + rect select on pixel boundaries
-// + zoom grid with image
-// + pop open file dialog if filename is "?open"
-// + load clipboard if filename is "?clipboard"
-// + use sRGB color space
-// + maintain relative position when toggling fullscreen
-// + animate selection rectangle
-// + paste image clipboard into the window
-// + copy selection to clipboard
-// + settings\background colour
-// + load/save settings
-// + drop an image file onto the window
-// + copy copies to BITMAPV5HEADER to preserve alpha channel
-// + fix up the file loading fiasco
-// + fit window to image on load / zoom
-// + zoom to selection
-// + animate zoom changes
-// + fix CF_DIBV5 copy/paste stuff
-// + reuse window
-// + make crosshairs fat when zoomed in? (well, kinda)
-// + toggle_fullscreen uses monitor that the window is mostly on
-// + shift key snaps mouse to axis
-// + open file dialog
-// + fit image to window on resize if it has been fitted to window and not dragged or zoomed since
-// + show filename for a while after its loaded
-// + fix coord clamping/rounding mess when selecting/zooming/copying etc
-// + text rendering
-// + fit window to image on load
-// + fix remembering window position/state
-// + 'C' to center image in window
-// + load dragged/pasted filenames
-// + zoom to selection still shows the coordinate labels
-// + drag the selection around
-// + fix round() selection drawing errors [kinda, good enough]
-// + handle exif rotation
-// + option - show full filepath in the titlebar
-// + fix zoom to selection
-// + drag edges and corners of selection around
 //
 //////////////////////////////////////////////////////////////////////
 
@@ -109,6 +64,7 @@ LPCWSTR App::window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-20769
 ComPtr<ID3D11Debug> App::d3d_debug;
 
 std::unordered_map<std::wstring, App::file_loader *> App::loaded_files;
+std::unordered_map<std::wstring, App::file_loader *> App::loading_files;
 
 //////////////////////////////////////////////////////////////////////
 // cursors for hovering over rectangle interior/corners/edges
@@ -206,7 +162,7 @@ HRESULT App::serialize_setting(settings_t::serialize_action action, wchar_t cons
 HRESULT App::settings_t::serialize(serialize_action action, wchar_t const *save_key_name)
 {
     if(save_key_name == null) {
-        return ERROR_BAD_ARGUMENTS;
+        return E_INVALIDARG;
     }
 
 #undef DECL_SETTING
@@ -281,50 +237,47 @@ HRESULT App::on_command_line(wchar_t *cmd_line)
 
 HRESULT App::on_paste()
 {
-    UINT filename_fmt = RegisterClipboardFormat(CFSTR_FILENAMEW);
-    // UINT link_fmt = RegisterClipboardFormat(CFSTR_INETURLW);
-
     if(IsClipboardFormatAvailable(CF_DIBV5)) {
 
         // if clipboard contains a DIB, make it look like a file we just loaded
-        file_loader *fl = new file_loader();
-        fl->bytes.resize(sizeof(BITMAPFILEHEADER));
-        fl->filename = L"Clipboard";
-        CHK_HR(append_clipboard_to_buffer(fl->bytes, CF_DIBV5));
+        std::vector<byte> bytes;
+        bytes.resize(sizeof(BITMAPFILEHEADER));
+        CHK_HR(append_clipboard_to_buffer(bytes, CF_DIBV5));
 
-        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(fl->bytes.data());
+        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(bytes.data());
 
         BITMAPV5HEADER *i = reinterpret_cast<BITMAPV5HEADER *>(b + 1);
 
         memset(b, 0, sizeof(*b));
         b->bfType = 'MB';
-        b->bfSize = (DWORD)fl->bytes.size();
+        b->bfSize = (DWORD)bytes.size();
         b->bfOffBits = sizeof(BITMAPV5HEADER) + sizeof(BITMAPFILEHEADER) + i->bV5ProfileSize;
 
         if(i->bV5Compression == BI_BITFIELDS) {
             b->bfOffBits += 12;
         }
 
-        filename = L"Clipboard";
-        image_decode_complete = false;
         selection_active = false;
-        PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
-
-    } else if(IsClipboardFormatAvailable(filename_fmt)) {
-
-        // else if it's a filename, try to load it
-        std::vector<byte> buffer;
-        CHK_HR(append_clipboard_to_buffer(buffer, filename_fmt));
-        load_image(reinterpret_cast<wchar_t const *>(buffer.data()));
-
-    } else if(IsClipboardFormatAvailable(CF_UNICODETEXT)) {
-
-        std::vector<byte> buffer;
-        CHK_HR(append_clipboard_to_buffer(buffer, CF_UNICODETEXT));
-        return on_drop_string(reinterpret_cast<wchar_t const *>(buffer.data()));
+        return show_image(bytes, L"Clipboard");
     }
 
-    return S_OK;
+    UINT filename_fmt = RegisterClipboardFormat(CFSTR_FILENAMEW);
+    UINT fmt = 0;
+    if(IsClipboardFormatAvailable(filename_fmt)) {
+        fmt = filename_fmt;
+    } else if(IsClipboardFormatAvailable(CF_UNICODETEXT)) {
+        fmt = CF_UNICODETEXT;
+    }
+
+    std::vector<byte> buffer;
+    CHK_HR(append_clipboard_to_buffer(buffer, fmt));
+    wchar_t const *name = reinterpret_cast<wchar_t const *>(buffer.data());
+    std::wstring bare_name = strip_quotes(name);
+    if(file_exists(bare_name.c_str())) {
+        return load_image(bare_name.c_str());
+    }
+    set_message(format(L"Can't load %s - not a file", bare_name.c_str()).c_str(), 2.0f);
+    return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -346,45 +299,41 @@ void App::cancel_loader()
 
 //////////////////////////////////////////////////////////////////////
 
-void App::decode_image(file_loader *f)
+HRESULT App::decode_image(file_loader *f)
 {
-    if(f == null) {
-        return;
-    }
-
-    if(image_decode_complete) {
-        return;
-    }
-
-    if(most_recently_loaded_file != null) {
-        delete most_recently_loaded_file;
-    }
-
-    most_recently_loaded_file = f;
-
     selection_active = false;
 
-    HRESULT load_hr = most_recently_loaded_file->hresult;
+    HRESULT load_hr = f->hresult;
 
     if(FAILED(load_hr)) {
 
-        if(load_hr != ERROR_OPERATION_ABORTED && files_loaded == 0) {
+        if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
             std::wstring load_err = windows_error_message(load_hr);
             std::wstring err_msg = format(L"Error loading %s\n\n%s", filename.c_str(), load_err.c_str());
             MessageBoxW(null, err_msg.c_str(), L"ImageView", MB_ICONEXCLAMATION);
+
+            // window might be null, that's ok
             PostMessage(window, WM_CLOSE, 0, 0);
         }
         std::wstring err_str = windows_error_message(load_hr);
         wchar_t *name = PathFindFileName(filename.c_str());
         set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
-        return;
+        return load_hr;
     }
     files_loaded += 1;
-    image_decode_complete = true;
-    HRESULT hr = initialize_image_from_buffer(most_recently_loaded_file->bytes);
+
+    f->view_count += 1;
+    return show_image(f->bytes, filename.c_str());
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT App::show_image(std::vector<byte> const &data, wchar_t const *file)
+{
+    HRESULT hr = initialize_image_from_buffer(data);
     if(SUCCEEDED(hr)) {
         m_timer.reset();
-        set_message(filename.c_str(), 2.0f);
+        set_message(file, 2.0f);
     } else {
 
         std::wstring err_str;
@@ -395,9 +344,10 @@ void App::decode_image(file_loader *f)
         } else {
             err_str = windows_error_message(hr);
         }
-        wchar_t *name = PathFindFileName(filename.c_str());
+        wchar_t *name = PathFindFileName(file);
         set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
     }
+    return hr;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -413,6 +363,8 @@ HRESULT App::do_folder_scan(wchar_t const *folder_path)
     std::wstring path;
 
     CHK_HR(file_get_path(folder_path, path));
+
+    delete[] folder_path;
 
     Log(L"Scan folder %s", path.c_str());
 
@@ -438,6 +390,14 @@ void App::scanner_function()
 {
     MSG msg;
     bool quit = false;
+
+    // is this the right way to force message queue creation?
+    PeekMessage(&msg, (HWND)-1, 0, 0, PM_NOREMOVE);
+
+    // hope so, now notify main thread that scanner_thread is alive
+    scanner_thread_running = true;
+
+    // respond to requests from main thread
     while(!quit && GetMessage(&msg, null, 0, 0) != 0) {
         switch(msg.message) {
         case WM_SCAN_FOLDER:
@@ -454,8 +414,6 @@ void App::scanner_function()
 
 void App::on_folder_scanned(folder_scan_result *scan_result)
 {
-    std::vector<file_info> &results = scan_result->files;
-
     Log(L"Folder scanned: %s", scan_result->path.c_str());
 
     if(current_folder_scan != null) {
@@ -465,30 +423,12 @@ void App::on_folder_scanned(folder_scan_result *scan_result)
 
     current_folder_scan = scan_result;
 
-    if(_wcsicmp(scan_result->path.c_str(), current_folder.c_str()) == 0) {
-        Log(L"We're still in the same folder as the most recently loaded image");
-        std::wstring current_filename;
-        file_get_filename(filename.c_str(), current_filename);
+    if(scan_result == null) {
+        MessageBox(null, L"!", L"!", MB_ICONEXCLAMATION);
+    }
 
-        for(auto f = results.begin(); f != results.end(); ++f) {
-
-            std::wstring d = L"";
-
-            if(_wcsicmp(f->name.c_str(), current_filename.c_str()) == 0) {
-
-                current_file_cursor = (int)(results.size() - (results.end() - f));
-                d = format(L"<=== found it at index %d", current_file_cursor);
-            }
-
-            Log(L"file: %s %s", f->name.c_str(), d.c_str());
-            // Log(L"GOT file: %s", f->name.c_str());
-        }
-        // now load in N files before/after the cursor
-        if(current_file_cursor != -1) {
-            // update_file_cache();
-        }
-    } else {
-        Log(L"Folder scan results from an out-of-date scan (presumably a new image was loaded after this scan was started)");
+    if(current_image_file != null && current_image_file->index == -1) {
+        update_file_index(current_image_file);
     }
 }
 
@@ -512,81 +452,232 @@ void App::move_file_cursor(int movement)
 }
 
 //////////////////////////////////////////////////////////////////////
+// kick off a file loader thread
+
+void App::load_file(file_loader *loader)
+{
+    // +1 threadcount
+
+    InterlockedIncrement(&thread_count);
+
+    std::thread(
+
+        [this](file_loader *fl) {
+
+            fl->hresult = ::load_file(fl->filename.c_str(), fl->bytes, cancel_loader_event);
+            WaitForSingleObject(window_created_event, INFINITE);
+            PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
+
+            InterlockedDecrement(&thread_count);
+        },
+        loader)
+        .detach();
+}
+
+//////////////////////////////////////////////////////////////////////
 
 HRESULT App::load_image(wchar_t const *filepath)
 {
     filename = (filepath == null) ? L"" : filepath;
 
     // if filename is '?clipboard', attempt to load the contents of the clipboard as a bitmap (synchronously in the UI thread, whevs)
+
+    if(filename.compare(L"?clipboard") == 0) {
+        return on_paste();
+    }
+
     // if filename is '?open', show OpenFileDialog
-    // else try to load it
+
     if(filename.compare(L"?open") == 0) {
 
         std::wstring selected_filename;
         CHK_HR(select_file_dialog(selected_filename));
-        load_image(selected_filename.c_str());
+        filename = selected_filename.c_str();
+    }
 
-    } else if(filename.compare(L"?clipboard") == 0) {
+    // get somewhat canonical filepath and parts thereof
 
-        on_paste();
+    std::wstring folder;
+    std::wstring name;
+    std::wstring fullpath;
 
-    } else {
+    CHK_HR(file_get_full_path(filename.c_str(), fullpath));
+    CHK_HR(file_get_filename(fullpath.c_str(), name));
+    CHK_HR(file_get_path(fullpath.c_str(), folder));
 
-        std::wstring folder;
+    if(folder.empty()) {
+        folder = L".";
+    } else if(folder.back() == '\\') {
+        folder.pop_back();
+    }
 
-        std::wstring fullpath;
+    // kick folder scanner thread off if we haven't already
 
-        CHK_HR(file_get_full_path(filepath, fullpath));
+    if(!scanner_thread_running) {
+        scanner_thread = std::thread([this]() {
+            scanner_function();
+            Log(L"Scanner thread exit");
+        });
 
-        CHK_HR(file_get_path(fullpath.c_str(), folder));
-
-        if(folder.empty()) {
-            folder = L".";
-        } else if(folder.back() == '\\') {
-            folder.pop_back();
+        while(!scanner_thread_running) {
+            Sleep(0);
         }
+        scanner_thread_handle = scanner_thread.native_handle();
+        scanner_thread_id = GetThreadId(scanner_thread_handle);
+    }
 
-        InterlockedAdd(&thread_count, 1);
+    // if it's in the cache already, just decode and show it
 
-        std::thread(
-            [&](wchar_t const *file) {
-                file_loader *fl = new file_loader();
-                fl->filename = std::wstring(file);
-                fl->hresult = load_file(fl->filename, fl->bytes, cancel_loader_event);
-                WaitForSingleObject(window_created_event, INFINITE);
-                PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
-                InterlockedDecrement(&thread_count);
-            },
-            filename.c_str())
-            .detach();
+    auto found = loaded_files.find(fullpath);
+    if(found != loaded_files.end()) {
+        Log(L"Already got %s", name.c_str());
+        current_image_file = found->second;
+        decode_image(current_image_file);
+        return S_OK;
+    }
 
-        // if it's an image from a new folder, scan it
-        if(_wcsicmp(current_folder.c_str(), folder.c_str()) != 0) {
-            current_folder = folder;
-            PostThreadMessage(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(filepath));
-        }
+    // if it's currently being loaded, mark it for viewing when it arrives
+
+    found = loading_files.find(fullpath);
+    if(found != loading_files.end()) {
+        Log(L"In progress %s", name.c_str());
+        requested_file = found->second;
+        return S_OK;
+    }
+
+    // file_loader object is later transferred from loading_files to loaded_files
+
+    Log(L"Loading %s", name.c_str());
+
+    file_loader *fl = new file_loader();
+    fl->filename = fullpath;
+    loading_files[fullpath] = fl;
+
+    // when this file arrives, please display it
+
+    requested_file = fl;
+
+    // kick off loader thread for this file
+
+    load_file(fl);
+
+    // loading a file from a new folder or the current scanned folder?
+
+    if(_wcsicmp(current_folder.c_str(), folder.c_str()) != 0) {
+
+        // tell the scanner thread to scan this new folder
+        // when it's done it will notify main thread with a windows message
+
+        current_folder = folder;
+
+        // sigh, manually marshall the filename for the message, the receiver is responsible for freeing it
+        wchar_t *fullpath_buffer = new wchar_t[fullpath.size() + 1];
+        memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar_t));
+
+        PostThreadMessage(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
     }
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
-// push shader_constants to GPU
 
-HRESULT App::update_constants()
+HRESULT App::update_file_index(file_loader *f)
 {
-    D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-    CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
-    memcpy(mapped_subresource.pData, &shader_constants, sizeof(shader_const_t));
-    d3d_context->Unmap(constant_buffer.Get(), 0);
-    return S_OK;
+    if(current_folder_scan == null) {
+        return E_INVALIDARG;
+    }
+    std::wstring name;
+    CHK_HR(file_get_filename(f->filename.c_str(), name));
+    int id = 0;
+    for(auto &ff : current_folder_scan->files) {
+        if(_wcsicmp(ff.name.c_str(), name.c_str()) == 0) {
+            f->index = id;
+            return S_OK;
+        }
+        id += 1;
+    }
+    return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
 }
 
 //////////////////////////////////////////////////////////////////////
 
 void App::on_file_load_complete(LPARAM lparam)
 {
-    image_decode_complete = false;
     file_loader *f = reinterpret_cast<file_loader *>(lparam);
+
+    if(FAILED(f->hresult)) {
+        delete f;
+    } else {
+
+        // transfer from loading to loaded
+        loading_files.erase(f->filename);
+        loaded_files[f->filename] = f;
+
+        // update cache total size
+        cache_in_use += f->bytes.size();
+
+        // if it's most recently requested, show it
+        if(f == requested_file) {
+            requested_file = null;
+            current_image_file = f;
+            decode_image(f);
+        }
+
+        // fill in the index so we know where it is in the list of files
+
+        update_file_index(f);
+
+        if(f->index != -1) {
+            current_file_cursor = f->index;
+        }
+
+        // remove things from cache until it's <= cache_size
+
+        while(cache_in_use > settings.cache_size) {
+
+            // find the file in the cache which:
+            //      is furthest away from the current file cursor
+            //      has been viewed most times (yes, most...)
+            //      is the biggest
+
+            std::vector<file_loader *> files;
+            files.reserve(loaded_files.size());
+            for(auto const e : loaded_files) {
+                files.push_back(e.second);
+            }
+
+            std::sort(files.begin(), files.end(), [&](file_loader const *a, file_loader const *b) {
+                int adiff = std::abs(a->index - current_file_cursor);
+                int bdiff = std::abs(b->index - current_file_cursor);
+                if(bdiff != adiff) {
+                    return adiff > bdiff;
+                }
+                if(b->view_count != a->view_count) {
+                    return a->view_count > b->view_count;
+                }
+                if(a->bytes.size() != b->bytes.size()) {
+                    return a->bytes.size() > b->bytes.size();
+                }
+                return _wcsicmp(a->filename.c_str(), b->filename.c_str()) < 0;
+            });
+
+            file_loader *loser = files.front();
+
+            cache_in_use -= loser->bytes.size();
+
+            Log(L"Removing %s from cache (now %d MB in use)", loser->filename.c_str(), cache_in_use / 1048576);
+
+            loaded_files.erase(loser->filename);
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void App::on_file_already_loaded(LPARAM lparam)
+{
+    file_loader *f = reinterpret_cast<file_loader *>(lparam);
+    current_image_file = f;
     decode_image(f);
 }
 
@@ -594,8 +685,6 @@ void App::on_file_load_complete(LPARAM lparam)
 
 HRESULT App::initialize_image_from_buffer(std::vector<byte> const &buffer)
 {
-    image_decode_complete = true;
-
     ComPtr<ID3D11Resource> new_resource;
     ComPtr<ID3D11ShaderResourceView> new_srv;
 
@@ -620,8 +709,6 @@ HRESULT App::initialize_image_from_buffer(std::vector<byte> const &buffer)
 
     texture_width = image_texture_desc.Width;
     texture_height = image_texture_desc.Height;
-
-    Log(L"Image file %s is %d,%d", filename.c_str(), texture_width, texture_height);
 
     reset_zoom(settings.zoom_mode);
 
@@ -735,9 +822,15 @@ vec2 App::texture_to_screen_pos(vec2 pos)
 
 HRESULT App::init()
 {
+    CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
+
+    Log(L"System has %lluGB of memory", system_memory_size_kb / 1048576);
+
+    settings.cache_size = 1048576 * 16;    // 16MB cache
+
     window_created_event = CreateEvent(null, true, false, null);
 
-    current_cursor = LoadCursor(null, IDC_ARROW);
+    current_mouse_cursor = LoadCursor(null, IDC_ARROW);
 
     // remember default settings for 'reset settings to default' feature in settings dialog
     default_settings = settings;
@@ -751,14 +844,6 @@ HRESULT App::init()
     CHK_NULL(cancel_loader_event = CreateEvent(null, true, false, null));
     CHK_NULL(quit_event = CreateEvent(null, true, false, null));
 
-    scanner_thread = std::thread([this]() {
-        scanner_function();
-        Log(L"Scanner thread exit");
-    });
-
-    scanner_thread_handle = scanner_thread.native_handle();
-    scanner_thread_id = GetThreadId(scanner_thread_handle);
-
     return S_OK;
 }
 
@@ -768,7 +853,7 @@ HRESULT App::init()
 HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
 {
     if(r == null || style == null || ex_style == null) {
-        return ERROR_BAD_ARGUMENTS;
+        return E_INVALIDARG;
     }
 
     *ex_style = 0;    // WS_EX_NOREDIRECTIONBITMAP
@@ -878,7 +963,7 @@ void App::set_cursor(HCURSOR c)
     if(c == null) {
         c = LoadCursor(null, IDC_ARROW);
     }
-    current_cursor = c;
+    current_mouse_cursor = c;
     SetCursor(c);
 }
 
@@ -970,7 +1055,7 @@ HRESULT App::set_window(HWND hwnd)
 
 bool App::on_setcursor()
 {
-    set_cursor(current_cursor);
+    set_cursor(current_mouse_cursor);
     return true;
 }
 
@@ -1321,6 +1406,13 @@ void App::on_key_down(int vk_key, LPARAM flags)
         }
     } break;
 
+    case 'B': {
+        uint32_t bg_color = color_to_uint32(settings.background_color);
+        if(SUCCEEDED(select_color_dialog(window, bg_color, L"Choose background color"))) {
+            settings.background_color = uint32_to_color(bg_color);
+        }
+    } break;
+
     case 'N':
         selection_active = false;
         break;
@@ -1516,7 +1608,7 @@ void App::select_all()
 HRESULT App::copy_selection()
 {
     if(!selection_active) {
-        return ERROR_NO_DATA;
+        return E_ABORT;
     }
     vec2 tl = vec2::min(select_anchor, select_current);
     vec2 br = vec2::max(select_anchor, select_current);
@@ -1533,7 +1625,7 @@ HRESULT App::copy_selection()
     int h = copy_box.bottom - copy_box.top;
 
     if(w < 1 || h < 1) {
-        return ERROR_NO_DATA;
+        return E_BOUNDS;
     }
 
     size_t pixel_size = 4llu;
@@ -1548,7 +1640,7 @@ HRESULT App::copy_selection()
     HANDLE hData = GlobalAlloc(GHND | GMEM_SHARE, buffer_size);
 
     if(hData == null) {
-        return ERROR_OUTOFMEMORY;
+        return HRESULT_FROM_WIN32(ERROR_OUTOFMEMORY);
     }
 
     byte *pData = reinterpret_cast<byte *>(GlobalLock(hData));
@@ -1700,6 +1792,18 @@ HRESULT App::draw_string(std::wstring const &text, IDWriteTextFormat *format, ve
 
     d2d_render_target->DrawTextLayout(text_pos, text_layout.Get(), text_fg_brush.Get());
 
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+// push shader_constants to GPU
+
+HRESULT App::update_constants()
+{
+    D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+    CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
+    memcpy(mapped_subresource.pData, &shader_constants, sizeof(shader_const_t));
+    d3d_context->Unmap(constant_buffer.Get(), 0);
     return S_OK;
 }
 
@@ -2368,13 +2472,13 @@ HRESULT App::on_dpi_changed(UINT new_dpi, rect *new_rect)
 
 HRESULT App::on_device_lost()
 {
-    image_decode_complete = false;
-
     CHK_HR(create_device());
 
     CHK_HR(create_resources());
 
-    decode_image(most_recently_loaded_file);
+    if(current_image_file != null) {
+        CHK_HR(decode_image(current_image_file));
+    }
 
     return S_OK;
 }
