@@ -609,6 +609,10 @@ HRESULT App::update_file_index(file_loader *f)
 }
 
 //////////////////////////////////////////////////////////////////////
+// a file got loaded
+// move it from loading into loaded pile
+// show it if it was the most recently requested image
+// maintain cache
 
 void App::on_file_load_complete(LPARAM lparam)
 {
@@ -679,15 +683,6 @@ void App::on_file_load_complete(LPARAM lparam)
             loaded_files.erase(loser->filename);
         }
     }
-}
-
-//////////////////////////////////////////////////////////////////////
-
-void App::on_file_already_loaded(LPARAM lparam)
-{
-    file_loader *f = reinterpret_cast<file_loader *>(lparam);
-    current_image_file = f;
-    decode_image(f);
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -417,10 +417,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         app->on_file_load_complete(lParam);
         break;
 
-    case App::WM_FILE_ALREADY_LOADED:
-        app->on_file_already_loaded(lParam);
-        break;
-
     case App::WM_FOLDER_SCAN_COMPLETE:
         app->on_folder_scanned(reinterpret_cast<folder_scan_result *>(lParam));
         break;

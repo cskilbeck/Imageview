@@ -42,8 +42,7 @@ struct App : public CDragDropHelper
     enum
     {
         WM_FILE_LOAD_COMPLETE = WM_USER,
-        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1,
-        WM_FILE_ALREADY_LOADED = WM_USER + 2
+        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1
     };
 
     // WM_USER messages for scanner thread
@@ -77,9 +76,6 @@ struct App : public CDragDropHelper
 
     // new file loaded
     void on_file_load_complete(LPARAM lparam);
-
-    // file found in cache, display it
-    void on_file_already_loaded(LPARAM lparam);
 
     // actual image decoder uses WIC
     HRESULT initialize_image_from_buffer(std::vector<byte> const &buffer);
