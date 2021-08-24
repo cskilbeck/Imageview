@@ -66,9 +66,9 @@ struct App : public CDragDropHelper
     HRESULT update();
 
     // request an image file to be loaded
-    HRESULT load_image(wchar_t const *filepath);
+    HRESULT load_image(wchar const *filepath);
 
-    HRESULT App::show_image(std::vector<byte> const &data, wchar_t const *filename);
+    HRESULT App::show_image(std::vector<byte> const &data, wchar const *filename);
 
     void load_file(file_loader *f);
 
@@ -126,16 +126,16 @@ struct App : public CDragDropHelper
 
     // handle this command line either because it's the command line or another instance
     // of the application was run and it's in single window mode (settings.reuse_window == true)
-    HRESULT on_command_line(wchar_t *cmd_line);
+    HRESULT on_command_line(wchar *cmd_line);
 
     // if settings.reuse_window and an existing window is found, send it the command line
     // with WM_COPYDATA and return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)
     // else return S_OK
-    HRESULT reuse_window(wchar_t *cmd_line);
+    HRESULT reuse_window(wchar *cmd_line);
 
     // some thing(s) was/were dropped onto the window, try to load the first one
     HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) override;
-    HRESULT on_drop_string(wchar_t const *str) override;
+    HRESULT on_drop_string(wchar const *str) override;
 
     // IUnknown for the DragDropHelper stuff
     IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv);
@@ -236,7 +236,7 @@ private:
         HRESULT load();
 
         // where in the registry to put the settings. this does not need to be localized... right?
-        static wchar_t constexpr *key_name{ L"Software\\ImageView" };
+        static wchar constexpr *key_name{ L"Software\\ImageView" };
 
         enum class serialize_action
         {
@@ -244,10 +244,10 @@ private:
             load
         };
 
-        HRESULT serialize(serialize_action action, wchar_t const *save_key_name);
+        HRESULT serialize(serialize_action action, wchar const *save_key_name);
     };
 
-    static HRESULT serialize_setting(settings_t::serialize_action action, wchar_t const *key_name, wchar_t const *name, byte *var, DWORD size);
+    static HRESULT serialize_setting(settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
 
     settings_t settings;
     settings_t default_settings;
@@ -281,7 +281,7 @@ private:
     std::atomic_bool scanner_thread_running{ false };
 
     void scanner_function();
-    HRESULT do_folder_scan(wchar_t const *path);
+    HRESULT do_folder_scan(wchar const *path);
 
     HRESULT update_file_index(file_loader *f);
 
@@ -371,14 +371,14 @@ private:
     double message_timestamp{ 0 };
     double message_fade_time{ 0 };
 
-    void set_message(wchar_t const *message, double fade_time);
+    void set_message(wchar const *message, double fade_time);
 
     vec2 small_label_size{ 0, 0 };
     float small_label_padding{ 2.0f };
 
-    uint64_t system_memory_size_kb{ 0 };
+    uint64 system_memory_size_kb{ 0 };
 
-    uint64_t cache_in_use{ 0 };
+    uint64 cache_in_use{ 0 };
 
     // for IUnknown
     long refcount;
@@ -497,7 +497,7 @@ private:
         cursor_type type;
         short id;
 
-        cursor_def(cursor_type _type, wchar_t const *_id) : type(_type), id((short)((intptr_t)_id & 0xffff))
+        cursor_def(cursor_type _type, wchar const *_id) : type(_type), id((short)((intptr_t)_id & 0xffff))
         {
         }
     };

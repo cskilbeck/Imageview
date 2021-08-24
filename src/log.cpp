@@ -4,7 +4,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-void write_line_to_file(char const *txt, uint32_t len)
+void write_line_to_file(char const *txt, uint32 len)
 {
     static std::mutex mutex;
     std::lock_guard<std::mutex> lockguard(mutex);
@@ -20,10 +20,10 @@ void write_line_to_file(char const *txt, uint32_t len)
 
 //////////////////////////////////////////////////////////////////////
 
-void write_line_to_file(wchar_t const *txt, uint32_t len)
+void write_line_to_file(wchar const *txt, uint32 len)
 {
     std::string s = str_from_wide(txt, len);
-    write_line_to_file(s.c_str(), static_cast<uint32_t>(s.length()));
+    write_line_to_file(s.c_str(), static_cast<uint32>(s.length()));
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -38,7 +38,7 @@ void Log(char const *fmt, ...)
     time(&t);
     struct tm tm;
     localtime_s(&tm, &t);
-    uint32_t len = static_cast<uint32_t>(strftime(buffer, _countof(buffer), "%d/%m/%Y,%H:%M:%S ", &tm));
+    uint32 len = static_cast<uint32>(strftime(buffer, _countof(buffer), "%d/%m/%Y,%H:%M:%S ", &tm));
     len += _vsnprintf_s(buffer + len, _countof(buffer) - len - 1, _TRUNCATE, fmt, v);
     write_line_to_file(buffer, len);
     OutputDebugStringA(buffer);
@@ -47,20 +47,19 @@ void Log(char const *fmt, ...)
 
 //////////////////////////////////////////////////////////////////////
 
-void Log(wchar_t const *fmt, ...)
+void Log(wchar const *fmt, ...)
 {
-    wchar_t buffer[4096];
+    wchar buffer[4096];
     va_list v;
     va_start(v, fmt);
     time_t t;
     time(&t);
     struct tm tm;
     localtime_s(&tm, &t);
-    uint32_t len = uint32_t(wcsftime(buffer, _countof(buffer), L"%d/%m/%Y,%H:%M:%S ", &tm));
+    uint32 len = uint32(wcsftime(buffer, _countof(buffer), L"%d/%m/%Y,%H:%M:%S ", &tm));
     len += _vsnwprintf_s(buffer + len, _countof(buffer) - len, _countof(buffer) - len, fmt, v);
     write_line_to_file(buffer, len);
     OutputDebugStringW(buffer);
     OutputDebugStringW(L"\n");
 }
 #endif
-

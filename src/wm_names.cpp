@@ -4,7 +4,7 @@
     case iD:         \
         return L#iD;
 
-wchar_t const *get_wm_name(uint32_t uMsg)
+wchar const *get_wm_name(uint32 uMsg)
 {
     switch(uMsg) {
         TRACE_ID(WM_NULL);

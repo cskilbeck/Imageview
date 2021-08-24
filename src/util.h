@@ -8,23 +8,38 @@ using namespace DirectX;
 
 struct vec2;
 
+using Microsoft::WRL::ComPtr;
+
+// remove some nonsense
+
+constexpr nullptr_t null = nullptr;
+
+using uint8 = std::uint8_t;
+using uint16 = std::uint16_t;
+using uint32 = std::uint32_t;
+using uint64 = std::uint64_t;
+
+using int8 = std::int8_t;
+using int16 = std::int16_t;
+using int32 = std::int32_t;
+using int64 = std::int64_t;
+
+using wchar = wchar_t;
+
 // share some types with the HLSL header
+
 using matrix = XMMATRIX;
 using vec4 = XMVECTOR;
-using uint = uint32_t;
+using uint = uint32;
 using float4 = vec4;
 using float2 = vec2;
 using int4 = int[4];
 
-using Microsoft::WRL::ComPtr;
-
-constexpr nullptr_t null = nullptr;
-
 //////////////////////////////////////////////////////////////////////
-
 // get the name of a WM_ windows message
+
 #if defined(_DEBUG)
-wchar_t const *get_wm_name(uint32_t uMsg);
+wchar const *get_wm_name(uint32 uMsg);
 #endif
 
 //////////////////////////////////////////////////////////////////////
@@ -83,49 +98,54 @@ static struct
     };
 
 //////////////////////////////////////////////////////////////////////
+// string formatting
 
-std::wstring format_v(wchar_t const *fmt, va_list v);
+std::wstring format_v(wchar const *fmt, va_list v);
 std::string format_v(char const *fmt, va_list v);
 
-std::wstring format(wchar_t const *fmt, ...);
+std::wstring format(wchar const *fmt, ...);
 std::string format(char const *fmt, ...);
 
-std::wstring windows_error_message(uint32_t err = 0);
+//////////////////////////////////////////////////////////////////////
+// win32 error messages
 
-HRESULT log_win32_error(DWORD err, wchar_t const *message, ...);
-HRESULT log_win32_error(wchar_t const *message, ...);
-HRESULT log_win32_error(DWORD err, wchar_t const *message, va_list v);
+std::wstring windows_error_message(uint32 err = 0);
+
+HRESULT log_win32_error(DWORD err, wchar const *message, ...);
+HRESULT log_win32_error(wchar const *message, ...);
+HRESULT log_win32_error(DWORD err, wchar const *message, va_list v);
 
 //////////////////////////////////////////////////////////////////////
 // general utility functions
 
 HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cancel_event = null);
+
 HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format);
-HRESULT get_file_id(wchar_t const *filename, uint32_t *volume_id, uint64_t *id);
-HRESULT load_resource(DWORD id, wchar_t const *type, void **buffer, size_t *size);
-HRESULT load_bitmap(wchar_t const *filename, IWICBitmapFrameDecode **decoder);
+
+HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size);
+HRESULT load_bitmap(wchar const *filename, IWICBitmapFrameDecode **decoder);
+
 HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv);
+
 HRESULT select_file_dialog(std::wstring &path);
-HRESULT select_color_dialog(HWND window, uint32_t &color, wchar_t const *dialog_title);
+HRESULT select_color_dialog(HWND window, uint32 &color, wchar const *dialog_title);
+
+HRESULT file_get_full_path(wchar const *filename, std::wstring &fullpath);
+HRESULT file_get_path(wchar const *filename, std::wstring &path);
+HRESULT file_get_filename(wchar const *filename, std::wstring &name);
+HRESULT file_get_extension(wchar const *filename, std::wstring &extension);
+BOOL file_exists(wchar const *name);
+
 RECT center_rect_on_default_monitor(RECT const &r);
+uint32 color_to_uint32(vec4 color);
+vec4 uint32_to_color(uint32 color);
 
-HRESULT file_get_full_path(wchar_t const *filename, std::wstring &fullpath);
-
-HRESULT file_get_path(wchar_t const *filename, std::wstring &path);
-HRESULT file_get_filename(wchar_t const *filename, std::wstring &name);
-HRESULT file_get_extension(wchar_t const *filename, std::wstring &extension);
-
-BOOL file_exists(wchar_t const *name);
-
-uint32_t color_to_uint32(vec4 color);
-vec4 uint32_to_color(uint32_t color);
-
-std::wstring strip_quotes(wchar_t const *s);
+std::wstring strip_quotes(wchar const *s);
 
 //////////////////////////////////////////////////////////////////////
 // localization
 
-wchar_t const *localize(uint id);
+wchar const *localize(uint id);
 std::wstring const &str_local(uint id);
 
 //////////////////////////////////////////////////////////////////////
@@ -145,12 +165,12 @@ enum class scan_folder_sort_order
 
 struct file_info
 {
-    file_info(std::wstring const &n, uint64_t d) throw() : name(n), date(d)
+    file_info(std::wstring const &n, uint64 d) throw() : name(n), date(d)
     {
     }
 
     std::wstring name;
-    uint64_t date;
+    uint64 date;
 };
 
 struct folder_scan_result
@@ -159,11 +179,12 @@ struct folder_scan_result
     std::vector<file_info> files;
 };
 
-HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, folder_scan_result **result,
+HRESULT scan_folder2(wchar const *path, std::vector<wchar const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, folder_scan_result **result,
                      HANDLE cancel_event);
-HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<file_info> &files);
+HRESULT scan_folder(wchar const *path, std::vector<wchar const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<file_info> &files);
 
 //////////////////////////////////////////////////////////////////////
+// general
 
 template <typename T> T clamp(T min, T a, T max)
 {
@@ -201,7 +222,7 @@ template <typename T> T div_point(T a, T b)
 //////////////////////////////////////////////////////////////////////
 // wide string conversion
 
-__declspec(selectany) std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> wstr_converter;
+__declspec(selectany) std::wstring_convert<std::codecvt_utf8<wchar>, wchar> wstr_converter;
 
 inline std::wstring wide_from_str(std::string s)
 {
@@ -218,7 +239,7 @@ inline std::wstring wide_from_str(char const *s, size_t len)
     return wstr_converter.from_bytes(s, s + len);
 }
 
-inline std::string str_from_wide(wchar_t const *s, size_t len)
+inline std::string str_from_wide(wchar const *s, size_t len)
 {
     return wstr_converter.to_bytes(s, s + len);
 }
@@ -228,7 +249,7 @@ inline std::wstring wide_from_str(char const *s)
     return wstr_converter.from_bytes(s, s + strlen(s));
 }
 
-inline std::string str_from_wide(wchar_t const *s)
+inline std::string str_from_wide(wchar const *s)
 {
     return wstr_converter.to_bytes(s, s + wcslen(s));
 }
@@ -251,17 +272,17 @@ template <class T> HRESULT SetInterface(T **ppT, IUnknown *punk)
 }
 
 //////////////////////////////////////////////////////////////////////
-// error checking macros
 
-inline void display_error(wchar_t const *message, HRESULT hr)
+inline void display_error(wchar const *message, HRESULT hr)
 {
     MessageBoxW(null, format(L"Error:\n\n%s\n\n%s", message, windows_error_message(hr).c_str()).c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
     log_win32_error(hr, message);
 }
 
 //////////////////////////////////////////////////////////////////////
+// error checking macros
 
-#define DO_CHECK(x, y)                     \
+#define _DO_CHECK(x, y)                    \
     {                                      \
         do {                               \
             HRESULT hr##y = (x);           \
@@ -272,7 +293,7 @@ inline void display_error(wchar_t const *message, HRESULT hr)
         } while(false);                    \
     }
 
-#define DO_HR(x, y)                          \
+#define _DO_HR(x, y)                         \
     {                                        \
         do {                                 \
             HRESULT hr##y = (x);             \
@@ -283,7 +304,7 @@ inline void display_error(wchar_t const *message, HRESULT hr)
         } while(false);                      \
     }
 
-#define DO_BOOL(x, y)                              \
+#define _DO_BOOL(x, y)                             \
     {                                              \
         do {                                       \
             bool hr##y = (x);                      \
@@ -295,11 +316,11 @@ inline void display_error(wchar_t const *message, HRESULT hr)
         } while(false);                            \
     }
 
-#define DO_NULL(x, y)                              \
+#define _DO_NULL(x, y)                             \
     {                                              \
         do {                                       \
             auto hr##y = (x);                      \
-            if(hr##y == (decltype(x))null) {       \
+            if(hr##y == (decltype(hr##y))null) {   \
                 DWORD gle##y = GetLastError();     \
                 display_error(L#x, gle##y);        \
                 return HRESULT_FROM_WIN32(gle##y); \
@@ -307,8 +328,14 @@ inline void display_error(wchar_t const *message, HRESULT hr)
         } while(false);                            \
     }
 
-#define CHECK(x) DO_CHECK(x, __COUNTER__)
-#define CHECK(x) DO_CHECK(x, __COUNTER__)
-#define CHK_HR(x) DO_HR(x, __COUNTER__)
-#define CHK_BOOL(x) DO_BOOL(x, __COUNTER__)
-#define CHK_NULL(x) DO_NULL(x, __COUNTER__)
+// if(FAILED(x)) { messagebox(error); return hresult; }
+#define CHECK(x) _DO_CHECK(x, __COUNTER__)
+
+// if(FAILED(x)) { return hresult; }
+#define CHK_HR(x) _DO_HR(x, __COUNTER__)
+
+// if(!x) { return HRESULT_FROM_WIN32(GetLastError()); }
+#define CHK_BOOL(x) _DO_BOOL(x, __COUNTER__)
+
+// if(x == null) { return HRESULT_FROM_WIN32(GetLastError()); }
+#define CHK_NULL(x) _DO_NULL(x, __COUNTER__)

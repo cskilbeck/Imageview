@@ -71,7 +71,7 @@ HRESULT check_heif_support(bool &heif_is_supported)
     defer(MFShutdown());
 
     IMFActivate **activate{};
-    uint32_t count{};
+    uint32 count{};
 
     MFT_REGISTER_TYPE_INFO input;
     input.guidMajorType = MFMediaType_Video;
@@ -80,7 +80,7 @@ HRESULT check_heif_support(bool &heif_is_supported)
     CHK_HR(MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SYNCMFT, &input, null, &activate, &count));
     defer(CoTaskMemFree(activate));
 
-    for(uint32_t i = 0; i < count; i++) {
+    for(uint32 i = 0; i < count; i++) {
         activate[i]->Release();
     }
 
@@ -101,7 +101,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
     CHECK(application.init());
 
-    wchar_t *cmd_line = GetCommandLineW();
+    wchar *cmd_line = GetCommandLineW();
 
     HRESULT hr = application.reuse_window(cmd_line);
     if(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
@@ -237,7 +237,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 SetForegroundWindow(hWnd);
                 SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                app->on_command_line(reinterpret_cast<wchar_t *>(c->lpData));
+                app->on_command_line(reinterpret_cast<wchar *>(c->lpData));
                 break;
             default:
                 break;

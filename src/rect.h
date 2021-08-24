@@ -49,9 +49,9 @@ struct rect : RECT
         return bottom;
     }
 
-    std::basic_string<wchar_t> as_string()
+    std::basic_string<wchar> as_string()
     {
-        std::basic_ostringstream<wchar_t> s;
+        std::basic_ostringstream<wchar> s;
         s << L"X:" << x() << L" Y:" << y() << L" W:" << w() << L" H:" << h();
         return s.str();
     }

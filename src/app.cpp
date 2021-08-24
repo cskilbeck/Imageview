@@ -32,8 +32,8 @@ namespace
 {
     using namespace DirectX;
 
-    wchar_t const *small_font_family_name{ L"Noto Sans" };
-    wchar_t const *mono_font_family_name{ L"Roboto Mono" };
+    wchar const *small_font_family_name{ L"Noto Sans" };
+    wchar const *mono_font_family_name{ L"Roboto Mono" };
 
 #if defined(_DEBUG)
     void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
@@ -131,7 +131,7 @@ void App::set_windowplacement()
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::serialize_setting(settings_t::serialize_action action, wchar_t const *key_name, wchar_t const *name, byte *var, DWORD size)
+HRESULT App::serialize_setting(settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size)
 {
     switch(action) {
 
@@ -159,7 +159,7 @@ HRESULT App::serialize_setting(settings_t::serialize_action action, wchar_t cons
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::settings_t::serialize(serialize_action action, wchar_t const *save_key_name)
+HRESULT App::settings_t::serialize(serialize_action action, wchar const *save_key_name)
 {
     if(save_key_name == null) {
         return E_INVALIDARG;
@@ -196,13 +196,13 @@ HRESULT App::on_copy()
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::reuse_window(wchar_t *cmd_line)
+HRESULT App::reuse_window(wchar *cmd_line)
 {
     if(settings.reuse_window) {
         HWND existing_window = FindWindow(window_class, null);
         if(existing_window != null) {
             COPYDATASTRUCT c;
-            c.cbData = (DWORD)(wcslen(cmd_line) + 1) * sizeof(wchar_t);
+            c.cbData = (DWORD)(wcslen(cmd_line) + 1) * sizeof(wchar);
             c.lpData = reinterpret_cast<void *>(cmd_line);
             c.dwData = (DWORD)App::copydata_t::commandline;
             SendMessageW(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
@@ -218,13 +218,13 @@ HRESULT App::reuse_window(wchar_t *cmd_line)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::on_command_line(wchar_t *cmd_line)
+HRESULT App::on_command_line(wchar *cmd_line)
 {
     // parse args
     int argc;
     LPWSTR *argv = CommandLineToArgvW(cmd_line, &argc);
 
-    wchar_t const *filepath{ L"?open" };
+    wchar const *filepath{ L"?open" };
 
     if(argc > 1 && argv[1] != null) {
         filepath = argv[1];
@@ -271,7 +271,7 @@ HRESULT App::on_paste()
 
     std::vector<byte> buffer;
     CHK_HR(append_clipboard_to_buffer(buffer, fmt));
-    wchar_t const *name = reinterpret_cast<wchar_t const *>(buffer.data());
+    wchar const *name = reinterpret_cast<wchar const *>(buffer.data());
     std::wstring bare_name = strip_quotes(name);
     if(file_exists(bare_name.c_str())) {
         return load_image(bare_name.c_str());
@@ -316,7 +316,7 @@ HRESULT App::decode_image(file_loader *f)
             PostMessage(window, WM_CLOSE, 0, 0);
         }
         std::wstring err_str = windows_error_message(load_hr);
-        wchar_t *name = PathFindFileName(filename.c_str());
+        wchar *name = PathFindFileName(filename.c_str());
         set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
         return load_hr;
     }
@@ -328,7 +328,7 @@ HRESULT App::decode_image(file_loader *f)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::show_image(std::vector<byte> const &data, wchar_t const *file)
+HRESULT App::show_image(std::vector<byte> const &data, wchar const *file)
 {
     HRESULT hr = initialize_image_from_buffer(data);
     if(SUCCEEDED(hr)) {
@@ -344,7 +344,7 @@ HRESULT App::show_image(std::vector<byte> const &data, wchar_t const *file)
         } else {
             err_str = windows_error_message(hr);
         }
-        wchar_t *name = PathFindFileName(file);
+        wchar *name = PathFindFileName(file);
         set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
     }
     return hr;
@@ -358,7 +358,7 @@ App::~App()
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::do_folder_scan(wchar_t const *folder_path)
+HRESULT App::do_folder_scan(wchar const *folder_path)
 {
     std::wstring path;
 
@@ -368,7 +368,7 @@ HRESULT App::do_folder_scan(wchar_t const *folder_path)
 
     Log(L"Scan folder %s", path.c_str());
 
-    std::vector<wchar_t const *> extensions{ L"jpg", L"png", L"bmp", L"tiff", L"jpeg" };
+    std::vector<wchar const *> extensions{ L"jpg", L"png", L"bmp", L"tiff", L"jpeg" };
 
     scan_folder_sort_field sort_field = scan_folder_sort_field::name;
     scan_folder_sort_order order = scan_folder_sort_order::ascending;
@@ -401,7 +401,7 @@ void App::scanner_function()
     while(!quit && GetMessage(&msg, null, 0, 0) != 0) {
         switch(msg.message) {
         case WM_SCAN_FOLDER:
-            do_folder_scan(reinterpret_cast<wchar_t const *>(msg.lParam));
+            do_folder_scan(reinterpret_cast<wchar const *>(msg.lParam));
             break;
         case WM_EXIT_THREAD:
             quit = true;
@@ -476,9 +476,13 @@ void App::load_file(file_loader *loader)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT App::load_image(wchar_t const *filepath)
+HRESULT App::load_image(wchar const *filepath)
 {
-    filename = (filepath == null) ? L"" : filepath;
+    if(filepath == null || filepath[0] == 0) {
+        return E_INVALIDARG;
+    }
+
+    filename = std::wstring(filepath);
 
     // if filename is '?clipboard', attempt to load the contents of the clipboard as a bitmap (synchronously in the UI thread, whevs)
 
@@ -571,8 +575,8 @@ HRESULT App::load_image(wchar_t const *filepath)
         current_folder = folder;
 
         // sigh, manually marshall the filename for the message, the receiver is responsible for freeing it
-        wchar_t *fullpath_buffer = new wchar_t[fullpath.size() + 1];
-        memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar_t));
+        wchar *fullpath_buffer = new wchar[fullpath.size() + 1];
+        memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar));
 
         PostThreadMessage(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
     }
@@ -714,7 +718,7 @@ HRESULT App::initialize_image_from_buffer(std::vector<byte> const &buffer)
 
     current_rect = target_rect;
 
-    wchar_t const *filename_text = filename.c_str();
+    wchar const *filename_text = filename.c_str();
 
     if(!settings.show_full_filename_in_titlebar) {
         filename_text = PathFindFileName(filename_text);
@@ -1177,7 +1181,7 @@ void App::on_mouse_wheel(point_s pos, int delta)
 
 //////////////////////////////////////////////////////////////////////
 
-void App::set_message(wchar_t const *message, double fade_time)
+void App::set_message(wchar const *message, double fade_time)
 {
     current_message = std::wstring(message);
     message_timestamp = m_timer.wall_time();
@@ -1407,7 +1411,7 @@ void App::on_key_down(int vk_key, LPARAM flags)
     } break;
 
     case 'B': {
-        uint32_t bg_color = color_to_uint32(settings.background_color);
+        uint32 bg_color = color_to_uint32(settings.background_color);
         if(SUCCEEDED(select_color_dialog(window, bg_color, L"Choose background color"))) {
             settings.background_color = uint32_to_color(bg_color);
         }
@@ -1711,10 +1715,10 @@ HRESULT App::copy_selection()
     byte *row = pixels;
     byte *src = reinterpret_cast<byte *>(mapped_resource.pData);
     for(int y = 0; y < h; ++y) {
-        uint32_t *s = reinterpret_cast<uint32_t *>(src);
-        uint32_t *d = reinterpret_cast<uint32_t *>(row);
+        uint32 *s = reinterpret_cast<uint32 *>(src);
+        uint32 *d = reinterpret_cast<uint32 *>(row);
         for(int x = 0; x < w; ++x) {
-            uint32_t p = *s++;
+            uint32 p = *s++;
             *d++ = (p & 0xff00ff00) | ((p & 0xff0000) >> 16) | ((p & 0xff) << 16);
         }
         src += mapped_resource.RowPitch;
@@ -2228,7 +2232,7 @@ HRESULT App::create_device()
 
     D3D_FEATURE_LEVEL feature_level{ D3D_FEATURE_LEVEL_11_1 };
 
-    uint32_t num_feature_levels = (UINT)std::size(feature_levels);
+    uint32 num_feature_levels = (UINT)std::size(feature_levels);
 
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
@@ -2501,7 +2505,7 @@ HRESULT App::on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
 // if it exists as a file, try to load it
 // otherwise.... no dice I guess
 
-HRESULT App::on_drop_string(wchar_t const *str)
+HRESULT App::on_drop_string(wchar const *str)
 {
     std::wstring s(str);
     if(s[0] == '"') {

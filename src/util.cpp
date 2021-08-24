@@ -4,7 +4,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT load_resource(DWORD id, wchar_t const *type, void **buffer, size_t *size)
+HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size)
 {
     if(buffer == null || size == null || type == null || id == 0) {
         return ERROR_BAD_ARGUMENTS;
@@ -182,7 +182,7 @@ RECT center_rect_on_default_monitor(RECT const &r)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT load_bitmap(wchar_t const *filename, IWICBitmapFrameDecode **decoder)
+HRESULT load_bitmap(wchar const *filename, IWICBitmapFrameDecode **decoder)
 {
     if(decoder == null) {
         return ERROR_BAD_ARGUMENTS;
@@ -248,7 +248,7 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT get_file_id(wchar_t const *filename, uint32_t *volume_id, uint64_t *id)
+HRESULT get_file_id(wchar const *filename, uint32 *volume_id, uint64 *id)
 {
     if(volume_id == null || id == null || filename == null || filename[0] == 0) {
         return ERROR_BAD_ARGUMENTS;
@@ -260,14 +260,14 @@ HRESULT get_file_id(wchar_t const *filename, uint32_t *volume_id, uint64_t *id)
     defer(CloseHandle(file_handle));
     BY_HANDLE_FILE_INFORMATION info;
     CHK_BOOL(GetFileInformationByHandle(file_handle, &info));
-    *id = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
+    *id = ((uint64)info.nFileIndexHigh << 32) | info.nFileIndexLow;
     *volume_id = info.dwVolumeSerialNumber;
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, folder_scan_result **result,
+HRESULT scan_folder2(wchar const *path, std::vector<wchar const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, folder_scan_result **result,
                      HANDLE cancel_event)
 {
     if(result == null) {
@@ -326,20 +326,20 @@ HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extension
             }
 
             // if it's a file
-            uint32_t ignore = FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_VIRTUAL;
+            uint32 ignore = FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_VIRTUAL;
             if((f->FileAttributes & ignore) == 0) {
                 // find the extension
-                size_t namelen = f->FileNameLength / sizeof(wchar_t);
-                for(wchar_t const *i = f->FileName + namelen; i > f->FileName; --i) {
+                size_t namelen = f->FileNameLength / sizeof(wchar);
+                for(wchar const *i = f->FileName + namelen; i > f->FileName; --i) {
                     if(*i == '.') {
                         i += 1;
                         size_t ext_len = namelen - (i - f->FileName);
 
                         // check if extension is in the list
-                        for(wchar_t const *ext : extensions) {
+                        for(wchar const *ext : extensions) {
 
                             // extensions can be specified with or without a leading dot
-                            wchar_t const *find_ext = ext;
+                            wchar const *find_ext = ext;
                             if(*find_ext == '.') {
                                 find_ext += 1;
                             }
@@ -380,8 +380,8 @@ HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extension
         }
 
         // by name
-        uint64_t fa = 0;
-        uint64_t fb = 0;
+        uint64 fa = 0;
+        uint64 fb = 0;
 
         // or date
         if(sort_field == scan_folder_sort_field::date) {
@@ -407,11 +407,11 @@ HRESULT scan_folder2(wchar_t const *path, std::vector<wchar_t const *> extension
 // this doesn't do the thing Windows Explorer does where it examines photo metadata and uses the date the picture was taken as the 'date'.
 // In this case 'date' means the earliest of created/modified (which, come to think of it, will always be created, so....)
 
-HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<file_info> &files)
+HRESULT scan_folder(wchar const *path, std::vector<wchar const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, std::vector<file_info> &files)
 {
     WIN32_FIND_DATA ffd;
 
-    auto filetime_to_uint64 = [](FILETIME const &f) { return f.dwLowDateTime + ((uint64_t)f.dwHighDateTime << 32); };
+    auto filetime_to_uint64 = [](FILETIME const &f) { return f.dwLowDateTime + ((uint64)f.dwHighDateTime << 32); };
 
     std::wstring str_path(path);
     if(!str_path.empty() && str_path.back() != '\\') {
@@ -431,9 +431,9 @@ HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions
     do
         if((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
 
-            for(wchar_t const *ext : extensions) {
+            for(wchar const *ext : extensions) {
 
-                wchar_t const *find_ext = ext;
+                wchar const *find_ext = ext;
                 if(*find_ext == '.') {
                     find_ext += 1;
                 }
@@ -443,7 +443,7 @@ HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions
                     e += 1;
                     if(_wcsicmp(e, find_ext) == 0) {
 
-                        uint64_t last_write = (uint64_t)ffd.ftLastWriteTime.dwHighDateTime << 32 | ffd.ftLastWriteTime.dwLowDateTime;
+                        uint64 last_write = (uint64)ffd.ftLastWriteTime.dwHighDateTime << 32 | ffd.ftLastWriteTime.dwLowDateTime;
                         files.emplace_back(std::wstring(ffd.cFileName), last_write);
                         break;
                     }
@@ -471,8 +471,8 @@ HRESULT scan_folder(wchar_t const *path, std::vector<wchar_t const *> extensions
         }
 
         // by name
-        uint64_t fa = 0;
-        uint64_t fb = 0;
+        uint64 fa = 0;
+        uint64 fb = 0;
 
         // or date
         if(sort_field == scan_folder_sort_field::date) {
@@ -522,7 +522,7 @@ HRESULT select_file_dialog(std::wstring &path)
 
 //////////////////////////////////////////////////////////////////////
 
-uint32_t color_to_uint32(vec4 color)
+uint32 color_to_uint32(vec4 color)
 {
     float *f = reinterpret_cast<float *>(&color);
     int a = (int)(f[0] * 255.0f) & 0xff;
@@ -534,7 +534,7 @@ uint32_t color_to_uint32(vec4 color)
 
 //////////////////////////////////////////////////////////////////////
 
-vec4 uint32_to_color(uint32_t color)
+vec4 uint32_to_color(uint32 color)
 {
     float a = ((color >> 24) & 0xff) / 255.0f;
     float b = ((color >> 16) & 0xff) / 255.0f;
@@ -552,13 +552,13 @@ static UINT_PTR CALLBACK select_color_dialog_hook_proc(HWND hdlg, UINT uiMsg, WP
     if(uiMsg == WM_INITDIALOG) {
         CHOOSECOLOR *cc = reinterpret_cast<CHOOSECOLOR *>(lParam);
         if(cc != null && cc->lCustData != 0) {
-            SetWindowText(hdlg, reinterpret_cast<wchar_t *>(cc->lCustData));
+            SetWindowText(hdlg, reinterpret_cast<wchar *>(cc->lCustData));
         }
     }
     return 0;
 }
 
-HRESULT select_color_dialog(HWND window, uint32_t &color, wchar_t const *title)
+HRESULT select_color_dialog(HWND window, uint32 &color, wchar const *title)
 {
     static COLORREF custom_colors[16];
 
@@ -593,8 +593,8 @@ std::wstring const &str_local(uint id)
 
     // SetThreadUILanguage(MAKELCID(LANG_FRENCH, SUBLANG_NEUTRAL));
 
-    wchar_t *str;
-    int len = LoadString(GetModuleHandle(null), id, reinterpret_cast<wchar_t *>(&str), 0);
+    wchar *str;
+    int len = LoadString(GetModuleHandle(null), id, reinterpret_cast<wchar *>(&str), 0);
 
     if(len == 0) {
         return unknown;
@@ -604,7 +604,7 @@ std::wstring const &str_local(uint id)
 
 //////////////////////////////////////////////////////////////////////
 
-std::wstring strip_quotes(wchar_t const *s)
+std::wstring strip_quotes(wchar const *s)
 {
     size_t len = wcslen(s);
     if(s[0] == '"' && s[len - 1] == '"') {
@@ -615,16 +615,16 @@ std::wstring strip_quotes(wchar_t const *s)
 }
 
 //////////////////////////////////////////////////////////////////////
-// get a null-terminated wchar_t pointer to the localized string
+// get a null-terminated wchar pointer to the localized string
 
-wchar_t const *localize(uint id)
+wchar const *localize(uint id)
 {
     return str_local(id).c_str();
 }
 
 //////////////////////////////////////////////////////////////////////
 
-BOOL file_exists(wchar_t const *name)
+BOOL file_exists(wchar const *name)
 {
     DWORD x = GetFileAttributes(name);
     return x != 0xffffffff && (x & FILE_ATTRIBUTE_NORMAL) != 0;
@@ -636,12 +636,12 @@ namespace
 {
     struct path_parts
     {
-        wchar_t drive[MAX_PATH];
-        wchar_t dir[MAX_PATH];
-        wchar_t fname[MAX_PATH];
-        wchar_t ext[MAX_PATH];
+        wchar drive[MAX_PATH];
+        wchar dir[MAX_PATH];
+        wchar fname[MAX_PATH];
+        wchar ext[MAX_PATH];
 
-        HRESULT get(wchar_t const *filename)
+        HRESULT get(wchar const *filename)
         {
             if(_wsplitpath_s(filename, drive, dir, fname, ext) != 0) {
                 return HRESULT_FROM_WIN32(GetLastError());
@@ -651,7 +651,7 @@ namespace
     };
 }
 
-HRESULT file_get_path(wchar_t const *filename, std::wstring &path)
+HRESULT file_get_path(wchar const *filename, std::wstring &path)
 {
     path_parts p;
     CHK_HR(p.get(filename));
@@ -666,7 +666,7 @@ HRESULT file_get_path(wchar_t const *filename, std::wstring &path)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_filename(wchar_t const *filename, std::wstring &name)
+HRESULT file_get_filename(wchar const *filename, std::wstring &name)
 {
     path_parts p;
     CHK_HR(p.get(filename));
@@ -676,7 +676,7 @@ HRESULT file_get_filename(wchar_t const *filename, std::wstring &name)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_extension(wchar_t const *filename, std::wstring &extension)
+HRESULT file_get_extension(wchar const *filename, std::wstring &extension)
 {
     path_parts p;
     CHK_HR(p.get(filename));
@@ -686,9 +686,9 @@ HRESULT file_get_extension(wchar_t const *filename, std::wstring &extension)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_full_path(wchar_t const *filename, std::wstring &fullpath)
+HRESULT file_get_full_path(wchar const *filename, std::wstring &fullpath)
 {
-    wchar_t dummy;
+    wchar dummy;
     uint size = GetFullPathName(filename, 1, &dummy, null);
     if(size == 0) {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -704,7 +704,7 @@ HRESULT file_get_full_path(wchar_t const *filename, std::wstring &fullpath)
 
 //////////////////////////////////////////////////////////////////////
 
-std::wstring windows_error_message(uint32_t err)
+std::wstring windows_error_message(uint32 err)
 {
     if(err == 0) {
         err = GetLastError();
@@ -714,7 +714,7 @@ std::wstring windows_error_message(uint32_t err)
 
 //////////////////////////////////////////////////////////////////////
 
-std::wstring format_v(wchar_t const *fmt, va_list v)
+std::wstring format_v(wchar const *fmt, va_list v)
 {
     size_t len = _vscwprintf(fmt, v);
     std::wstring s;
@@ -745,7 +745,7 @@ std::string format(char const *fmt, ...)
 
 //////////////////////////////////////////////////////////////////////
 
-std::wstring format(wchar_t const *fmt, ...)
+std::wstring format(wchar const *fmt, ...)
 {
     va_list v;
     va_start(v, fmt);
@@ -754,7 +754,7 @@ std::wstring format(wchar_t const *fmt, ...)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT log_win32_error(DWORD err, wchar_t const *message, va_list v)
+HRESULT log_win32_error(DWORD err, wchar const *message, va_list v)
 {
     TCHAR buffer[4096];
     _vsntprintf_s(buffer, _countof(buffer), message, v);
@@ -766,7 +766,7 @@ HRESULT log_win32_error(DWORD err, wchar_t const *message, va_list v)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT log_win32_error(wchar_t const *message, ...)
+HRESULT log_win32_error(wchar const *message, ...)
 {
     va_list v;
     va_start(v, message);
@@ -775,7 +775,7 @@ HRESULT log_win32_error(wchar_t const *message, ...)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT log_win32_error(DWORD err, wchar_t const *message, ...)
+HRESULT log_win32_error(DWORD err, wchar const *message, ...)
 {
     va_list v;
     va_start(v, message);

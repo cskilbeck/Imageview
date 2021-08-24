@@ -58,9 +58,9 @@ struct timer_t
 
 struct stopwatch : timer_t
 {
-    wchar_t const *name;
+    wchar const *name;
 
-    explicit stopwatch(wchar_t const *name) : timer_t(), name(name)
+    explicit stopwatch(wchar const *name) : timer_t(), name(name)
     {
         reset();
     }

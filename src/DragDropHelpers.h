@@ -190,7 +190,6 @@ public:
             defer(psia->Release());
             CHK_HR(on_drop_shell_item(psia, grfKeyState));
             return S_OK;
-
         }
 
         FORMATETC f{ 0 };
@@ -205,7 +204,7 @@ public:
 
             void *p = GlobalLock(s.hGlobal);
             defer(GlobalUnlock(p));
-            return on_drop_string(reinterpret_cast<wchar_t const *>(p));
+            return on_drop_string(reinterpret_cast<wchar const *>(p));
         }
 
         CHK_HR(OnDropError(pdtobj));
@@ -215,7 +214,7 @@ public:
 private:
     // client provides
     virtual HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) = 0;
-    virtual HRESULT on_drop_string(wchar_t const *str) = 0;
+    virtual HRESULT on_drop_string(wchar const *str) = 0;
     virtual HRESULT OnDropError(IDataObject * /* pdtobj */)
     {
         return S_OK;
