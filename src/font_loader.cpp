@@ -1,9 +1,10 @@
 #include "pch.h"
 
-// Ignore unreferenced parameters, since they are very common
-// when implementing callbacks.
-#pragma warning(disable : 4100)
+// This entire file is the boilerplate for using an embedded font in D2D in Windows 7 and later
 
+
+// Ignore unreferenced parameters, since they are very common when implementing callbacks.
+#pragma warning(disable : 4100)
 
 ////////////////////////////////////////
 // COM inheritance helpers.

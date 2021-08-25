@@ -1,5 +1,5 @@
-#ifndef DECL_SETTING
-#error Please define DECL_SETTING
+#if !defined(DECL_SETTING)
+#define DECL_SETTING(...) "Please define DECL_SETTING"
 #endif
 
 // DECL_SETTING(type, name, default)
@@ -33,4 +33,4 @@ DECL_SETTING(bool, show_full_filename_in_titlebar, false);
 DECL_SETTING(float, select_border_grab_size, 8.0f);
 DECL_SETTING(bool, grid_enabled, false);
 DECL_SETTING(int, grid_multiplier, 2);
-DECL_SETTING(size_t, cache_size, 1048576llu * 16); // 1GB memory cache by default
+DECL_SETTING(size_t, cache_size, 1048576llu * 1024); // 1GB memory cache by default

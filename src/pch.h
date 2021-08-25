@@ -1,4 +1,15 @@
+//////////////////////////////////////////////////////////////////////
+// ImageView is tiny so stuffing all the headers into a single precompiled header makes sense
+
 #pragma once
+
+//////////////////////////////////////////////////////////////////////
+// TODO(chs): replace codecvt stuff with MultiByteToWideChar and WideCharToMultiByte
+
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+
+//////////////////////////////////////////////////////////////////////
+// Logging
 
 #if defined(_DEBUG)
 #define LOG_ENABLED 1
@@ -6,28 +17,32 @@
 #define LOG_ENABLED 0
 #endif
 
-// ImageView is tiny so stuffing all the headers into a single precompiled header makes sense
+//////////////////////////////////////////////////////////////////////
+// ANSI not supported
+
+#if !defined(UNICODE)
+#error Unicode only
+#endif
+
+//////////////////////////////////////////////////////////////////////
+// define SLOW_THINGS_DOWN to add some pauses to load_file and scan_folder for testing thread stuff
+
+// #define SLOW_THINGS_DOWN
+
+//////////////////////////////////////////////////////////////////////
+// Support Windows 7 and later
+
+#define _WIN32_WINNT _WIN32_WINNT_WIN7
+#define NTDDI_VERSION NTDDI_WIN7
 
 #include <winsdkver.h>
 
-// Support Windows 7
-
-// To use Windows 8/10 features, well...
-// One option would be to constrain all uses of those functions to a single source file,
-// and in there, define _WIN32_WINNT etc and switch off precompiled headers for that file
-// Then very carefully use those features after checking the operating system version
-
-// Big hassle but if there's a compelling feature then it might be worth it I guess?
-
-// _WIN32_WINNT/NTDDI_VERSION are defined at project scope because some modules don't use PCH
-
-//#define _WIN32_WINNT _WIN32_WINNT_WIN7
-//#define NTDDI_VERSION NTDDI_WIN7
-
+//////////////////////////////////////////////////////////////////////
 // MediaFoundation guids are required for checking HEIF support
 
 #define MF_INIT_GUIDS
 
+//////////////////////////////////////////////////////////////////////
 // All the Windows
 
 #define NOMINMAX
@@ -51,7 +66,13 @@
 #include <shobjidl_core.h>
 #include <winhttp.h>
 #include <wincodec.h>
+#include <DirectXMath.h>
+#include <propkey.h>
 
+using namespace DirectX;
+using Microsoft::WRL::ComPtr;
+
+//////////////////////////////////////////////////////////////////////
 // Old std lib
 
 #include <stdio.h>
@@ -59,6 +80,7 @@
 #include <time.h>
 #include <tchar.h>
 
+//////////////////////////////////////////////////////////////////////
 // New std lib
 
 #include <string>
@@ -67,6 +89,7 @@
 #include <locale>
 #include <codecvt>
 #include <functional>
+#include <memory>
 #include <thread>
 #include <set>
 #include <algorithm>
@@ -74,17 +97,26 @@
 #include <utility>
 #include <array>
 
+//////////////////////////////////////////////////////////////////////
 // Resource IDs
 
 #include "../resources/resource.h"
 
+//////////////////////////////////////////////////////////////////////
 // Local
 
+#include "types.h"
 #include "util.h"
 #include "log.h"
+#include "defer.h"
 #include "rect.h"
-#include "WICTextureLoader11.h"
-#include "DragDropHelpers.h"
+#include "files.h"
+#include "dialogs.h"
+#include "drag_drop.h"
 #include "font_loader.h"
 #include "new_windows.h"
 #include "timer.h"
+#include "thread_pool.h"
+#include "image_decoder.h"
+#include "image.h"
+#include "app.h"

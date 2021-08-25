@@ -26,27 +26,36 @@ struct rect : RECT
     int w() const
     {
         return right - left;
-    };
+    }
 
     int h() const
     {
         return bottom - top;
     }
+
     int x() const
     {
         return left;
     }
+
     int y() const
     {
         return top;
     }
+
     int r() const
     {
         return right;
     }
+
     int b() const
     {
         return bottom;
+    }
+
+    POINT top_left() const
+    {
+        return { left, top };
     }
 
     std::basic_string<wchar> as_string()
@@ -107,7 +116,6 @@ struct vec2
     {
         return { ::clamp(min.x, a.x, max.x), ::clamp(min.y, a.y, max.y) };
     }
-
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -180,7 +188,7 @@ struct rect_f
     {
         vec2 min = vec2::min(a, b);
         vec2 max = vec2::max(a, b);
-        vec2 diff = sub_point(b, a);
+        vec2 diff = sub_point(max, min);
         x = min.x;
         y = min.y;
         w = diff.x;

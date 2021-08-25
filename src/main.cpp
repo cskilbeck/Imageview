@@ -1,18 +1,12 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "pch.h"
-#include "../resources/resource.h"
-#include "app.h"
-
-#if !defined(UNICODE)
-#error Unicode only
-#endif
 
 //////////////////////////////////////////////////////////////////////
 
 namespace
 {
-    using namespace DirectX;
+    // com_initializer goes _before_ the App declaration so CoInitialize is called before App ctor
 
     struct com_initializer
     {
@@ -31,23 +25,6 @@ namespace
 
     App application;
 
-    std::vector<byte> file_load_buffer;
-    std::atomic_bool file_load_complete{ false };
-    HRESULT file_load_hresult = S_OK;
-
-    LPCWSTR app_name = localize(IDS_AppName);
-
-    WINDOWPLACEMENT window_placement{ sizeof(WINDOWPLACEMENT) };
-
-    int get_x(LPARAM lp)
-    {
-        return (int)(short)LOWORD(lp);
-    }
-
-    int get_y(LPARAM lp)
-    {
-        return (int)(short)HIWORD(lp);
-    }
 }    // namespace
 
 //////////////////////////////////////////////////////////////////////
@@ -93,27 +70,16 @@ HRESULT check_heif_support(bool &heif_is_supported)
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
-    if(!XMVerifyCPUSupport()) {
-        std::wstring message = format(localize(IDS_OldCpu), localize(IDS_AppName));
-        MessageBox(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
-        return 1;
-    }
-
-    CHECK(application.init());
-
     wchar *cmd_line = GetCommandLineW();
 
-    if(application.reuse_window(cmd_line) == S_FALSE) {
-        return 0;
-    }
-
-    // start file load asap (or show OpenFileDialog)
-    HRESULT hr = application.on_command_line(cmd_line);
+    HRESULT hr = application.init(cmd_line);
 
     // quit if OpenFileDialog was shown and cancelled by the user
-    if(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
+    // or existing instance was reused or cpu not supported
+    if(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == S_FALSE) {
         return 0;
     }
+
     if(FAILED(hr)) {
         display_error(format(L"Command line %s", cmd_line).c_str(), hr);
         return 0;
@@ -140,9 +106,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     CHECK(application.get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
     HWND hwnd;
-    CHK_NULL(hwnd = CreateWindowExW(window_ex_style, App::window_class, app_name, window_style, rc.x(), rc.y(), rc.w(), rc.h(), null, null, hInstance, &application));
+    CHK_NULL(hwnd = CreateWindowExW(window_ex_style, App::window_class, localize(IDS_AppName), window_style, rc.x(), rc.y(), rc.w(), rc.h(), null, null, hInstance, &application));
 
-    application.set_windowplacement();
+    application.setup_initial_windowplacement();
 
     RAWINPUTDEVICE Rid[1];
     Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
@@ -155,8 +121,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
     CHK_NULL(haccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
 
-    MSG msg = {};
-    while(WM_QUIT != msg.message) {
+    MSG msg;
+
+    do {
         if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
             if(!TranslateAccelerator(hwnd, haccel, &msg)) {
                 TranslateMessage(&msg);
@@ -165,13 +132,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
         } else {
             application.update();
         }
-    }
-
-    CoUninitialize();
+    } while(msg.message != WM_QUIT);
 
     application.on_process_exit();
 
-    return (int)msg.wParam;
+    CoUninitialize();
+
+    return 0;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -243,6 +210,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
     } break;
+
+    case WM_SHOWWINDOW:
+        if(wParam) {
+            SetCursor(LoadCursor(null, IDC_ARROW));
+        }
+        break;
 
     case WM_SETCURSOR:
         if(LOWORD(lParam) != HTCLIENT || !app->on_setcursor()) {
@@ -322,13 +295,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             app->on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
         }
     } break;
-
-    // suppress alt key behaviour
-    case WM_SYSCOMMAND:
-        if(wParam == SC_KEYMENU && (lParam >> 16) <= 0) {
-            return 0;
-        }
-        return DefWindowProc(hWnd, message, wParam, lParam);
 
     case WM_COMMAND:
         switch(LOWORD(wParam)) {

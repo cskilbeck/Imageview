@@ -24,33 +24,60 @@ struct App : public CDragDropHelper
         commandline = 1
     };
 
-    // a file that has maybe been loaded, successfully or not
-    struct file_loader
+    static HRESULT get_image_file_size(wchar const *filename, uint64 *size)
     {
-        std::wstring filename;                                                 // file path, relative to scanned folder - use this as key for map
-        std::vector<byte> bytes;                                               // raw pixels, once it has been loaded - duplicate of texture, so...?
-        HRESULT hresult{ HRESULT_FROM_WIN32(ERROR_OPERATION_IN_PROGRESS) };    // error code or S_OK from load_file()
-        int index{ -1 };                                                       // position in the list of files
-        int view_count{ 0 };                                                   // how many times this has been viewed since being loaded
+        if(size == null || filename == null || filename[0] == 0) {
+            return E_INVALIDARG;
+        }
+
+        uint64 file_size;
+
+        CHK_HR(file_get_size(filename, file_size));
+
+        uint32 w, h;
+        uint64 image_size;
+
+        CHK_HR(get_image_size(filename, w, h, image_size));
+
+        *size = (size_t)image_size + file_size;
+
+        return S_OK;
+    }
+
+    // an image file that has maybe been loaded, successfully or not
+    struct image_file
+    {
+        image_file() = default;
+        image_file(std::wstring const &name) : filename(name)
+        {
+        }
+
+        std::wstring filename;           // file path, use this as key for map
+        std::vector<byte> bytes;         // file contents, once it has been loaded
+        HRESULT hresult{ E_PENDING };    // error code or S_OK from load_file()
+        int index{ -1 };                 // position in the list of files
+        int view_count{ 0 };             // how many times this has been viewed since being loaded
+        bool is_cache_load{ false };     // true if being loaded just for cache (don't call warm_cache when it arrives)
+        std::vector<byte> pixels;        // decoded pixels from the file, format is always BGRA32
+
+        image img;
+
+        bool is_decoded() const
+        {
+            return img.pixels != null;
+        }
+
+        size_t total_size() const
+        {
+            if(!is_decoded()) {
+                return 0;
+            }
+            return bytes.size() + img.size();
+        }
     };
 
     App() = default;
-
-    ~App();
-
-    // WM_USER messages for main window
-    enum
-    {
-        WM_FILE_LOAD_COMPLETE = WM_USER,
-        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1
-    };
-
-    // WM_USER messages for scanner thread
-    enum
-    {
-        WM_SCAN_FOLDER = WM_USER,
-        WM_EXIT_THREAD = WM_USER + 1
-    };
+    ~App() = default;
 
     // singletonish, but not checked
     App(App &&) = delete;
@@ -58,8 +85,37 @@ struct App : public CDragDropHelper
     App(App const &) = delete;
     App &operator=(App const &) = delete;
 
-    // reset to blank state
-    HRESULT init();
+    // WM_USER messages for main window
+    enum
+    {
+        WM_FILE_LOAD_COMPLETE = WM_USER,         // a file load completed (lparam -> file_loader *)
+        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1    // a folder scan completed (lparam -> folder_scan_results *)
+    };
+
+    // WM_USER messages for scanner thread
+    enum
+    {
+        WM_SCAN_FOLDER = WM_USER    // please scan a folder (lparam -> path)
+    };
+
+    // WM_USER messages for file_loader thread
+    enum
+    {
+        WM_LOAD_FILE = WM_USER    // please load this file (lparam -> filepath)
+    };
+
+    // reset to blank state before anything happens, load settings
+    // maybe return S_FALSE if existing instance was reused
+    HRESULT init(wchar *cmd_line);
+
+    // get some defaults for window creation
+    HRESULT get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style);
+
+    // call in WM_NCCREATE after GWLP_USERDATA points at this
+    HRESULT set_window(HWND window);
+
+    // call this after CreateWindow
+    void setup_initial_windowplacement();
 
     // per-frame update
     HRESULT update();
@@ -67,26 +123,11 @@ struct App : public CDragDropHelper
     // request an image file to be loaded
     HRESULT load_image(wchar const *filepath);
 
-    HRESULT App::show_image(std::vector<byte> const &data, wchar const *filename);
-
-    void load_file(file_loader *f);
-
     // if file was loaded, try to decode it
-    HRESULT decode_image(file_loader *f);
+    HRESULT display_image(image_file *f);
 
     // new file loaded
     void on_file_load_complete(LPARAM lparam);
-
-    // actual image decoder uses WIC
-    HRESULT initialize_image_from_buffer(std::vector<byte> const &buffer);
-
-    // get some defaults for window creation
-    HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style);
-
-    // setup after window has been created
-    HRESULT set_window(HWND window);
-
-    void set_windowplacement();
 
     // window handlers
 
@@ -107,14 +148,16 @@ struct App : public CDragDropHelper
     void on_key_up(int vk_key);
     bool on_setcursor();
 
+    // WM_FOLDER_SCAN_COMPLETE
     void on_folder_scanned(folder_scan_result *scan_result);
 
+    // WM_DESTROY
     HRESULT on_closing();
 
     // copy current selection to CF_DIBV5 clipboard
     HRESULT on_copy();
 
-    // paste current clipboard (CF_DIBV5 or CFSTR_FILENAME) into texture
+    // paste current clipboard (CF_DIBV5 or CFSTR_FILENAME or CF_UNICODETEXT) into texture
     HRESULT on_paste();
 
     // toggle windowed or fake fullscreen on current monitor
@@ -124,11 +167,6 @@ struct App : public CDragDropHelper
     // of the application was run and it's in single window mode (settings.reuse_window == true)
     HRESULT on_command_line(wchar *cmd_line);
 
-    // if settings.reuse_window and an existing window is found, send it the command line
-    // with WM_COPYDATA and return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)
-    // else return S_OK
-    HRESULT reuse_window(wchar *cmd_line);
-
     // some thing(s) was/were dropped onto the window, try to load the first one
     HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) override;
     HRESULT on_drop_string(wchar const *str) override;
@@ -137,6 +175,8 @@ struct App : public CDragDropHelper
     IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv);
     IFACEMETHODIMP_(ULONG) AddRef();
     IFACEMETHODIMP_(ULONG) Release();
+
+    static LPCWSTR window_class;
 
     // public so DEFINE_ENUM_OPERATORS can see it
     enum selection_hover_t : uint
@@ -148,8 +188,6 @@ struct App : public CDragDropHelper
         sel_hover_bottom = 8,
         sel_hover_outside = 0x80000000
     };
-
-    static LPCWSTR window_class;
 
 private:
     //////////////////////////////////////////////////////////////////////
@@ -221,6 +259,10 @@ private:
     //
     //////////////////////////////////////////////////////////////////////
 
+    // if settings.reuse_window and an existing window is found, send it the command line
+    // and return S_FALSE else return S_OK
+    HRESULT reuse_window(wchar *cmd_line);
+
     // settings get serialized/deserialized to/from the registry
     struct settings_t
     {
@@ -232,7 +274,7 @@ private:
         HRESULT load();
 
         // where in the registry to put the settings. this does not need to be localized... right?
-        static wchar constexpr *key_name{ L"Software\\ImageView" };
+        static wchar constexpr *settings_key_name{ L"Software\\ImageView" };
 
         enum class serialize_action
         {
@@ -241,9 +283,10 @@ private:
         };
 
         HRESULT serialize(serialize_action action, wchar const *save_key_name);
-    };
 
-    static HRESULT serialize_setting(settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
+        // write or read a settings field to or from the registry - helper for serialize()
+        static HRESULT serialize_setting(settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
+    };
 
     settings_t settings;
     settings_t default_settings;
@@ -251,51 +294,52 @@ private:
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
     std::wstring current_folder;
 
-    folder_scan_result *current_folder_scan{ null };
-    int current_file_cursor{ 0 };
+    // most recently scanned folder results
+    std::unique_ptr<folder_scan_result> current_folder_scan;
 
+    // index in folder scan of currently viewed file
+    int current_file_cursor{ -1 };
+
+    // move to a new current file relative +/-
     void move_file_cursor(int movement);
 
-    // how many files loaded in this run
-    // which is used to decide whether to MessageBox and DestroyWindow when load_file() fails
-    // if files_loaded == 0 and load fails, show messagebox and bomb
-    // else just show error as text in the window
-    // increment files_loaded when a file load succeeds
-    // note that this does not account for failing to decode the image....
+    // how many files loaded so far in this run
     int files_loaded{ 0 };
 
-    // thread admin
-    file_loader *requested_file{ null };
+    // the most recently requested file to show - when a file_load succeeds, if it's this one, show it
+    image_file *requested_file{ null };
 
-    // persistent folder scanner thread
-    std::thread scanner_thread;
-    HANDLE scanner_thread_handle{ null };
-    DWORD scanner_thread_id{ 0 };
-    std::atomic_bool scanner_thread_running{ false };
+    // folder scanner thread id so we can PostMessage to it
+    uint scanner_thread_id{ (uint)-1 };
+    uint file_loader_thread_id{ (uint)-1 };
 
     void scanner_function();
     HRESULT do_folder_scan(wchar const *path);
 
-    HRESULT update_file_index(file_loader *f);
+    void file_loader_function();
+    void request_image(wchar const *filename);
 
-    // set this to cancel all async file loading activity
-    HANDLE cancel_loader_event;
+    // find, set the index of a loaded file in the current scan results
+    HRESULT update_file_index(image_file *f);
+
+    // preload some files either side of the current file
+    HRESULT warm_cache();
 
     // set this to signal that the application is exiting
+    // all threads should quit asap when this is set
     HANDLE quit_event;
 
-    // # of file loader threads in flight, set cancel event then wait for this to fall to 0
-    LONG thread_count;
-
     // files which have been loaded
-    static std::unordered_map<std::wstring, file_loader *> loaded_files;
+    static std::unordered_map<std::wstring, image_file *> loaded_files;
 
     // files which have been requested to load
-    static std::unordered_map<std::wstring, file_loader *> loading_files;
+    static std::unordered_map<std::wstring, image_file *> loading_files;
 
-    file_loader *current_image_file{ null };
+    // kick off a file_loader thread
+    void start_file_loader(image_file *f);
 
-    void cancel_loader();
+    // set this image to the window
+    HRESULT show_image(image_file *f);
 
     // render one frame
     HRESULT render();
@@ -309,26 +353,31 @@ private:
     // create all d3d, d2d, dwrite factories and devices
     HRESULT create_device();
 
-    // create resources (eg after window resize)
+    // create resources (eg after device lost etc)
     HRESULT create_resources();
 
+    // create D2D text rendering objects
     HRESULT create_text_formats();
 
-    // device lost (eg sleep/resume, another app goes fullscreen)
+    // device was lost (eg sleep/resume, another app goes fullscreen)
     HRESULT on_device_lost();
 
     // copy the current selection into a CF_DIBV5
     HRESULT copy_selection();
 
+    // crop the image to the current selection
+    HRESULT crop_to_selection();
+
     // send the shader constants to the GPU
     HRESULT update_constants();
 
-    void set_cursor(HCURSOR c);
+    // set mouse cursor with error checking and monitoring of current cursor
+    void set_mouse_cursor(HCURSOR c);
 
     // mouse button admin
-    void set_grab(int button);
-    void clear_grab(int button);
-    bool get_grab(int button);
+    void set_mouse_button(int button);
+    void clear_mouse_buttons(int button);
+    bool get_mouse_buttons(int button) const;
 
     // zoom admin
     void reset_zoom(reset_zoom_mode mode);
@@ -340,31 +389,38 @@ private:
     void select_all();
 
     // converting to/from screen/texel coords
-    vec2 screen_to_texture_pos(vec2 pos);
-    vec2 screen_to_texture_pos(point_s pos);
-    vec2 texture_to_screen_pos(vec2 pos);
+    vec2 screen_to_texture_pos(vec2 pos) const;
+    vec2 screen_to_texture_pos(point_s pos) const;
+    vec2 texture_to_screen_pos(vec2 pos) const;
+    vec2 texture_to_screen_pos_unclamped(vec2 pos) const;
 
-    vec2 texels_to_pixels(vec2 pos);
-    vec2 pixels_to_texels(vec2 pos);
+    vec2 texels_to_pixels(vec2 pos) const;
 
     vec2 texel_size() const;
     vec2 texture_size() const;
     vec2 window_size() const;
 
-    vec2 clamp_to_texture(vec2 pos);
-
-    HANDLE window_created_event{ null };
+    vec2 clamp_to_texture(vec2 pos) const;
 
     // draw a string with a border and background fill
     HRESULT draw_string(std::wstring const &text, IDWriteTextFormat *format, vec2 pos, vec2 pivot, float opacity = 1.0f, float corner_radius = 4.0f, float padding = 4.0f);
-    HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size);
+
+    // get string dimensions with padding
+    HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size) const;
+
+    // set the message displayed on the window and how long before it fades out
+    void set_message(wchar const *message, double fade_time);
+
+    // which image currently being displayed
+    image_file *current_image_file{ null };
+
+    // wait on this before sending a message to the window which must arrive safely
+    HANDLE window_created_event{ null };
 
     // admin for showing a message
     std::wstring current_message;
     double message_timestamp{ 0 };
     double message_fade_time{ 0 };
-
-    void set_message(wchar const *message, double fade_time);
 
     vec2 small_label_size{ 0, 0 };
     float small_label_padding{ 2.0f };
@@ -412,6 +468,8 @@ private:
         ;
 
     shader_const_t shader_constants;
+
+    thread_pool_t thread_pool;
 
     // all the com pointers
 
@@ -479,19 +537,32 @@ private:
 
     void check_selection_hover(vec2 pos);
 
-    enum class cursor_type
-    {
-        system,
-        user
-    };
-
     struct cursor_def
     {
-        cursor_type type;
+        enum class src
+        {
+            system,
+            user
+        };
+
+        src source;
         short id;
 
-        cursor_def(cursor_type _type, wchar const *_id) : type(_type), id((short)((intptr_t)_id & 0xffff))
+        cursor_def(src s, wchar const *i) : source(s), id((short)((intptr_t)i & 0xffff))
         {
+        }
+
+        cursor_def(src s, short i) : source(s), id(i)
+        {
+        }
+
+        HCURSOR get_hcursor() const
+        {
+            HMODULE h = null;
+            if(source == App::cursor_def::src::user) {
+                h = GetModuleHandle(null);
+            }
+            return LoadCursor(h, MAKEINTRESOURCE(id));
         }
     };
 
@@ -500,9 +571,9 @@ private:
 
     // selection admin
     bool selecting{ false };              // dragging new selection rectangle
-    bool selection_active{ false };       // a selection rectangle exists
-    bool drag_selection{ false };         // dragging the selection rectangle
-    selection_hover_t selection_hover;    // which part of the selection rectangle being dragged (all, corner, edge)
+    bool selection_active{ false };       // a defined selection rectangle exists
+    bool drag_selection{ false };         // dragging the existing selection rectangle
+    selection_hover_t selection_hover;    // which part of the selection rectangle being hovered over (all, corner, edge)
     vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
     vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
 
@@ -518,10 +589,10 @@ private:
     bool has_been_zoomed_or_dragged{ false };
     reset_zoom_mode last_zoom_mode{ reset_zoom_mode::shrink_to_fit };
 
-    // texture drawn in this rectangle
+    // texture drawn in this rectangle which is in pixels
     rect_f current_rect;
 
-    // texture rectangle target for animated zoom
+    // texture rectangle target for animated zoom etc
     rect_f target_rect;
 
     // texture dimensions
@@ -540,6 +611,7 @@ private:
 
     // which frame rendering
     int m_frame{ 0 };
+
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(App::selection_hover_t);

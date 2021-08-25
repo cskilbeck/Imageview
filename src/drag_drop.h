@@ -1,3 +1,4 @@
+//////////////////////////////////////////////////////////////////////
 // THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
 // ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 // THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
@@ -5,78 +6,43 @@
 //
 // Copyright (c) Microsoft Corporation. All rights reserved
 
+//////////////////////////////////////////////////////////////////////
+
 #pragma once
 
-#include <strsafe.h>
-#include <commoncontrols.h>
+//////////////////////////////////////////////////////////////////////
 
-// declare a static CLIPFORMAT and pass that that by ref as the first param
+void clear_drop_tip(IDataObject *pdtobj);
+void set_drop_tip(IDataObject *pdtobj, DROPIMAGETYPE type, PCWSTR pszMsg, PCWSTR pszInsert);
+HRESULT set_blob(IDataObject *pdtobj, CLIPFORMAT cf, const void *pvBlob, UINT cbBlob);
+CLIPFORMAT get_clipboard_format(CLIPFORMAT *pcf, PCWSTR pszForamt);
+HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv);
 
-inline CLIPFORMAT GetClipboardFormat(CLIPFORMAT *pcf, PCWSTR pszForamt)
+//////////////////////////////////////////////////////////////////////
+// COM helpers
+
+template <class T> void SafeRelease(T **ppT)
 {
-    if(*pcf == 0) {
-        *pcf = (CLIPFORMAT)RegisterClipboardFormat(pszForamt);
+    if(*ppT) {
+        (*ppT)->Release();
+        *ppT = NULL;
     }
-    return *pcf;
 }
 
-inline HRESULT SetBlob(IDataObject *pdtobj, CLIPFORMAT cf, const void *pvBlob, UINT cbBlob)
+//////////////////////////////////////////////////////////////////////
+
+template <class T> HRESULT SetInterface(T **ppT, IUnknown *punk)
 {
-    void *pv = GlobalAlloc(GPTR, cbBlob);
-    HRESULT hr = pv ? S_OK : E_OUTOFMEMORY;
-    if(SUCCEEDED(hr)) {
-        CopyMemory(pv, pvBlob, cbBlob);
+    SafeRelease(ppT);
 
-        FORMATETC fmte = { cf, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
-
-        // The STGMEDIUM structure is used to define how to handle a global memory transfer.
-        // This structure includes a flag, tymed, which indicates the medium
-        // to be used, and a union comprising pointers and a handle for getting whichever
-        // medium is specified in tymed.
-        STGMEDIUM medium = {};
-        medium.tymed = TYMED_HGLOBAL;
-        medium.hGlobal = pv;
-
-        hr = pdtobj->SetData(&fmte, &medium, TRUE);
-        if(FAILED(hr)) {
-            GlobalFree(pv);
-        }
+    if(punk == null) {
+        return E_NOINTERFACE;
     }
-    return hr;
+
+    return punk->QueryInterface(ppT);
 }
 
-inline void SetDropTip(IDataObject *pdtobj, DROPIMAGETYPE type, PCWSTR pszMsg, PCWSTR pszInsert)
-{
-    DROPDESCRIPTION dd = { type };
-    StringCchCopyW(dd.szMessage, ARRAYSIZE(dd.szMessage), pszMsg);
-    StringCchCopyW(dd.szInsert, ARRAYSIZE(dd.szInsert), pszInsert ? pszInsert : L"");
-
-    static CLIPFORMAT s_cfDropDescription = 0;
-    SetBlob(pdtobj, GetClipboardFormat(&s_cfDropDescription, CFSTR_DROPDESCRIPTION), &dd, sizeof(dd));
-}
-
-inline void ClearDropTip(IDataObject *pdtobj)
-{
-    SetDropTip(pdtobj, DROPIMAGE_INVALID, L"", NULL);
-}
-
-// encapsulation of the shell drag drop presentation and Drop handling functionality
-// this provides the following features 1) drag images, 2) drop tips,
-// 3) ints OLE and registers drop target, 4) conversion of the data object item into shell items
-//
-// to use this
-//      1) have the object that represents the main window of your app derive
-//         from CDragDropHelper exposing it as public.
-//         "class CAppClass : public CDragDropHelper"
-//      2) add IDropTarget to the QueryInterface() implementation of your class
-//         that is a COM object itself
-//      3) in your WM_INITDIALOG handling call
-//         InitializeDragDropHelper(_hdlg, DROPIMAGE_LINK, NULL) passing
-//         the dialog window and drop tip template and type
-//      4) in your WM_DESTROY handler add a call to TerminateDragDropHelper(). note not
-//         doing this will lead to a leak of your object so this is important
-//      5) add the delaration and implementation of OnDrop() to your class, this
-//         gets called when the drop happens
+//////////////////////////////////////////////////////////////////////
 
 class CDragDropHelper : public IDropTarget
 {
@@ -149,7 +115,7 @@ public:
             PWSTR pszName;
             hr = psi->GetDisplayName(SIGDN_NORMALDISPLAY, &pszName);
             if(SUCCEEDED(hr)) {
-                SetDropTip(pdtobj, _dropImageType, _pszDropTipTemplate ? _pszDropTipTemplate : L"%1", pszName);
+                set_drop_tip(pdtobj, _dropImageType, _pszDropTipTemplate ? _pszDropTipTemplate : L"%1", pszName);
                 CoTaskMemFree(pszName);
             }
             psi->Release();
@@ -172,7 +138,7 @@ public:
         if(_pdth) {
             _pdth->DragLeave();
         }
-        ClearDropTip(_pdtobj);
+        clear_drop_tip(_pdtobj);
         SafeRelease(&_pdtobj);
         return S_OK;
     }

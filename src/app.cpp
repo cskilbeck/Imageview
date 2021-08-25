@@ -1,5 +1,7 @@
 //////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
 //
+// fix the cache
 // monitor DPI / orientation awareness
 // show message if file load is slow
 // settings dialog
@@ -7,7 +9,6 @@
 // localization
 // Windows 7 support
 // installation/file associations
-// image decode in the loader thread?
 //
 // slippery slope:
 // 'R' to rotate it and then, save?
@@ -17,7 +18,6 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "pch.h"
-#include "app.h"
 
 #include "shader_inc/vs_rectangle.h"
 #include "shader_inc/ps_drawimage.h"
@@ -55,41 +55,44 @@ namespace
     {
         return (GetAsyncKeyState(key) & 0x8000) != 0;
     }
+};    // namespace
 
 #define d3d_name(x) set_d3d_debug_name(x, #x)
-};    // namespace
 
 LPCWSTR App::window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
 ComPtr<ID3D11Debug> App::d3d_debug;
 
-std::unordered_map<std::wstring, App::file_loader *> App::loaded_files;
-std::unordered_map<std::wstring, App::file_loader *> App::loading_files;
+// file/image cache admin
+
+std::unordered_map<std::wstring, App::image_file *> App::loaded_files;
+std::unordered_map<std::wstring, App::image_file *> App::loading_files;
 
 //////////////////////////////////////////////////////////////////////
 // cursors for hovering over rectangle interior/corners/edges
 // see selection_hover_t
 
 App::cursor_def App::sel_hover_cursors[16] = {
-    { App::cursor_type::user, MAKEINTRESOURCE(IDC_CURSOR_HAND) },    // 0 - inside
-    { App::cursor_type::system, IDC_SIZEWE },                        // 1 - left
-    { App::cursor_type::system, IDC_SIZEWE },                        // 2 - right
-    { App::cursor_type::system, IDC_ARROW },                         // 3 - left and right xx shouldn't be possible
-    { App::cursor_type::system, IDC_SIZENS },                        // 4 - top
-    { App::cursor_type::system, IDC_SIZENWSE },                      // 5 - left and top
-    { App::cursor_type::system, IDC_SIZENESW },                      // 6 - right and top
-    { App::cursor_type::system, IDC_ARROW },                         // 7 - top left and right xx
-    { App::cursor_type::system, IDC_SIZENS },                        // 8 - bottom
-    { App::cursor_type::system, IDC_SIZENESW },                      // 9 - bottom left
-    { App::cursor_type::system, IDC_SIZENWSE },                      // 10 - bottom right
-    { App::cursor_type::system, IDC_ARROW },                         // 11 - bottom left and right xx
-    { App::cursor_type::system, IDC_ARROW },                         // 12 - bottom and top xx
-    { App::cursor_type::system, IDC_ARROW },                         // 13 - bottom top and left xx
-    { App::cursor_type::system, IDC_ARROW },                         // 14 - bottom top and right xx
-    { App::cursor_type::system, IDC_ARROW }                          // 15 - bottom top left and right xx
+    { App::cursor_def::src::user, IDC_CURSOR_HAND },    //  0 - inside
+    { App::cursor_def::src::system, IDC_SIZEWE },       //  1 - left
+    { App::cursor_def::src::system, IDC_SIZEWE },       //  2 - right
+    { App::cursor_def::src::system, IDC_ARROW },        //  3 - xx left and right shouldn't be possible
+    { App::cursor_def::src::system, IDC_SIZENS },       //  4 - top
+    { App::cursor_def::src::system, IDC_SIZENWSE },     //  5 - left and top
+    { App::cursor_def::src::system, IDC_SIZENESW },     //  6 - right and top
+    { App::cursor_def::src::system, IDC_ARROW },        //  7 - xx top left and right
+    { App::cursor_def::src::system, IDC_SIZENS },       //  8 - bottom
+    { App::cursor_def::src::system, IDC_SIZENESW },     //  9 - bottom left
+    { App::cursor_def::src::system, IDC_SIZENWSE },     // 10 - bottom right
+    { App::cursor_def::src::system, IDC_ARROW },        // 11 - xx bottom left and right
+    { App::cursor_def::src::system, IDC_ARROW },        // 12 - xx bottom and top
+    { App::cursor_def::src::system, IDC_ARROW },        // 13 - xx bottom top and left
+    { App::cursor_def::src::system, IDC_ARROW },        // 14 - xx bottom top and right
+    { App::cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
 };
 
 //////////////////////////////////////////////////////////////////////
+// DragDropHelper stuff
 
 IFACEMETHODIMP App::QueryInterface(REFIID riid, void **ppv)
 {
@@ -119,8 +122,9 @@ IFACEMETHODIMP_(ULONG) App::Release()
 }
 
 //////////////////////////////////////////////////////////////////////
+// restore window position if not fullscreen and not first time running
 
-void App::set_windowplacement()
+void App::setup_initial_windowplacement()
 {
     if(!settings.first_run && !settings.fullscreen) {
         WINDOWPLACEMENT w{ settings.window_placement };
@@ -130,8 +134,10 @@ void App::set_windowplacement()
 }
 
 //////////////////////////////////////////////////////////////////////
+// save or load a setting
 
-HRESULT App::serialize_setting(settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size)
+HRESULT App::settings_t::serialize_setting(
+    settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size)
 {
     switch(action) {
 
@@ -150,7 +156,8 @@ HRESULT App::serialize_setting(settings_t::serialize_action action, wchar const 
         if(FAILED(RegQueryValueEx(key, name, null, null, null, &cbsize)) || cbsize != size) {
             return S_FALSE;
         }
-        CHK_HR(RegGetValue(HKEY_CURRENT_USER, key_name, name, RRF_RT_REG_BINARY, null, reinterpret_cast<DWORD *>(var), &cbsize));
+        CHK_HR(RegGetValue(
+            HKEY_CURRENT_USER, key_name, name, RRF_RT_REG_BINARY, null, reinterpret_cast<DWORD *>(var), &cbsize));
     } break;
     }
 
@@ -158,6 +165,7 @@ HRESULT App::serialize_setting(settings_t::serialize_action action, wchar const 
 }
 
 //////////////////////////////////////////////////////////////////////
+// save or load all the settings
 
 HRESULT App::settings_t::serialize(serialize_action action, wchar const *save_key_name)
 {
@@ -166,27 +174,31 @@ HRESULT App::settings_t::serialize(serialize_action action, wchar const *save_ke
     }
 
 #undef DECL_SETTING
-#define DECL_SETTING(type, name, ...) CHK_HR(serialize_setting(action, save_key_name, L#name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+#define DECL_SETTING(type, name, ...) \
+    CHK_HR(serialize_setting(action, save_key_name, L#name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
 #include "settings.h"
 
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
+// load the settings
 
 HRESULT App::settings_t::load()
 {
-    return serialize(serialize_action::load, key_name);
+    return serialize(serialize_action::load, settings_key_name);
 }
 
 //////////////////////////////////////////////////////////////////////
+// save the settings
 
 HRESULT App::settings_t::save()
 {
-    return serialize(serialize_action::save, key_name);
+    return serialize(serialize_action::save, settings_key_name);
 }
 
 //////////////////////////////////////////////////////////////////////
+// copy selection and record timestamp for flash notification
 
 HRESULT App::on_copy()
 {
@@ -195,6 +207,7 @@ HRESULT App::on_copy()
 }
 
 //////////////////////////////////////////////////////////////////////
+// if it's already running, send it the command line and return S_FALSE
 
 HRESULT App::reuse_window(wchar *cmd_line)
 {
@@ -217,40 +230,56 @@ HRESULT App::reuse_window(wchar *cmd_line)
 }
 
 //////////////////////////////////////////////////////////////////////
+// process a command line, could be from another instance
 
 HRESULT App::on_command_line(wchar *cmd_line)
 {
     // parse args
     int argc;
-    LPWSTR *argv = CommandLineToArgvW(cmd_line, &argc);
+    wchar **argv = CommandLineToArgvW(cmd_line, &argc);
 
     wchar const *filepath{ L"?open" };
 
     if(argc > 1 && argv[1] != null) {
         filepath = argv[1];
     }
-    CHK_HR(load_image(filepath));
+    load_image(filepath);
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
+// ask the file_loader_thread to load a file
+
+void App::request_image(wchar const *filename)
+{
+    PostThreadMessage(file_loader_thread_id, WM_LOAD_FILE, 0, reinterpret_cast<LPARAM>(filename));
+}
+
+//////////////////////////////////////////////////////////////////////
+// paste the clipboard - if it's a bitmap, paste that else if it's
+// a string, try to load that file
 
 HRESULT App::on_paste()
 {
+    if(window == null) {
+        return E_UNEXPECTED;
+    }
+
     if(IsClipboardFormatAvailable(CF_DIBV5)) {
 
         // if clipboard contains a DIB, make it look like a file we just loaded
-        std::vector<byte> bytes;
-        bytes.resize(sizeof(BITMAPFILEHEADER));
-        CHK_HR(append_clipboard_to_buffer(bytes, CF_DIBV5));
+        image_file *f = new image_file();
 
-        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(bytes.data());
+        f->bytes.resize(sizeof(BITMAPFILEHEADER));
+        CHK_HR(append_clipboard_to_buffer(f->bytes, CF_DIBV5));
+
+        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(f->bytes.data());
 
         BITMAPV5HEADER *i = reinterpret_cast<BITMAPV5HEADER *>(b + 1);
 
         memset(b, 0, sizeof(*b));
         b->bfType = 'MB';
-        b->bfSize = (DWORD)bytes.size();
+        b->bfSize = (DWORD)f->bytes.size();
         b->bfOffBits = sizeof(BITMAPV5HEADER) + sizeof(BITMAPFILEHEADER) + i->bV5ProfileSize;
 
         if(i->bV5Compression == BI_BITFIELDS) {
@@ -258,7 +287,18 @@ HRESULT App::on_paste()
         }
 
         selection_active = false;
-        return show_image(bytes, L"Clipboard");
+
+        // TODO(chs): fix this mess:
+
+        f->filename = L"Clipboard";
+        f->hresult = S_OK;
+        f->index = -1;
+        f->is_cache_load = true;
+        f->view_count = 0;
+        image &img = f->img;
+        CHK_HR(decode_image(f->bytes.data(), f->bytes.size(), f->pixels, img.width, img.height, img.row_pitch));
+        f->img.pixels = f->pixels.data();
+        return show_image(f);
     }
 
     UINT filename_fmt = RegisterClipboardFormat(CFSTR_FILENAMEW);
@@ -271,79 +311,96 @@ HRESULT App::on_paste()
 
     std::vector<byte> buffer;
     CHK_HR(append_clipboard_to_buffer(buffer, fmt));
-    wchar const *name = reinterpret_cast<wchar const *>(buffer.data());
-    std::wstring bare_name = strip_quotes(name);
-    if(file_exists(bare_name.c_str())) {
-        return load_image(bare_name.c_str());
-    }
-    set_message(format(L"Can't load %s - not a file", bare_name.c_str()).c_str(), 2.0f);
-    return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    return on_drop_string(reinterpret_cast<wchar const *>(buffer.data()));
 }
 
 //////////////////////////////////////////////////////////////////////
+// make an image the current one
 
-void App::cancel_loader()
+HRESULT App::display_image(image_file *f)
 {
-    Log(L"Cancelling loader threads");
-    SetEvent(cancel_loader_event);
-    while(true) {
-        long threads = InterlockedCompareExchange(&thread_count, 0, 0);
-        Log(L"%d loaders are active", threads);
-        if(threads == 0) {
-            break;
-        }
-        Sleep(10);
+    if(f == null) {
+        return E_INVALIDARG;
     }
-    ResetEvent(cancel_loader_event);
-}
-
-//////////////////////////////////////////////////////////////////////
-
-HRESULT App::decode_image(file_loader *f)
-{
     selection_active = false;
 
     HRESULT load_hr = f->hresult;
 
     if(FAILED(load_hr)) {
 
+        // if this is the first file being loaded and there was a file loading error
         if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
+
+            // show a messagebox (because they probably ran it just now)
             std::wstring load_err = windows_error_message(load_hr);
             std::wstring err_msg = format(L"Error loading %s\n\n%s", f->filename.c_str(), load_err.c_str());
             MessageBoxW(null, err_msg.c_str(), L"ImageView", MB_ICONEXCLAMATION);
 
-            // window might be null, that's ok
+            // don't wait for window creation to complete, window might be null, that's ok
             PostMessage(window, WM_CLOSE, 0, 0);
         }
+
+        // and in any case, set window message to error text
         std::wstring err_str = windows_error_message(load_hr);
         std::wstring name;
         CHK_HR(file_get_filename(f->filename.c_str(), name));
         set_message(format(L"Can't load %s - %s", name.c_str(), err_str.c_str()).c_str(), 3);
         return load_hr;
     }
+    current_image_file = f;
     files_loaded += 1;
-
     f->view_count += 1;
-    return show_image(f->bytes, f->filename.c_str());
+    return show_image(f);
 }
 
 //////////////////////////////////////////////////////////////////////
+// actually show an image
 
-HRESULT App::show_image(std::vector<byte> const &data, wchar const *file)
+HRESULT App::show_image(image_file *f)
 {
-    HRESULT hr = initialize_image_from_buffer(data);
+    std::wstring name;
+
+    // hresult from load_file
+    HRESULT hr = f->hresult;
+
+    ComPtr<ID3D11Texture2D> new_texture;
+    ComPtr<ID3D11ShaderResourceView> new_srv;
+
+    // or hresult from create_texture
     if(SUCCEEDED(hr)) {
+        hr = f->img.create_texture(d3d_device.Get(), d3d_context.Get(), &new_texture, &new_srv);
+    }
+
+    // set texture as current
+    if(SUCCEEDED(hr)) {
+
+        image_texture.Attach(new_texture.Detach());
+        image_texture_view.Attach(new_srv.Detach());
+
+        d3d_name(image_texture);
+        d3d_name(image_texture_view);
+
+        D3D11_TEXTURE2D_DESC image_texture_desc;
+        image_texture->GetDesc(&image_texture_desc);
+
+        texture_width = image_texture_desc.Width;
+        texture_height = image_texture_desc.Height;
+
+        reset_zoom(settings.zoom_mode);
+
+        current_rect = target_rect;
+
         m_timer.reset();
 
-        std::wstring name;
         if(settings.show_full_filename_in_titlebar) {
-            name = std::wstring(file);
+            name = f->filename;
         } else {
-            CHK_HR(file_get_filename(file, name));
+            CHK_HR(file_get_filename(f->filename.c_str(), name));
         }
         std::wstring msg = format(L"%s %dx%d", name.c_str(), texture_width, texture_height);
         SetWindowText(window, msg.c_str());
         set_message(msg.c_str(), 2.0f);
+
     } else {
 
         std::wstring err_str;
@@ -354,19 +411,17 @@ HRESULT App::show_image(std::vector<byte> const &data, wchar const *file)
         } else {
             err_str = windows_error_message(hr);
         }
-        wchar *name = PathFindFileName(file);
-        set_message(format(L"Can't load %s - %s", name, err_str.c_str()).c_str(), 3);
+
+        CHK_HR(file_get_filename(f->filename.c_str(), name));
+        std::wstring msg = format(L"Can't load %s - %s", name.c_str(), err_str.c_str());
+        set_message(msg.c_str(), 3.0f);
     }
     return hr;
 }
 
 //////////////////////////////////////////////////////////////////////
-
-App::~App()
-{
-}
-
-//////////////////////////////////////////////////////////////////////
+// scan a folder - this runs in the folder_scanner_thread
+// results are sent to the main thread with SendMessage
 
 HRESULT App::do_folder_scan(wchar const *folder_path)
 {
@@ -395,56 +450,148 @@ HRESULT App::do_folder_scan(wchar const *folder_path)
 }
 
 //////////////////////////////////////////////////////////////////////
+// file_loader_thread waits for file load requests and kicks off
+// threads for each one
 
-void App::scanner_function()
+void App::file_loader_function()
 {
     MSG msg;
-    bool quit = false;
 
-    // is this the right way to force message queue creation?
-    PeekMessage(&msg, (HWND)-1, 0, 0, PM_NOREMOVE);
-
-    // hope so, now notify main thread that scanner_thread is alive
-    scanner_thread_running = true;
-
-    // respond to requests from main thread
-    while(!quit && GetMessage(&msg, null, 0, 0) != 0) {
-        switch(msg.message) {
-        case WM_SCAN_FOLDER:
-            do_folder_scan(reinterpret_cast<wchar const *>(msg.lParam));
-            break;
-        case WM_EXIT_THREAD:
-            quit = true;
-            break;
+    // respond to requests from main thread, quit if quit_event gets set
+    while(MsgWaitForMultipleObjects(1, &quit_event, false, INFINITE, QS_POSTMESSAGE) != WAIT_OBJECT_0) {
+        if(PeekMessage(&msg, null, 0, 0, PM_REMOVE) != 0) {
+            switch(msg.message) {
+            case WM_LOAD_FILE:
+                start_file_loader(reinterpret_cast<image_file *>(msg.lParam));
+                break;
+            }
         }
     }
+    Log(L"File loader thread exit");
 }
 
 //////////////////////////////////////////////////////////////////////
+// file_scanner_thread waits for scan requests and processes them
+// in this thread
+
+void App::scanner_function()
+{
+    bool quit = false;
+    MSG msg;
+
+    // respond to requests from main thread
+    while(!quit) {
+        switch(MsgWaitForMultipleObjects(1, &quit_event, false, INFINITE, QS_POSTMESSAGE | QS_ALLPOSTMESSAGE)) {
+        case WAIT_OBJECT_0:
+            quit = true;
+            break;
+        case WAIT_OBJECT_0 + 1:
+            if(GetMessage(&msg, null, 0, 0) != 0) {
+                switch(msg.message) {
+                case WM_SCAN_FOLDER:
+                    do_folder_scan(reinterpret_cast<wchar const *>(msg.lParam));
+                    break;
+                }
+                break;
+            }
+        }
+    }
+    Log(L"Scanner thread exit");
+}
+
+//////////////////////////////////////////////////////////////////////
+// warm the cache by loading N files either side of the current one
+
+HRESULT App::warm_cache()
+{
+    // if it's a normal file in the current folder
+    if(current_image_file != null && current_image_file->index != -1) {
+
+        int const num_images_to_cache = 12;
+
+        for(int i = 0; i < num_images_to_cache; ++i) {
+
+            int y = current_image_file->index - (i + 2) / 2 * ((i & 1) * 2 - 1);
+
+            if(y >= 0 && y < (int)current_folder_scan->files.size()) {
+
+                std::wstring this_file = current_folder_scan->path + L"\\" + current_folder_scan->files[y].name;
+
+                if(loading_files.find(this_file) == loading_files.end() &&
+                   loaded_files.find(this_file) == loaded_files.end()) {
+
+                    // remove things from cache until it's <= cache_size + required size
+
+                    uint64 img_size;
+                    if(SUCCEEDED(get_image_file_size(this_file.c_str(), &img_size)))
+                    {
+                        if(img_size < settings.cache_size) {
+
+                            while(cache_in_use + img_size > settings.cache_size) {
+
+                                image_file *loser = null;
+                                uint loser_diff = 0;
+                                for(auto const &fl : loaded_files) {
+                                    uint diff = std::abs(fl.second->index - current_file_cursor);
+                                    if(diff > loser_diff) {
+                                        loser_diff = diff;
+                                        loser = fl.second;
+                                    }
+                                }
+
+                                if(loser != null) {
+
+                                    Log(L"Removing %s (%d) from cache (now %d MB in use)",
+                                        loser->filename.c_str(),
+                                        loser->index,
+                                        cache_in_use / 1048576);
+
+                                    cache_in_use -= loser->total_size();
+                                    loaded_files.erase(loser->filename);
+                                }
+                            }
+                        }
+
+                        if((cache_in_use + img_size) <= settings.cache_size) {
+
+                            Log(L"Caching %s at %d", this_file.c_str(), y);
+                            image_file *cache_file = new image_file(this_file);
+                            cache_file->is_cache_load = true;
+                            loading_files[this_file] = cache_file;
+                            start_file_loader(cache_file);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+// folder scan complete
 
 void App::on_folder_scanned(folder_scan_result *scan_result)
 {
     Log(L"%llu images found in %s", scan_result->files.size(), scan_result->path.c_str());
 
-    if(current_folder_scan != null) {
-        delete current_folder_scan;
-        current_folder_scan = null;
-    }
-
-    current_folder_scan = scan_result;
+    current_folder_scan.reset(scan_result);
 
     if(current_image_file != null && current_image_file->index == -1) {
         update_file_index(current_image_file);
     }
+
+    warm_cache();
 }
 
 //////////////////////////////////////////////////////////////////////
+// move to another file in the folder
 
 void App::move_file_cursor(int movement)
 {
     // can't key left/right while folder is still being scanned
     // TODO(chs): remember the moves and apply them when the scan is complete?
-    if(current_folder_scan == null) {
+    if(current_folder_scan == null || current_file_cursor == -1) {
         return;
     }
 
@@ -452,7 +599,8 @@ void App::move_file_cursor(int movement)
 
     if(new_file_cursor != current_file_cursor) {
         current_file_cursor = new_file_cursor;
-        std::wstring pic_filename = format(L"%s\\%s", current_folder_scan->path.c_str(), current_folder_scan->files[current_file_cursor].name.c_str());
+        std::wstring pic_filename = format(
+            L"%s\\%s", current_folder_scan->path.c_str(), current_folder_scan->files[current_file_cursor].name.c_str());
         load_image(pic_filename.c_str());
     }
 }
@@ -460,27 +608,39 @@ void App::move_file_cursor(int movement)
 //////////////////////////////////////////////////////////////////////
 // kick off a file loader thread
 
-void App::load_file(file_loader *loader)
+void App::start_file_loader(image_file *loader)
 {
-    // +1 threadcount
+    thread_pool.create_thread(
+        [this](image_file *fl) {
 
-    InterlockedIncrement(&thread_count);
+            // load the file synchronously to this thread
+            fl->hresult = load_file(fl->filename.c_str(), fl->bytes, quit_event);
 
-    std::thread(
+            if(SUCCEEDED(fl->hresult)) {
 
-        [this](file_loader *fl) {
+                // Need to call this in any thread which uses Windows Imaging Component
+                CoInitializeEx(null, COINIT_APARTMENTTHREADED);
 
-            fl->hresult = ::load_file(fl->filename.c_str(), fl->bytes, cancel_loader_event);
+                // decode the image
+                fl->hresult = decode_image(
+                    fl->bytes.data(), fl->bytes.size(), fl->pixels, fl->img.width, fl->img.height, fl->img.row_pitch);
+
+                fl->img.pixels = fl->pixels.data();
+
+                CoUninitialize();
+            }
+
+            // let the window know, either way, that the file load attempt is complete, failed or
+            // otherwise
             WaitForSingleObject(window_created_event, INFINITE);
             PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
-
-            InterlockedDecrement(&thread_count);
         },
-        loader)
-        .detach();
+        loader);
 }
 
 //////////////////////////////////////////////////////////////////////
+// load an image file or get it from the cache (or notice that it's
+// already being loaded and just let it arrive later)
 
 HRESULT App::load_image(wchar const *filepath)
 {
@@ -490,18 +650,12 @@ HRESULT App::load_image(wchar const *filepath)
 
     std::wstring filename = std::wstring(filepath);
 
-    // if filename is '?clipboard', attempt to load the contents of the clipboard as a bitmap (synchronously in the UI thread, whevs)
-
-    if(filename.compare(L"?clipboard") == 0) {
-        return on_paste();
-    }
-
     // if filename is '?open', show OpenFileDialog
 
     if(filename.compare(L"?open") == 0) {
 
         std::wstring selected_filename;
-        CHK_HR(select_file_dialog(selected_filename));
+        CHK_HR(select_file_dialog(window, selected_filename));
         filename = selected_filename.c_str();
     }
 
@@ -521,28 +675,13 @@ HRESULT App::load_image(wchar const *filepath)
         folder.pop_back();
     }
 
-    // kick folder scanner thread off if we haven't already
-
-    if(!scanner_thread_running) {
-        scanner_thread = std::thread([this]() {
-            scanner_function();
-            Log(L"Scanner thread exit");
-        });
-
-        while(!scanner_thread_running) {
-            Sleep(0);
-        }
-        scanner_thread_handle = scanner_thread.native_handle();
-        scanner_thread_id = GetThreadId(scanner_thread_handle);
-    }
-
     // if it's in the cache already, just decode and show it
 
     auto found = loaded_files.find(fullpath);
     if(found != loaded_files.end()) {
         Log(L"Already got %s", name.c_str());
-        current_image_file = found->second;
-        decode_image(current_image_file);
+        display_image(found->second);
+        CHK_HR(warm_cache());
         return S_OK;
     }
 
@@ -555,11 +694,14 @@ HRESULT App::load_image(wchar const *filepath)
         return S_OK;
     }
 
+    // if it's not a cache_load, remove things from the cache until there's room for it
+    // remove files what are furthest away from it by index
+
     // file_loader object is later transferred from loading_files to loaded_files
 
     Log(L"Loading %s", name.c_str());
 
-    file_loader *fl = new file_loader();
+    image_file *fl = new image_file();
     fl->filename = fullpath;
     loading_files[fullpath] = fl;
 
@@ -567,9 +709,7 @@ HRESULT App::load_image(wchar const *filepath)
 
     requested_file = fl;
 
-    // kick off loader thread for this file
-
-    load_file(fl);
+    PostThreadMessage(file_loader_thread_id, WM_LOAD_FILE, 0, reinterpret_cast<LPARAM>(fl));
 
     // loading a file from a new folder or the current scanned folder?
 
@@ -580,7 +720,8 @@ HRESULT App::load_image(wchar const *filepath)
 
         current_folder = folder;
 
-        // sigh, manually marshall the filename for the message, the receiver is responsible for freeing it
+        // sigh, manually marshall the filename for the message, the receiver is responsible for
+        // freeing it
         wchar *fullpath_buffer = new wchar[fullpath.size() + 1];
         memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar));
 
@@ -592,9 +733,9 @@ HRESULT App::load_image(wchar const *filepath)
 //////////////////////////////////////////////////////////////////////
 // if loaded file is in the current folder, find index with list of files
 
-HRESULT App::update_file_index(file_loader *f)
+HRESULT App::update_file_index(image_file *f)
 {
-    if(current_folder_scan == null) {
+    if(current_folder_scan == null || f == null) {
         return E_INVALIDARG;
     }
     std::wstring folder;
@@ -611,6 +752,9 @@ HRESULT App::update_file_index(file_loader *f)
         if(_wcsicmp(ff.name.c_str(), name.c_str()) == 0) {
             f->index = id;
             Log(L"%s is at index %d", name.c_str(), id);
+            if(current_file_cursor == -1) {
+                current_file_cursor = f->index;
+            }
             return S_OK;
         }
         id += 1;
@@ -626,121 +770,52 @@ HRESULT App::update_file_index(file_loader *f)
 
 void App::on_file_load_complete(LPARAM lparam)
 {
-    file_loader *f = reinterpret_cast<file_loader *>(lparam);
+    image_file *f = reinterpret_cast<image_file *>(lparam);
 
     if(FAILED(f->hresult)) {
         delete f;
-    } else {
+        return;
+    }
 
-        // transfer from loading to loaded
-        loading_files.erase(f->filename);
-        loaded_files[f->filename] = f;
+    // transfer from loading to loaded
+    loading_files.erase(f->filename);
+    loaded_files[f->filename] = f;
 
-        // update cache total size
-        cache_in_use += f->bytes.size();
+    // update cache total size
+    cache_in_use += f->total_size();
 
-        // if it's most recently requested, show it
-        if(f == requested_file) {
-            requested_file = null;
-            current_image_file = f;
-            decode_image(f);
-        }
+    // fill in the index so we know where it is in the list of files
 
-        // fill in the index so we know where it is in the list of files
+    update_file_index(f);
 
-        update_file_index(f);
+    // if it's most recently requested, show it
+    if(f == requested_file) {
+        requested_file = null;
+        display_image(f);
+        current_file_cursor = f->index;
+        f->is_cache_load = false;    // warm the cache for this file please
+    }
 
-        if(f->index != -1) {
-            current_file_cursor = f->index;
-        }
+    bool is_cache_load = f->is_cache_load;
 
-        // remove things from cache until it's <= cache_size
+    // if this image was displayed, cache some file around it
 
-        while(cache_in_use > settings.cache_size) {
-
-            // find the file in the cache which:
-            //      is furthest away from the current file cursor
-            //      has been viewed most times (yes, most...)
-            //      is the biggest
-
-            std::vector<file_loader *> files;
-            files.reserve(loaded_files.size());
-            for(auto const e : loaded_files) {
-                files.push_back(e.second);
-            }
-
-            std::sort(files.begin(), files.end(), [&](file_loader const *a, file_loader const *b) {
-                int adiff = std::abs(a->index - current_file_cursor);
-                int bdiff = std::abs(b->index - current_file_cursor);
-                if(bdiff != adiff) {
-                    return adiff > bdiff;
-                }
-                if(b->view_count != a->view_count) {
-                    return a->view_count > b->view_count;
-                }
-                if(a->bytes.size() != b->bytes.size()) {
-                    return a->bytes.size() > b->bytes.size();
-                }
-                return _wcsicmp(a->filename.c_str(), b->filename.c_str()) < 0;
-            });
-
-            file_loader *loser = files.front();
-
-            cache_in_use -= loser->bytes.size();
-
-            Log(L"Removing %s from cache (now %d MB in use)", loser->filename.c_str(), cache_in_use / 1048576);
-
-            loaded_files.erase(loser->filename);
-        }
+    if(!is_cache_load) {
+        warm_cache();
     }
 }
 
 //////////////////////////////////////////////////////////////////////
+// get current mouse buttons
 
-HRESULT App::initialize_image_from_buffer(std::vector<byte> const &buffer)
-{
-    ComPtr<ID3D11Resource> new_resource;
-    ComPtr<ID3D11ShaderResourceView> new_srv;
-
-    CHK_HR(CreateWICTextureFromMemoryEx(d3d_device.Get(), d3d_context.Get(), buffer.data(), buffer.size(), 0, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0,
-                                        WIC_LOADER_IGNORE_SRGB | WIC_LOADER_FORCE_RGBA32, &new_resource, &new_srv));
-
-    image_texture.Reset();
-    image_texture_view.Reset();
-
-    d3d_name(new_srv);
-
-    CHK_HR(new_resource.As(&image_texture));
-
-    d3d_name(image_texture);
-
-    new_srv.As(&image_texture_view);
-    new_srv.Reset();
-    d3d_name(image_texture_view);
-
-    D3D11_TEXTURE2D_DESC image_texture_desc;
-    image_texture->GetDesc(&image_texture_desc);
-
-    texture_width = image_texture_desc.Width;
-    texture_height = image_texture_desc.Height;
-
-    reset_zoom(settings.zoom_mode);
-
-    current_rect = target_rect;
-
-    return S_OK;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-bool App::get_grab(int button)
+bool App::get_mouse_buttons(int button) const
 {
     return (mouse_grab & (1 << button)) != 0;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void App::set_grab(int button)
+void App::set_mouse_button(int button)
 {
     int mask = 1 << (int)button;
     if(mouse_grab == 0) {
@@ -751,7 +826,7 @@ void App::set_grab(int button)
 
 //////////////////////////////////////////////////////////////////////
 
-void App::clear_grab(int button)
+void App::clear_mouse_buttons(int button)
 {
     int mask = 1 << (int)button;
     mouse_grab &= ~mask;
@@ -761,6 +836,7 @@ void App::clear_grab(int button)
 }
 
 //////////////////////////////////////////////////////////////////////
+// get texture size as a vec2
 
 vec2 App::texture_size() const
 {
@@ -768,6 +844,7 @@ vec2 App::texture_size() const
 }
 
 //////////////////////////////////////////////////////////////////////
+// get window size as a vec2
 
 vec2 App::window_size() const
 {
@@ -775,6 +852,7 @@ vec2 App::window_size() const
 }
 
 //////////////////////////////////////////////////////////////////////
+// get size of a texel in window pixels
 
 vec2 App::texel_size() const
 {
@@ -782,57 +860,86 @@ vec2 App::texel_size() const
 }
 
 //////////////////////////////////////////////////////////////////////
+// convert a texel pos to a window pixel pos
 
-vec2 App::texels_to_pixels(vec2 pos)
+vec2 App::texels_to_pixels(vec2 pos) const
 {
     return mul_point(pos, texel_size());
 }
 
 //////////////////////////////////////////////////////////////////////
+// clamp a texel pos to the texture dimensions
 
-vec2 App::clamp_to_texture(vec2 pos)
+vec2 App::clamp_to_texture(vec2 pos) const
 {
     vec2 t = texture_size();
-    return vec2{ clamp(0.0f, pos.x, t.x), clamp(0.0f, pos.y, t.y) };
+    return vec2{ clamp(0.0f, pos.x, t.x - 1), clamp(0.0f, pos.y, t.y - 1) };
 }
 
 //////////////////////////////////////////////////////////////////////
+// convert a window pixel pos to a texel pos
 
-vec2 App::pixels_to_texels(vec2 pos)
+vec2 App::screen_to_texture_pos(vec2 pos) const
 {
-    return div_point(pos, texel_size());
+    vec2 relative_pos = sub_point(pos, current_rect.top_left());
+    return div_point(relative_pos, texel_size());
 }
 
 //////////////////////////////////////////////////////////////////////
+// convert a window pos (point_s) to texel pos
 
-vec2 App::screen_to_texture_pos(vec2 pos)
-{
-    return pixels_to_texels(sub_point(pos, current_rect.top_left()));
-}
-
-//////////////////////////////////////////////////////////////////////
-
-vec2 App::screen_to_texture_pos(point_s pos)
+vec2 App::screen_to_texture_pos(point_s pos) const
 {
     return screen_to_texture_pos(vec2(pos));
 }
 
 //////////////////////////////////////////////////////////////////////
+// convert texel pos to window pixel pos with clamp to texture
 
-vec2 App::texture_to_screen_pos(vec2 pos)
+vec2 App::texture_to_screen_pos(vec2 pos) const
 {
     return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(clamp_to_texture(pos))));
 }
 
 //////////////////////////////////////////////////////////////////////
+// convert texel pos to window pixel pos without clamp
 
-HRESULT App::init()
+vec2 App::texture_to_screen_pos_unclamped(vec2 pos) const
 {
+    return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(pos)));
+}
+
+//////////////////////////////////////////////////////////////////////
+// call this before doing anything else with App, e.g. top of main
+//   checks cpu is supported, displays error dialog and returns S_FALSE if not
+//   check if reuse_window == true and another instance is running, if so, sends command line there and returns S_FALSE
+//   creates some events
+//   sets up default mouse cursor
+//   starts some threads
+//   loads settings
+//   checks command line and maybe initiates loading an image file
+
+HRESULT App::init(wchar *cmd_line)
+{
+    if(!XMVerifyCPUSupport()) {
+        std::wstring message = format(localize(IDS_OldCpu), localize(IDS_AppName));
+        MessageBox(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
+        return S_FALSE;
+    }
+
+    HRESULT hr = reuse_window(cmd_line);
+
+    if(hr == S_FALSE) {
+        return S_FALSE;
+    }
+
+    if(FAILED(hr)) {
+        return hr;
+    }
+
     CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
 
     Log(L"System has %lluGB of memory", system_memory_size_kb / 1048576);
-
-    settings.cache_size = 1048576 * 16;    // 16MB cache
 
     window_created_event = CreateEvent(null, true, false, null);
 
@@ -847,8 +954,15 @@ HRESULT App::init()
 #endif
         settings.load();
 
-    CHK_NULL(cancel_loader_event = CreateEvent(null, true, false, null));
     CHK_NULL(quit_event = CreateEvent(null, true, false, null));
+
+    CHK_HR(thread_pool.init());
+
+    CHK_HR(thread_pool.create_thread_with_message_pump(&scanner_thread_id, [this]() { scanner_function(); }));
+
+    CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, [this]() { file_loader_function(); }));
+
+    CHK_HR(on_command_line(cmd_line));
 
     return S_OK;
 }
@@ -864,7 +978,8 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
 
     *ex_style = 0;    // WS_EX_NOREDIRECTIONBITMAP
 
-    // if settings.fullscreen, use settings.fullscreen_rect (which will be on a monitor (which may or may not still exist...))
+    // if settings.fullscreen, use settings.fullscreen_rect (which will be on a monitor (which may
+    // or may not still exist...))
 
     int default_monitor_width = GetSystemMetrics(SM_CXSCREEN);
     int default_monitor_height = GetSystemMetrics(SM_CYSCREEN);
@@ -901,7 +1016,7 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
         // check the monitor is still there and the same size
         MONITORINFO i;
         i.cbSize = sizeof(MONITORINFO);
-        HMONITOR m = MonitorFromPoint({ settings.fullscreen_rect.left, settings.fullscreen_rect.top }, MONITOR_DEFAULTTONEAREST);
+        HMONITOR m = MonitorFromPoint(settings.fullscreen_rect.top_left(), MONITOR_DEFAULTTONEAREST);
         if(m != null && GetMonitorInfo(m, &i) && memcmp(&settings.fullscreen_rect, &i.rcMonitor, sizeof(rect)) == 0) {
             *r = settings.fullscreen_rect;
         } else {
@@ -915,6 +1030,7 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
 }
 
 //////////////////////////////////////////////////////////////////////
+// toggle between normal window and fake fullscreen
 
 void App::toggle_fullscreen()
 {
@@ -963,8 +1079,9 @@ void App::toggle_fullscreen()
 }
 
 //////////////////////////////////////////////////////////////////////
+// set the mouse cursor and track it
 
-void App::set_cursor(HCURSOR c)
+void App::set_mouse_cursor(HCURSOR c)
 {
     if(c == null) {
         c = LoadCursor(null, IDC_ARROW);
@@ -974,27 +1091,26 @@ void App::set_cursor(HCURSOR c)
 }
 
 //////////////////////////////////////////////////////////////////////
+// find where on the selection the mouse is hovering
+//    sets selection_hover
+//    sets mouse cursor appropriately
 
 void App::check_selection_hover(vec2 pos)
 {
     if(!selection_active) {
-        set_cursor(null);
+        set_mouse_cursor(null);
         return;
     }
 
-#if defined(_DEBUG)
-    if(is_key_down(VK_TAB)) {
-        DebugBreak();
-    }
-#endif
+    rect_f select_rect(select_current, select_anchor);
 
     // get screen coords of selection rectangle
-    vec2 tl = texture_to_screen_pos(vec2::min(select_current, select_anchor));
-    vec2 br = texture_to_screen_pos(add_point({ 1, 1 }, vec2::max(select_current, select_anchor)));
+    vec2 tl = texture_to_screen_pos(select_rect.top_left());
+    vec2 br = texture_to_screen_pos_unclamped(add_point({ 1, 1 }, select_rect.bottom_right()));
 
     // selection grab border is +/- N pixels (setting: 4 to 32 pixels)
-    float border = dpi_scale(settings.select_border_grab_size);
-    vec2 b{ border / 2, border / 2 };
+    float border = dpi_scale(settings.select_border_grab_size) / 2;
+    vec2 b{ border, border };
 
     // expand outer rect
     vec2 expanded_topleft = vec2::max({ 0, 0 }, sub_point(tl, b));
@@ -1003,8 +1119,7 @@ void App::check_selection_hover(vec2 pos)
     selection_hover = selection_hover_t::sel_hover_outside;
 
     // mouse is in the expanded box?
-    rect_f expanded_box(expanded_topleft, size(sub_point(expanded_bottomright, expanded_topleft)));
-    if(expanded_box.contains(pos)) {
+    if(rect_f(expanded_topleft, expanded_bottomright).contains(pos)) {
 
         selection_hover = selection_hover_t::sel_hover_inside;    // which is to say zero
 
@@ -1024,23 +1139,15 @@ void App::check_selection_hover(vec2 pos)
         if(hd < border) {
             selection_hover |= (ld < rd) ? sel_hover_left : sel_hover_right;
         }
+        set_mouse_cursor(sel_hover_cursors[selection_hover].get_hcursor());
 
-        cursor_def const &ct = sel_hover_cursors[selection_hover];
-        short id = ct.id;
-        HMODULE h = null;
-
-        // if it's a resource of our own, we have to load it from current module
-        if(ct.type == App::cursor_type::user) {
-            h = GetModuleHandle(null);
-        }
-
-        set_cursor(LoadCursor(h, MAKEINTRESOURCE(id)));
     } else {
-        set_cursor(null);
+        set_mouse_cursor(null);
     }
 }
 
 //////////////////////////////////////////////////////////////////////
+// call this from WM_NCCREATE when window is first created
 
 HRESULT App::set_window(HWND hwnd)
 {
@@ -1058,14 +1165,16 @@ HRESULT App::set_window(HWND hwnd)
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_SETCURSOR
 
 bool App::on_setcursor()
 {
-    set_cursor(current_mouse_cursor);
+    set_mouse_cursor(current_mouse_cursor);
     return true;
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_[L/M/R]BUTTON[UP/DOWN]
 
 void App::on_mouse_button(point_s pos, int button, int state)
 {
@@ -1075,7 +1184,7 @@ void App::on_mouse_button(point_s pos, int button, int state)
         mouse_pos[button] = pos;
         memset(mouse_offset + button, 0, sizeof(point_s));
 
-        set_grab(button);
+        set_mouse_button(button);
 
         if(button == settings.select_button) {
 
@@ -1100,15 +1209,16 @@ void App::on_mouse_button(point_s pos, int button, int state)
 
     } else {
 
-        clear_grab(button);
+        clear_mouse_buttons(button);
 
         if(button == settings.zoom_button) {
             ShowCursor(TRUE);
-            clear_grab(settings.drag_button);    // in case they pressed the drag button while zooming
+            clear_mouse_buttons(settings.drag_button);    // in case they pressed the drag button while zooming
         } else if(button == settings.select_button) {
             drag_selection = false;
 
-            // when selection is finalized, select_anchor is top left, select_current is bottom right
+            // when selection is finalized, select_anchor is top left, select_current is bottom
+            // right
             vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
             vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
             select_anchor = tl;
@@ -1119,19 +1229,21 @@ void App::on_mouse_button(point_s pos, int button, int state)
 }
 
 //////////////////////////////////////////////////////////////////////
+// Raw mouse input move (for zooming while MMB held down)
 
 void App::on_raw_mouse_move(point_s delta)
 {
-    if(get_grab(settings.zoom_button)) {
+    if(get_mouse_buttons(settings.zoom_button)) {
         do_zoom(mouse_click[settings.zoom_button], std::max(-4, std::min(-delta.y, 4)));
     }
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_MOUSEMOVE
 
 void App::on_mouse_move(point_s pos)
 {
-    if(!get_grab(settings.zoom_button)) {
+    if(!get_mouse_buttons(settings.zoom_button)) {
         cur_mouse_pos = pos;
     }
 
@@ -1157,7 +1269,7 @@ void App::on_mouse_move(point_s pos)
     }
 
     for(int i = 0; i < btn_count; ++i) {
-        if(get_grab(i)) {
+        if(get_mouse_buttons(i)) {
             mouse_offset[i] = add_point(mouse_offset[i], sub_point(cur_mouse_pos, mouse_pos[i]));
             mouse_pos[i] = cur_mouse_pos;
         }
@@ -1167,14 +1279,15 @@ void App::on_mouse_move(point_s pos)
         selection_active = true;
     }
 
-    if(!get_grab(settings.select_button)) {
+    if(!get_mouse_buttons(settings.select_button)) {
         check_selection_hover(vec2(pos));
     } else if(selection_hover == selection_hover_t::sel_hover_outside) {
-        set_cursor(null);
+        set_mouse_cursor(null);
     }
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_MOUSEWHEEL
 
 void App::on_mouse_wheel(point_s pos, int delta)
 {
@@ -1182,6 +1295,7 @@ void App::on_mouse_wheel(point_s pos, int delta)
 }
 
 //////////////////////////////////////////////////////////////////////
+// set the banner message and how long before it fades out
 
 void App::set_message(wchar const *message, double fade_time)
 {
@@ -1241,6 +1355,7 @@ void App::do_zoom(point_s pos, int delta)
 }
 
 //////////////////////////////////////////////////////////////////////
+// zoom to the selection allowing for labels
 
 void App::zoom_to_selection()
 {
@@ -1248,6 +1363,14 @@ void App::zoom_to_selection()
         reset_zoom(reset_zoom_mode::fit_to_window);
         return;
     }
+
+    // this is bogus
+    // first calculate a zoom for just the selection
+    // then adjust to count for the labels which gives
+    // a close but slightly off result.
+    // the right way would be to work out the
+    // size including the labels first time
+    // but I can't be arsed
 
     auto calc_target = [&](vec2 const &sa, vec2 const &sc) -> rect_f {
         float w = fabsf(sc.x - sa.x) + 1;
@@ -1276,6 +1399,7 @@ void App::zoom_to_selection()
 }
 
 //////////////////////////////////////////////////////////////////////
+// center the image in the window
 
 void App::center_in_window()
 {
@@ -1284,6 +1408,7 @@ void App::center_in_window()
 }
 
 //////////////////////////////////////////////////////////////////////
+// reset the zoom mode to one of `reset_zoom_mode`
 
 void App::reset_zoom(reset_zoom_mode mode)
 {
@@ -1317,6 +1442,7 @@ void App::reset_zoom(reset_zoom_mode mode)
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_KEYUP
 
 void App::on_key_up(int vk_key)
 {
@@ -1335,6 +1461,7 @@ void App::on_key_up(int vk_key)
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_KEYDOWN
 
 void App::on_key_down(int vk_key, LPARAM flags)
 {
@@ -1359,7 +1486,11 @@ void App::on_key_down(int vk_key, LPARAM flags)
         break;
 
     case 'C':
-        center_in_window();
+        if(shift && !ctrl) {
+            crop_to_selection();
+        } else if(!shift && !ctrl) {
+            center_in_window();
+        }
         break;
 
     case 'A':
@@ -1375,6 +1506,19 @@ void App::on_key_down(int vk_key, LPARAM flags)
             settings.fixed_grid = !settings.fixed_grid;
         } else {
             settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
+        }
+        break;
+
+    case 'R':
+        if(shift && ctrl &&
+           MessageBox(window, L"Reset settings to factory defaults!?", localize(IDS_AppName), MB_YESNO) == IDYES) {
+
+            bool old_fullscreen = settings.fullscreen;
+            WINDOWPLACEMENT old_windowplacement = settings.window_placement;
+            settings = default_settings;
+            if(old_fullscreen != settings.fullscreen) {
+                toggle_fullscreen();
+            }
         }
         break;
 
@@ -1407,7 +1551,7 @@ void App::on_key_down(int vk_key, LPARAM flags)
 
     case 'O': {
         std::wstring selected_filename;
-        if(SUCCEEDED(select_file_dialog(selected_filename))) {
+        if(SUCCEEDED(select_file_dialog(window, selected_filename))) {
             load_image(selected_filename.c_str());
         }
     } break;
@@ -1440,6 +1584,7 @@ void App::on_key_down(int vk_key, LPARAM flags)
 }
 
 //////////////////////////////////////////////////////////////////////
+// call this repeatedly when there are no windows messages available
 
 HRESULT App::update()
 {
@@ -1459,22 +1604,22 @@ HRESULT App::update()
     lerp(current_rect.w, target_rect.w);
     lerp(current_rect.h, target_rect.h);
 
-    if(get_grab(settings.zoom_button)) {
+    if(get_mouse_buttons(settings.zoom_button)) {
         POINT old_pos{ mouse_click[settings.zoom_button].x, mouse_click[settings.zoom_button].y };
         ClientToScreen(window, &old_pos);
         SetCursorPos(old_pos.x, old_pos.y);
     }
 
-    if(get_grab(settings.drag_button) && !get_grab(settings.zoom_button)) {
+    if(get_mouse_buttons(settings.drag_button) && !get_mouse_buttons(settings.zoom_button)) {
         current_rect.x += mouse_offset[settings.drag_button].x;
         current_rect.y += mouse_offset[settings.drag_button].y;
         target_rect = current_rect;
         has_been_zoomed_or_dragged = true;
     }
 
-    selecting = get_grab(settings.select_button);
+    selecting = get_mouse_buttons(settings.select_button);
 
-    if(selecting && !get_grab(settings.zoom_button)) {
+    if(selecting && !get_mouse_buttons(settings.zoom_button)) {
 
         if(drag_selection) {
 
@@ -1599,6 +1744,7 @@ HRESULT App::update()
 }
 
 //////////////////////////////////////////////////////////////////////
+// select the whole image
 
 void App::select_all()
 {
@@ -1610,6 +1756,21 @@ void App::select_all()
 }
 
 //////////////////////////////////////////////////////////////////////
+// crop the image to the selection
+
+HRESULT App::crop_to_selection()
+{
+    if(!selection_active) {
+        return E_ABORT;
+    }
+
+    // create a file_loader which represents the contents of the selection
+
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+// copy the current selection into clipboard as a DIBV5
 
 HRESULT App::copy_selection()
 {
@@ -1701,13 +1862,6 @@ HRESULT App::copy_selection()
 
     d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
 
-    struct file_loader
-    {
-        std::wstring filename;      // file path, relative to scanned folder - use this as key for map
-        std::vector<byte> bytes;    // data, once it has been loaded
-        HRESULT hresult{ S_OK };    // error code or S_OK from load_file()
-    };
-
     d3d_context->Flush();
 
     D3D11_MAPPED_SUBRESOURCE mapped_resource{};
@@ -1740,12 +1894,14 @@ HRESULT App::copy_selection()
 }
 
 //////////////////////////////////////////////////////////////////////
+// get dimensions of a string including padding
 
-HRESULT App::measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size)
+HRESULT App::measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size) const
 {
     ComPtr<IDWriteTextLayout> text_layout;
 
-    CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(), (UINT32)text.size(), format, (float)window_width * 2, (float)window_height * 2, &text_layout));
+    CHK_HR(dwrite_factory->CreateTextLayout(
+        text.c_str(), (UINT32)text.size(), format, (float)window_width * 2, (float)window_height * 2, &text_layout));
 
     DWRITE_TEXT_METRICS m;
     CHK_HR(text_layout->GetMetrics(&m));
@@ -1757,8 +1913,15 @@ HRESULT App::measure_string(std::wstring const &text, IDWriteTextFormat *format,
 }
 
 //////////////////////////////////////////////////////////////////////
+// draw some text with a box round it
 
-HRESULT App::draw_string(std::wstring const &text, IDWriteTextFormat *format, vec2 pos, vec2 pivot, float opacity, float corner_radius, float padding)
+HRESULT App::draw_string(std::wstring const &text,
+                         IDWriteTextFormat *format,
+                         vec2 pos,
+                         vec2 pivot,
+                         float opacity,
+                         float corner_radius,
+                         float padding)
 {
     corner_radius = dpi_scale(corner_radius);
     padding = dpi_scale(padding);
@@ -1769,7 +1932,8 @@ HRESULT App::draw_string(std::wstring const &text, IDWriteTextFormat *format, ve
 
     // This sucks that you have to create and destroy a com object to draw a text string
 
-    CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(), (UINT32)text.size(), format, (float)window_width * 2, (float)window_height * 2, &text_layout));
+    CHK_HR(dwrite_factory->CreateTextLayout(
+        text.c_str(), (UINT32)text.size(), format, (float)window_width * 2, (float)window_height * 2, &text_layout));
 
     // work out baseline as a fraction of the height
     // scale the outline box a bit
@@ -1784,7 +1948,10 @@ HRESULT App::draw_string(std::wstring const &text, IDWriteTextFormat *format, ve
     D2D1_POINT_2F text_pos{ pos.x - (w * pivot.x), pos.y - (h * pivot.y) };
 
     D2D1_ROUNDED_RECT rr;
-    rr.rect = D2D1_RECT_F{ text_pos.x - padding * 2, text_pos.y - padding * 0.5f, text_pos.x + w + padding * 2, text_pos.y + h + padding * 0.5f };
+    rr.rect = D2D1_RECT_F{ text_pos.x - padding * 2,
+                           text_pos.y - padding * 0.5f,
+                           text_pos.x + w + padding * 2,
+                           text_pos.y + h + padding * 0.5f };
     rr.radiusX = r;
     rr.radiusY = r;
 
@@ -1814,6 +1981,7 @@ HRESULT App::update_constants()
 }
 
 //////////////////////////////////////////////////////////////////////
+// render a frame
 
 HRESULT App::render()
 {
@@ -1823,8 +1991,8 @@ HRESULT App::render()
 
         vec2 scale = div_point(vec2{ 2, 2 }, vec2{ (float)window_width, (float)window_height });
 
-        float x_scale = 2.0f / window_width;
-        float y_scale = 2.0f / window_height;
+        auto get_scale = [&scale](vec2 f) { return mul_point({ f.x, -f.y }, scale); };
+        auto get_offset = [&scale](vec2 f) { return vec2{ f.x * scale.x - 1, 1 - (f.y * scale.y) }; };
 
         vec2 grid_pos{ 0, 0 };
 
@@ -1838,8 +2006,6 @@ HRESULT App::render()
         if(settings.fixed_grid) {
             vec2 g2{ 2.0f * gs, 2.0f * gs };
             grid_pos = sub_point(g2, vec2::mod(current_rect.top_left(), g2));
-            // gx = g2 - fmodf(current_rect.x, g2);
-            // gy = g2 - fmodf(current_rect.y, g2);
         }
 
         if(settings.grid_enabled) {
@@ -1858,13 +2024,11 @@ HRESULT App::render()
         shader_constants.select_color[1] = settings.select_outline_color1;
         shader_constants.select_color[2] = settings.select_outline_color2;
 
-        float cx = floorf(current_rect.x);
-        float cy = floorf(current_rect.y);
-        float cw = floorf(current_rect.w);
-        float ch = floorf(current_rect.h);
+        vec2 top_left = vec2::floor(current_rect.top_left());
+        vec2 rect_size = vec2::floor(current_rect.size());
 
-        shader_constants.scale = mul_point({ cw, -ch }, scale);
-        shader_constants.offset = { cx * x_scale - 1, 1 - cy * y_scale };
+        shader_constants.scale = get_scale(rect_size);
+        shader_constants.offset = get_offset(top_left);
 
         shader_constants.grid_size = gs;
         shader_constants.grid_offset = grid_pos;
@@ -1911,27 +2075,24 @@ HRESULT App::render()
             // it makes it better (less shimmering on
             // select rectangle position when zooming)
 
-            double tw = (double)texture_width;
-            double th = (double)texture_height;
+            double xs = (double)rect_size.x / (double)texture_width;
+            double ys = (double)rect_size.y / (double)texture_height;
 
-            double xs = cw / tw;
-            double ys = ch / th;
-
-            double tx = floorf(s_tl.x + 0) * xs + cx;
-            double ty = floorf(s_tl.y + 0) * ys + cy;
-            double bx = floorf(s_br.x + 1) * xs + cx;
-            double by = floorf(s_br.y + 1) * ys + cy;
+            double tx = floorf(s_tl.x + 0) * xs + top_left.x;
+            double ty = floorf(s_tl.y + 0) * ys + top_left.y;
+            double bx = floorf(s_br.x + 1) * xs + top_left.x;
+            double by = floorf(s_br.y + 1) * ys + top_left.y;
 
             s_tl = { (float)tx, (float)ty };
             s_br = { (float)bx, (float)by };
 
-            float sw = (float)settings.select_border_width;
+            float sbw = (float)settings.select_border_width;
 
-            // clamp to the image because zooming/rounding etc
-            float select_l = floorf(std::max(cx, s_tl.x)) - sw;
-            float select_t = floorf(std::max(cy, s_tl.y)) - sw;
-            float select_r = floorf(std::min(cx + cw - 1, s_br.x)) + sw;
-            float select_b = floorf(std::min(cy + ch - 1, s_br.y)) + sw;
+            float select_l = floorf(std::max(top_left.x, s_tl.x)) - sbw;
+            float select_t = floorf(std::max(top_left.y, s_tl.y)) - sbw;
+
+            float select_r = floorf(std::min(top_left.x + rect_size.x - 1, s_br.x)) + sbw;
+            float select_b = floorf(std::min(top_left.y + rect_size.y - 1, s_br.y)) + sbw;
 
             // always draw at least something
             float select_w = std::max(1.0f, select_r - select_l + 0.5f);
@@ -1945,8 +2106,8 @@ HRESULT App::render()
 
             shader_constants.select_border_width = select_border_width;    // set viewport coords for the vertex shader
 
-            shader_constants.scale = mul_point({ select_w, -select_h }, scale);
-            shader_constants.offset = { select_l * x_scale - 1, 1 - (select_t * y_scale) };
+            shader_constants.scale = get_scale({ select_w, select_h });
+            shader_constants.offset = get_offset({ select_l, select_t });
 
             // set rect coords for the pixel shader
             shader_constants.rect_f[0] = (int)select_l;
@@ -1989,59 +2150,36 @@ HRESULT App::render()
 
             vec2 g2{ crosshair_grid_size, crosshair_grid_size };
 
-            // scale from texels to pixels
-            vec2 p(cur_mouse_pos);
-            vec2 sp1 = clamp_to_texture(screen_to_texture_pos(p));
-            sp1 = texture_to_screen_pos(sp1);
+            // get top left and bottom right screen pos of texel under mouse curser
+            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+            vec2 sp1 = texture_to_screen_pos(p);
+            vec2 sp2 = sub_point(add_point(sp1, texel_size()), { 1, 1 });
+
+            if(fabsf(sp1.x - sp2.x) < 1.0f) {
+                sp2.x = sp1.x + 1;
+            }
+            if(fabsf(sp1.y - sp2.y) < 1.0f) {
+                sp2.y = sp1.y + 1;
+            }
 
             // draw a vertical crosshair line
 
-            auto draw_vert = [&](float mx, float my) {
+            float blip = (float)((m_frame >> 0) & 31);
+            grid_pos = sub_point(g2, vec2::mod({ sp1.x + blip, sp1.y + blip }, g2));
 
-                float blip = (float)((m_frame >> 0) & 31);
-                grid_pos = sub_point(g2, vec2::mod({ mx + blip, my + blip }, g2));
-                shader_constants.grid_offset = { 0, grid_pos.y };
-                shader_constants.offset = { mx * x_scale - 1, 1 };
-                shader_constants.scale = { 1 * x_scale, -2 };
-                CHK_HR(update_constants());
-                d3d_context->Draw(4, 0);
-                return S_OK;
-            };
+            shader_constants.grid_offset = { 0, grid_pos.y };
+            shader_constants.offset = get_offset({ sp1.x, 0 });
+            shader_constants.scale = get_scale({ sp2.x - sp1.x, (float)window_height });
+            CHK_HR(update_constants());
+            d3d_context->Draw(4, 0);
 
             // draw a horizontal crosshair line
 
-            auto draw_horiz = [&](float mx, float my) {
-
-                float blip = (float)((m_frame >> 0) & 31);
-                grid_pos = sub_point(g2, vec2::mod({ mx + blip, my + blip }, g2));
-                shader_constants.grid_offset = { grid_pos.x, 0 };
-                shader_constants.offset = { -1, 1 - my * y_scale };
-                shader_constants.scale = { 2, -1 * y_scale };
-                CHK_HR(update_constants());
-                d3d_context->Draw(4, 0);
-                return S_OK;
-            };
-
-            // draw the ones which are clamped to the topleft of the texel under the cursor
-
-            CHK_HR(draw_vert(sp1.x, sp1.y));
-            CHK_HR(draw_horiz(sp1.x, sp1.y));
-
-            // if zoomed texels are bigger than one pixel
-            // draw the ones which are clamped to the bottomright of the texel
-
-            vec2 sp2 = clamp_to_texture(screen_to_texture_pos(p));
-            sp2.x += 1;
-            sp2.y += 1;
-            sp2 = texture_to_screen_pos(sp2);
-            sp2.x -= 1;
-            sp2.y -= 1;
-
-            // only check x distance because zoom is always the same in x and y
-            if((sp2.x - sp1.x) > 2) {
-                CHK_HR(draw_vert(sp2.x, sp1.y));
-                CHK_HR(draw_horiz(sp1.x, sp2.y));
-            }
+            shader_constants.grid_offset = { grid_pos.x, 0 };
+            shader_constants.offset = get_offset({ 0, sp1.y });
+            shader_constants.scale = get_scale({ (float)window_width, sp2.y - sp1.y });
+            CHK_HR(update_constants());
+            d3d_context->Draw(4, 0);
         }
 
         // spinner if file load is slow
@@ -2057,8 +2195,8 @@ HRESULT App::render()
             vec2 mn = sub_point(vec2::min(mid, off), { 12.0f, 12.0f });
             vec2 mx = sub_point(add_point(vec2::max(mid, off), { 12.0f, 12.0f }), mn);
 
-            shader_constants.offset = { mn.x * x_scale - 1, 1 - (mn.y * y_scale) };
-            shader_constants.scale = mul_point({ mx.x, -mx.y }, scale);
+            shader_constants.offset = get_offset(mn);
+            shader_constants.scale = get_scale(mx);
 
             shader_constants.glowing_line_s = mid;
             shader_constants.glowing_line_e = off;
@@ -2077,20 +2215,22 @@ HRESULT App::render()
             vec2 screen_pos = texture_to_screen_pos(p);
             screen_pos.x -= dpi_scale(12);
             screen_pos.y += dpi_scale(8);
-            draw_string(text, small_text_format.Get(), screen_pos, { 1, 0 }, 1.0f, small_label_padding, small_label_padding);
+            draw_string(
+                text, small_text_format.Get(), screen_pos, { 1, 0 }, 1.0f, small_label_padding, small_label_padding);
         }
 
         if(selection_active) {
             vec2 tl = vec2::min(sa, sc);
             vec2 br = vec2::max(sa, sc);
-            vec2 s_tl = texture_to_screen_pos(tl);
-            vec2 s_br = texture_to_screen_pos({ br.x + 1, br.y + 1 });
+            vec2 s_tl = texture_to_screen_pos_unclamped(tl);
+            vec2 s_br = texture_to_screen_pos_unclamped({ br.x + 1, br.y + 1 });
             s_tl.x -= dpi_scale(12);
             s_tl.y -= dpi_scale(8);
             s_br.x += dpi_scale(12);
             s_br.y += dpi_scale(8);
             POINT s_dim{ (int)(floorf(br.x) - floorf(tl.x)) + 1, (int)(floorf(br.y) - floorf(tl.y)) + 1 };
-            draw_string(format(L"X %d Y %d", (int)tl.x, (int)tl.y), small_text_format.Get(), s_tl, { 1, 1 }, 1.0f, 2, 2);
+            draw_string(
+                format(L"X %d Y %d", (int)tl.x, (int)tl.y), small_text_format.Get(), s_tl, { 1, 1 }, 1.0f, 2, 2);
             draw_string(format(L"W %d H %d", s_dim.x, s_dim.y), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
         }
 
@@ -2102,7 +2242,11 @@ HRESULT App::render()
             if(message_alpha <= 1) {
                 message_alpha = 1 - powf(message_alpha, 16);
                 vec2 pos{ window_width / 2.0f, window_height - 12.0f };
-                draw_string(format(L"%s", current_message.c_str()), large_text_format.Get(), pos, { 0.5f, 1.0f }, message_alpha);
+                draw_string(format(L"%s", current_message.c_str()),
+                            large_text_format.Get(),
+                            pos,
+                            { 0.5f, 1.0f },
+                            message_alpha);
             }
         }
 
@@ -2117,18 +2261,22 @@ HRESULT App::render()
 }
 
 //////////////////////////////////////////////////////////////////////
+// clear the backbuffer
 
 void App::clear()
 {
-    d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float const *>(&settings.border_color));
+    d3d_context->ClearRenderTargetView(rendertarget_view.Get(),
+                                       reinterpret_cast<float const *>(&settings.border_color));
 
     d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
-    CD3D11_VIEWPORT viewport(0.0f, 0.0f, static_cast<float>(window_width), static_cast<float>(window_height));
+    vec2 ws = window_size();
+    CD3D11_VIEWPORT viewport(0.0f, 0.0f, ws.x, ws.y);
     d3d_context->RSSetViewports(1, &viewport);
 }
 
 //////////////////////////////////////////////////////////////////////
+// swap back/front buffers
 
 HRESULT App::present()
 {
@@ -2142,6 +2290,7 @@ HRESULT App::present()
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_CLOSING
 
 HRESULT App::on_closing()
 {
@@ -2149,6 +2298,7 @@ HRESULT App::on_closing()
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_ACTIVATEAPP
 
 void App::on_activated()
 {
@@ -2156,6 +2306,7 @@ void App::on_activated()
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_ACTIVATEAPP
 
 void App::on_deactivated()
 {
@@ -2178,6 +2329,7 @@ void App::on_resuming()
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_WINDOWPOSCHANGING
 
 HRESULT App::on_window_pos_changing(WINDOWPOS *new_pos)
 {
@@ -2186,6 +2338,7 @@ HRESULT App::on_window_pos_changing(WINDOWPOS *new_pos)
 }
 
 //////////////////////////////////////////////////////////////////////
+// WM_EXITSIZEMOVE
 
 HRESULT App::on_window_size_changed(int width, int height)
 {
@@ -2221,6 +2374,7 @@ HRESULT App::on_window_size_changed(int width, int height)
 }
 
 //////////////////////////////////////////////////////////////////////
+// create the d3d device
 
 HRESULT App::create_device()
 {
@@ -2238,7 +2392,16 @@ HRESULT App::create_device()
 
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
-    CHK_HR(D3D11CreateDevice(null, D3D_DRIVER_TYPE_HARDWARE, null, create_flags, feature_levels, num_feature_levels, D3D11_SDK_VERSION, &device, &feature_level, &context));
+    CHK_HR(D3D11CreateDevice(null,
+                             D3D_DRIVER_TYPE_HARDWARE,
+                             null,
+                             create_flags,
+                             feature_levels,
+                             num_feature_levels,
+                             D3D11_SDK_VERSION,
+                             &device,
+                             &feature_level,
+                             &context));
 
 #if defined(_DEBUG)
     if(SUCCEEDED(device.As(&d3d_debug))) {
@@ -2261,7 +2424,8 @@ HRESULT App::create_device()
     CHK_HR(device.As(&d3d_device));
     CHK_HR(context.As(&d3d_context));
 
-    CHK_HR(d3d_device->CreateVertexShader(vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
+    CHK_HR(
+        d3d_device->CreateVertexShader(vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
     d3d_name(vertex_shader);
 
     CHK_HR(d3d_device->CreatePixelShader(ps_drawimage_shaderbin, sizeof(ps_drawimage_shaderbin), null, &pixel_shader));
@@ -2325,6 +2489,7 @@ HRESULT App::create_device()
 }
 
 //////////////////////////////////////////////////////////////////////
+// create window size dependent resources
 
 HRESULT App::create_resources()
 {
@@ -2332,8 +2497,8 @@ HRESULT App::create_resources()
         create_device();
     }
 
-    ID3D11RenderTargetView *nullViews[] = { nullptr };
-    d3d_context->OMSetRenderTargets(static_cast<UINT>(std::size(nullViews)), nullViews, nullptr);
+    ID3D11RenderTargetView *nullViews[] = { null };
+    d3d_context->OMSetRenderTargets(static_cast<UINT>(std::size(nullViews)), nullViews, null);
     d3d_context->Flush();
 
     rendertarget_view.Reset();
@@ -2388,7 +2553,8 @@ HRESULT App::create_resources()
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
         fsSwapChainDesc.Windowed = TRUE;
 
-        CHK_HR(dxgiFactory->CreateSwapChainForHwnd(d3d_device.Get(), window, &swapChainDesc, &fsSwapChainDesc, nullptr, &swap_chain));
+        CHK_HR(dxgiFactory->CreateSwapChainForHwnd(
+            d3d_device.Get(), window, &swapChainDesc, &fsSwapChainDesc, null, &swap_chain));
 
         CHK_HR(dxgiFactory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER));
     }
@@ -2440,6 +2606,7 @@ HRESULT App::create_resources()
 }
 
 //////////////////////////////////////////////////////////////////////
+// create the d2d text formats
 
 HRESULT App::create_text_formats()
 {
@@ -2450,13 +2617,28 @@ HRESULT App::create_text_formats()
     auto style = DWRITE_FONT_STYLE_NORMAL;
     auto stretch = DWRITE_FONT_STRETCH_NORMAL;
 
-    CHK_HR(dwrite_factory->CreateTextFormat(small_font_family_name, font_collection.Get(), weight, style, stretch, large_font_size, L"en-us", &large_text_format));
-    CHK_HR(dwrite_factory->CreateTextFormat(mono_font_family_name, font_collection.Get(), weight, style, stretch, small_font_size, L"en-us", &small_text_format));
+    CHK_HR(dwrite_factory->CreateTextFormat(small_font_family_name,
+                                            font_collection.Get(),
+                                            weight,
+                                            style,
+                                            stretch,
+                                            large_font_size,
+                                            L"en-us",
+                                            &large_text_format));
+    CHK_HR(dwrite_factory->CreateTextFormat(mono_font_family_name,
+                                            font_collection.Get(),
+                                            weight,
+                                            style,
+                                            stretch,
+                                            small_font_size,
+                                            L"en-us",
+                                            &small_text_format));
 
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
+// deal with DPI changed
 
 HRESULT App::on_dpi_changed(UINT new_dpi, rect *new_rect)
 {
@@ -2475,6 +2657,7 @@ HRESULT App::on_dpi_changed(UINT new_dpi, rect *new_rect)
 }
 
 //////////////////////////////////////////////////////////////////////
+// recreate device and recreate current image texture if necessary
 
 HRESULT App::on_device_lost()
 {
@@ -2483,13 +2666,14 @@ HRESULT App::on_device_lost()
     CHK_HR(create_resources());
 
     if(current_image_file != null) {
-        CHK_HR(decode_image(current_image_file));
+        CHK_HR(display_image(current_image_file));
     }
 
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
+// user dropped something on the window, try to load it as a file
 
 HRESULT App::on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
 {
@@ -2509,46 +2693,29 @@ HRESULT App::on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
 
 HRESULT App::on_drop_string(wchar const *str)
 {
-    std::wstring s(str);
-    if(s[0] == '"') {
-        s = s.substr(1, s.size() - 2);
+    std::wstring bare_name = strip_quotes(str);
+    if(file_exists(bare_name.c_str())) {
+        return load_image(bare_name.c_str());
     }
-    return load_image(s.c_str());
+    set_message(format(L"Can't load %s - not a file", bare_name.c_str()).c_str(), 2.0f);
+    return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 }
 
 //////////////////////////////////////////////////////////////////////
+// call this last thing before the end of main
 
 void App::on_process_exit()
 {
     settings.save();
 
-    // this kills all loader threads
-    cancel_loader();
-
-    // murder the scanner thread
-
-    // tell scan_folder2 to quit
+    // set global quit event
     SetEvent(quit_event);
 
-    // tell the thread itself to quit
-    PostThreadMessage(scanner_thread_id, WM_EXIT_THREAD, 0, 0);
-
-    // wait for it to die
-    while(WaitForSingleObject(scanner_thread_handle, 100) != WAIT_OBJECT_0) {
-        Log(L"Waiting for scanner thread to exit");
-    }
-
-    // should really join() here but... whevs
-    scanner_thread.detach();
+    // wait for thread pool to drain
+    thread_pool.cleanup();
 
     // then cleanup
-
-    if(current_folder_scan != null) {
-        delete current_folder_scan;
-        current_folder_scan = null;
-    }
-
-    CloseHandle(cancel_loader_event);
     CloseHandle(quit_event);
     CloseHandle(window_created_event);
 }
+

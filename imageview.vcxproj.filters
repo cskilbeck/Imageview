@@ -16,7 +16,7 @@
     <ClInclude Include="src\app.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\DragDropHelpers.h">
+    <ClInclude Include="src\drag_drop.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\font_loader.h">
@@ -46,14 +46,32 @@
     <ClInclude Include="src\util.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\WICTextureLoader11.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="resources\resource.h">
       <Filter>resources</Filter>
     </ClInclude>
     <ClInclude Include="shaders\hlsl.h">
       <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="src\defer.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\types.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\files.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image_decoder.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\dialogs.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\thread_pool.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image.h">
+      <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -78,10 +96,25 @@
     <ClCompile Include="src\util.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\WICTextureLoader11.cpp">
+    <ClCompile Include="src\wm_names.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\wm_names.cpp">
+    <ClCompile Include="src\files.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\drag_drop.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\image_decoder.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dialogs.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\thread_pool.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\image.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

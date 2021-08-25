@@ -17,9 +17,10 @@ AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: 'false'
 AlwaysBreakTemplateDeclarations: 'false'
-BinPackArguments: 'true'
-BinPackParameters: 'true'
+BinPackArguments: 'false'
+BinPackParameters: 'false'
 BreakBeforeBraces: Custom
+PenaltyReturnTypeOnItsOwnLine: 10000000
 BraceWrapping: {
     AfterControlStatement: 'false'
     AfterEnum : 'true'
@@ -33,9 +34,9 @@ BraceWrapping: {
     IndentBraces : 'false'
 }
 BreakBeforeTernaryOperators: 'false'
-BreakConstructorInitializersBeforeComma: 'true'
+BreakConstructorInitializers: BeforeComma
 BreakStringLiterals: 'true'
-ColumnLimit: '180'
+ColumnLimit: '120'
 ConstructorInitializerAllOnOneLineOrOnePerLine: 'true'
 ConstructorInitializerIndentWidth: '4'
 ContinuationIndentWidth: '4'
@@ -44,7 +45,7 @@ DerivePointerAlignment: 'false'
 DisableFormat: 'false'
 IndentCaseLabels: 'false'
 IndentWidth: '4'
-IndentWrappedFunctionNames: 'true'
+IndentWrappedFunctionNames: 'false'
 KeepEmptyLinesAtTheStartOfBlocks: 'true'
 MaxEmptyLinesToKeep: '4'
 NamespaceIndentation: All
