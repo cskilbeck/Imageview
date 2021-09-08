@@ -523,8 +523,7 @@ HRESULT App::warm_cache()
                     // remove things from cache until it's <= cache_size + required size
 
                     uint64 img_size;
-                    if(SUCCEEDED(get_image_file_size(this_file.c_str(), &img_size)))
-                    {
+                    if(SUCCEEDED(get_image_file_size(this_file.c_str(), &img_size))) {
                         if(img_size < settings.cache_size) {
 
                             while(cache_in_use + img_size > settings.cache_size) {
@@ -548,6 +547,8 @@ HRESULT App::warm_cache()
 
                                     cache_in_use -= loser->total_size();
                                     loaded_files.erase(loser->filename);
+                                } else {
+                                    break;
                                 }
                             }
                         }
@@ -2730,4 +2731,3 @@ void App::on_process_exit()
     CloseHandle(quit_event);
     CloseHandle(window_created_event);
 }
-
