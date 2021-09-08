@@ -116,6 +116,11 @@ struct vec2
     {
         return { ::clamp(min.x, a.x, max.x), ::clamp(min.y, a.y, max.y) };
     }
+
+    static float length(vec2 const &a)
+    {
+        return sqrtf(a.x * a.x + a.y * a.y);
+    }
 };
 
 //////////////////////////////////////////////////////////////////////

@@ -573,7 +573,7 @@ HRESULT App::warm_cache()
 
 void App::on_folder_scanned(folder_scan_result *scan_result)
 {
-    Log(L"%llu images found in %s", scan_result->files.size(), scan_result->path.c_str());
+    Log(L"%zu images found in %s", scan_result->files.size(), scan_result->path.c_str());
 
     current_folder_scan.reset(scan_result);
 
@@ -1276,7 +1276,11 @@ void App::on_mouse_move(point_s pos)
     }
 
     if(selecting) {
-        selection_active = true;
+        vec2 diff = vec2(sub_point(mouse_click[settings.select_button], pos));
+        float len = vec2::length(diff);
+        if(len > settings.select_start_distance) {
+            selection_active = true;
+        }
     }
 
     if(!get_mouse_buttons(settings.select_button)) {
@@ -1875,7 +1879,15 @@ HRESULT App::copy_selection()
         uint32 *d = reinterpret_cast<uint32 *>(row);
         for(int x = 0; x < w; ++x) {
             uint32 p = *s++;
-            *d++ = (p & 0xff00ff00) | ((p & 0xff0000) >> 16) | ((p & 0xff) << 16);
+            uint32 r = (p >> 0) & 0xff;
+            uint32 g = (p >> 8) & 0xff;
+            uint32 b = (p >> 16) & 0xff;
+            uint32 a = (p >> 24) & 0xff;
+            r <<= 0;
+            g <<= 8;
+            b <<= 16;
+            a <<= 24;
+            *d++ = a | b | g | r;
         }
         src += mapped_resource.RowPitch;
         row += w * 4llu;
