@@ -1,21 +1,18 @@
 //////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////
-//
 // fix the cache
 // monitor DPI / orientation awareness
 // show message if file load is slow
 // settings dialog
 // customise keyboard shortcuts / help screen
 // localization
-// Windows 7 support
 // installation/file associations
-//
-// slippery slope:
-// 'R' to rotate it and then, save?
-// heif support (https://nokiatech.github.io/heif) ? or link to store app
-// load images from URLs which are dragged/pasted?
-//
 //////////////////////////////////////////////////////////////////////
+//
+// TO FIX
+// use std::string everywhere
+// use utf_8 everywhere
+// clean up namespaces
+//
 
 #include "pch.h"
 
@@ -238,12 +235,15 @@ HRESULT App::on_command_line(wchar *cmd_line)
     int argc;
     wchar **argv = CommandLineToArgvW(cmd_line, &argc);
 
-    wchar const *filepath{ L"?open" };
+    wchar const *filepath{ null };
 
     if(argc > 1 && argv[1] != null) {
         filepath = argv[1];
     }
-    load_image(filepath);
+
+    if(filepath != null) {
+        return load_image(filepath);
+    }
     return S_OK;
 }
 
@@ -268,18 +268,19 @@ HRESULT App::on_paste()
     if(IsClipboardFormatAvailable(CF_DIBV5)) {
 
         // if clipboard contains a DIB, make it look like a file we just loaded
-        image_file *f = new image_file();
+        image_file &f = clipboard_image_file;
+        f.is_clipboard = true;
 
-        f->bytes.resize(sizeof(BITMAPFILEHEADER));
-        CHK_HR(append_clipboard_to_buffer(f->bytes, CF_DIBV5));
+        f.bytes.resize(sizeof(BITMAPFILEHEADER));
+        CHK_HR(append_clipboard_to_buffer(f.bytes, CF_DIBV5));
 
-        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(f->bytes.data());
+        BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(f.bytes.data());
 
         BITMAPV5HEADER *i = reinterpret_cast<BITMAPV5HEADER *>(b + 1);
 
         memset(b, 0, sizeof(*b));
         b->bfType = 'MB';
-        b->bfSize = (DWORD)f->bytes.size();
+        b->bfSize = (DWORD)f.bytes.size();
         b->bfOffBits = sizeof(BITMAPV5HEADER) + sizeof(BITMAPFILEHEADER) + i->bV5ProfileSize;
 
         if(i->bV5Compression == BI_BITFIELDS) {
@@ -290,15 +291,15 @@ HRESULT App::on_paste()
 
         // TODO(chs): fix this mess:
 
-        f->filename = L"Clipboard";
-        f->hresult = S_OK;
-        f->index = -1;
-        f->is_cache_load = true;
-        f->view_count = 0;
-        image &img = f->img;
-        CHK_HR(decode_image(f->bytes.data(), f->bytes.size(), f->pixels, img.width, img.height, img.row_pitch));
-        f->img.pixels = f->pixels.data();
-        return show_image(f);
+        f.filename = L"Clipboard";
+        f.hresult = S_OK;
+        f.index = -1;
+        f.is_cache_load = true;
+        f.view_count = 0;
+        image &img = f.img;
+        CHK_HR(decode_image(f.bytes.data(), f.bytes.size(), f.pixels, img.width, img.height, img.row_pitch));
+        f.img.pixels = f.pixels.data();
+        return show_image(&f);
     }
 
     UINT filename_fmt = RegisterClipboardFormat(CFSTR_FILENAMEW);
@@ -347,7 +348,6 @@ HRESULT App::display_image(image_file *f)
         set_message(format(L"Can't load %s - %s", name.c_str(), err_str.c_str()).c_str(), 3);
         return load_hr;
     }
-    current_image_file = f;
     files_loaded += 1;
     f->view_count += 1;
     return show_image(f);
@@ -358,6 +358,8 @@ HRESULT App::display_image(image_file *f)
 
 HRESULT App::show_image(image_file *f)
 {
+    current_image_file = f;
+
     std::wstring name;
 
     // hresult from load_file
@@ -505,7 +507,7 @@ void App::scanner_function()
 HRESULT App::warm_cache()
 {
     // if it's a normal file in the current folder
-    if(current_image_file != null && current_image_file->index != -1) {
+    if(current_image_file != null && !current_image_file->is_clipboard && current_image_file->index != -1) {
 
         int const num_images_to_cache = 12;
 
@@ -653,12 +655,12 @@ HRESULT App::load_image(wchar const *filepath)
 
     // if filename is '?open', show OpenFileDialog
 
-    if(filename.compare(L"?open") == 0) {
+    // if(filename.compare(L"?open") == 0) {
 
-        std::wstring selected_filename;
-        CHK_HR(select_file_dialog(window, selected_filename));
-        filename = selected_filename.c_str();
-    }
+    //    std::wstring selected_filename;
+    //    CHK_HR(select_file_dialog(window, selected_filename));
+    //    filename = selected_filename.c_str();
+    //}
 
     // get somewhat canonical filepath and parts thereof
 
@@ -773,10 +775,10 @@ void App::on_file_load_complete(LPARAM lparam)
 {
     image_file *f = reinterpret_cast<image_file *>(lparam);
 
-    if(FAILED(f->hresult)) {
-        delete f;
-        return;
-    }
+    // if(FAILED(f->hresult)) {
+    //    delete f;
+    //    return;
+    //}
 
     // transfer from loading to loaded
     loading_files.erase(f->filename);
@@ -1162,6 +1164,11 @@ HRESULT App::set_window(HWND hwnd)
 
     InitializeDragDropHelper(window);
 
+    // if there was no file load requested on the command line, try to paste an image from the clipboard
+    if(requested_file == null && IsClipboardFormatAvailable(CF_DIBV5)) {
+        return on_paste();
+    }
+
     return S_OK;
 }
 
@@ -1177,10 +1184,13 @@ bool App::on_setcursor()
 //////////////////////////////////////////////////////////////////////
 // WM_[L/M/R]BUTTON[UP/DOWN]
 
-void App::on_mouse_button(point_s pos, int button, int state)
+void App::on_mouse_button(point_s pos, uint button, int state)
 {
+    assert(button < btn_count);
+
     if(state == btn_down) {
 
+        mouse_click_timestamp[button] = GetTickCount64();
         mouse_click[button] = pos;
         mouse_pos[button] = pos;
         memset(mouse_offset + button, 0, sizeof(point_s));
@@ -1203,19 +1213,56 @@ void App::on_mouse_button(point_s pos, int button, int state)
                 selection_active = false;
             }
 
-        } else if(button == settings.zoom_button) {
+        } else if(button == settings.zoom_button && !popup_menu_active) {
 
             ShowCursor(FALSE);
         }
 
-    } else {
+    } else {    // state == btn_up
 
         clear_mouse_buttons(button);
 
-        if(button == settings.zoom_button) {
+        // if RMB released within double-click time and haven't
+        // moved it much since they pressed it, show popup menu
+
+        if(button == settings.drag_button) {
+
+            uint64 since = GetTickCount64() - mouse_click_timestamp[settings.drag_button];
+
+            if(since < static_cast<uint64>(GetDoubleClickTime())) {
+
+                uint hover_high;
+                uint hover_wide;
+
+                SystemParametersInfo(SPI_GETMOUSEHOVERHEIGHT, 0, &hover_high, 0);
+                SystemParametersInfo(SPI_GETMOUSEHOVERWIDTH, 0, &hover_wide, 0);
+
+                point_s const &click_pos = mouse_click[settings.drag_button];
+
+                uint x_distance = std::abs(click_pos.x - pos.x);
+                uint y_distance = std::abs(click_pos.y - pos.y);
+
+                if(x_distance < hover_wide && y_distance < hover_high) {
+
+                    HMENU menu = LoadMenu(GetModuleHandle(null), MAKEINTRESOURCE(IDR_MENU_POPUP));
+                    HMENU popup_menu = GetSubMenu(menu, 0);
+                    POINT screen_pos{ click_pos.x, click_pos.y };
+                    ClientToScreen(window, &screen_pos);
+
+                    popup_menu_active = true;
+                    TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
+                    popup_menu_active = false;
+                }
+            }
+        }
+
+        else if(button == settings.zoom_button) {
+
             ShowCursor(TRUE);
             clear_mouse_buttons(settings.drag_button);    // in case they pressed the drag button while zooming
+
         } else if(button == settings.select_button) {
+
             drag_selection = false;
 
             // when selection is finalized, select_anchor is top left, select_current is bottom
@@ -1234,7 +1281,7 @@ void App::on_mouse_button(point_s pos, int button, int state)
 
 void App::on_raw_mouse_move(point_s delta)
 {
-    if(get_mouse_buttons(settings.zoom_button)) {
+    if(get_mouse_buttons(settings.zoom_button) && !popup_menu_active) {
         do_zoom(mouse_click[settings.zoom_button], std::max(-4, std::min(-delta.y, 4)));
     }
 }
@@ -1538,8 +1585,20 @@ void App::on_key_down(int vk_key, LPARAM flags)
         break;
 
     case 'S':
-        settings.zoom_mode = reset_zoom_mode::shrink_to_fit;
-        reset_zoom(settings.zoom_mode);
+        if(ctrl) {
+            std::wstring filename;
+            if(SUCCEEDED(save_file_dialog(window, filename))) {
+
+                image const &img = current_image_file->img;
+                HRESULT hr = save_image_file(filename.c_str(), img.pixels, img.width, img.height, img.row_pitch);
+                if(FAILED(hr)) {
+                    MessageBox(window, windows_error_message(hr).c_str(), L"Can't save file", MB_ICONEXCLAMATION);
+                }
+            }
+        } else {
+            settings.zoom_mode = reset_zoom_mode::shrink_to_fit;
+            reset_zoom(settings.zoom_mode);
+        }
         break;
 
     case 'X':
@@ -1785,6 +1844,8 @@ HRESULT App::copy_selection()
     vec2 tl = vec2::min(select_anchor, select_current);
     vec2 br = vec2::max(select_anchor, select_current);
 
+    // 1. Copy region into a texture
+
     D3D11_BOX copy_box;
     copy_box.left = (int)tl.x;
     copy_box.right = std::min(texture_width, (int)br.x + 1);
@@ -1799,52 +1860,6 @@ HRESULT App::copy_selection()
     if(w < 1 || h < 1) {
         return E_BOUNDS;
     }
-
-    size_t pixel_size = 4llu;
-
-    size_t pixel_buffer_size = pixel_size * (size_t)w * h;
-
-    // BI_BITFIELDS requires 3 DWORDS after the BITMAPV5HEADER
-    // See https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv5header
-
-    size_t buffer_size = sizeof(BITMAPV5HEADER) + pixel_buffer_size + 4llu * 3;
-
-    HANDLE hData = GlobalAlloc(GHND | GMEM_SHARE, buffer_size);
-
-    if(hData == null) {
-        return HRESULT_FROM_WIN32(ERROR_OUTOFMEMORY);
-    }
-
-    byte *pData = reinterpret_cast<byte *>(GlobalLock(hData));
-
-    if(pData == null) {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    BITMAPV5HEADER *bmi = reinterpret_cast<BITMAPV5HEADER *>(pData);
-
-    memset(bmi, 0, sizeof(BITMAPV5HEADER));
-    bmi->bV5Size = sizeof(BITMAPV5HEADER);
-    bmi->bV5Width = w;
-    bmi->bV5Height = -h;
-    bmi->bV5Planes = 1;
-    bmi->bV5BitCount = 32;
-    bmi->bV5Compression = BI_BITFIELDS;
-    bmi->bV5SizeImage = 4 * w * h;
-    bmi->bV5RedMask = 0x00ff0000;
-    bmi->bV5GreenMask = 0x0000ff00;
-    bmi->bV5BlueMask = 0x000000ff;
-    bmi->bV5AlphaMask = 0xff000000;
-    bmi->bV5CSType = LCS_WINDOWS_COLOR_SPACE;
-    bmi->bV5Intent = LCS_GM_GRAPHICS;
-
-    DWORD *rgb_bitmasks = reinterpret_cast<DWORD *>(pData + sizeof(BITMAPV5HEADER));
-
-    rgb_bitmasks[0] = 0xff0000;
-    rgb_bitmasks[1] = 0x00ff00;
-    rgb_bitmasks[2] = 0x0000ff;
-
-    byte *pixels = pData + sizeof(BITMAPV5HEADER) + 4llu * 3;
 
     D3D11_TEXTURE2D_DESC desc;
     image_texture->GetDesc(&desc);
@@ -1869,8 +1884,47 @@ HRESULT App::copy_selection()
 
     d3d_context->Flush();
 
+    // 2. Map the texture so we can access the pixels
+
     D3D11_MAPPED_SUBRESOURCE mapped_resource{};
     CHK_HR(d3d_context->Map(tex.Get(), 0, D3D11_MAP_READ, 0, &mapped_resource));
+    defer(d3d_context->Unmap(tex.Get(), 0));
+
+    uint32 pitch = mapped_resource.RowPitch;
+
+    size_t pixel_size = 4llu;
+    size_t pixel_buffer_size = pixel_size * (size_t)w * h;
+
+    // 3. Create CF_DIBV5 clipformat
+
+    size_t dibv5_buffer_size = sizeof(BITMAPV5HEADER) + pixel_buffer_size;
+    HANDLE dibv5_data = GlobalAlloc(GHND | GMEM_SHARE, dibv5_buffer_size);
+    if(dibv5_data == null) {
+        return HRESULT_FROM_WIN32(ERROR_OUTOFMEMORY);
+    }
+    byte *dibv5_buffer = reinterpret_cast<byte *>(GlobalLock(dibv5_data));
+    if(dibv5_buffer == null) {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    BITMAPV5HEADER *bmiv5 = reinterpret_cast<BITMAPV5HEADER *>(dibv5_buffer);
+
+    memset(bmiv5, 0, sizeof(BITMAPV5HEADER));
+    bmiv5->bV5Size = sizeof(BITMAPV5HEADER);
+    bmiv5->bV5Width = w;
+    bmiv5->bV5Height = -h;
+    bmiv5->bV5Planes = 1;
+    bmiv5->bV5BitCount = 32;
+    bmiv5->bV5Compression = BI_RGB;
+    bmiv5->bV5SizeImage = 4 * w * h;
+    bmiv5->bV5RedMask = 0x00ff0000;
+    bmiv5->bV5GreenMask = 0x0000ff00;
+    bmiv5->bV5BlueMask = 0x000000ff;
+    bmiv5->bV5AlphaMask = 0xff000000;
+    bmiv5->bV5CSType = LCS_WINDOWS_COLOR_SPACE;
+    bmiv5->bV5Intent = LCS_GM_GRAPHICS;
+
+    byte *pixels = dibv5_buffer + sizeof(BITMAPV5HEADER);
 
     // got the texels, copy into the DIB for the clipboard, swapping R, B channels
     byte *row = pixels;
@@ -1890,20 +1944,78 @@ HRESULT App::copy_selection()
             a <<= 24;
             *d++ = a | b | g | r;
         }
-        src += mapped_resource.RowPitch;
+        src += pitch;
         row += w * 4llu;
     }
 
-    d3d_context->Unmap(tex.Get(), 0);
+    GlobalUnlock(dibv5_data);
 
-    GlobalUnlock(hData);
+    // 4. Create CF_DIB clipformat
+
+    int stride = (((w * 3) + 3) & -4);
+    int dib_img_size = stride * h;
+
+    size_t dib_buffer_size = sizeof(BITMAPINFOHEADER) + dib_img_size;
+    HANDLE dib_data = GlobalAlloc(GHND | GMEM_SHARE, dib_buffer_size);
+    if(dib_data == null) {
+        return HRESULT_FROM_WIN32(ERROR_OUTOFMEMORY);
+    }
+    byte *dib_buffer = reinterpret_cast<byte *>(GlobalLock(dib_data));
+    if(dib_buffer == null) {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    BITMAPINFOHEADER *bmi = reinterpret_cast<BITMAPINFOHEADER *>(dib_buffer);
+
+    memset(bmi, 0, sizeof(BITMAPINFOHEADER));
+    bmi->biSize = sizeof(BITMAPINFOHEADER);
+    bmi->biBitCount = 24;
+    bmi->biCompression = BI_RGB;
+    bmi->biWidth = w;
+    bmi->biHeight = -h;
+    bmi->biPlanes = 1;
+    bmi->biSizeImage = dib_img_size;
+
+    byte *dib_pixels = dib_buffer + sizeof(BITMAPINFOHEADER);
+
+    byte *dib_row = dib_pixels;
+    byte *dib_src = reinterpret_cast<byte *>(mapped_resource.pData);
+    for(int y = 0; y < h; ++y) {
+        uint32 *s = reinterpret_cast<uint32 *>(dib_src);
+        byte *d = dib_row;
+        for(int x = 0; x < w; ++x) {
+            uint32 p = *s++;
+            byte r = (p >> 0) & 0xff;
+            byte g = (p >> 8) & 0xff;
+            byte b = (p >> 16) & 0xff;
+            *d++ = r;
+            *d++ = g;
+            *d++ = b;
+        }
+        dib_src += mapped_resource.RowPitch;
+        dib_row += stride;
+    }
+
+    GlobalUnlock(dib_data);
+
+    // 5. stang them into the clipboard
 
     CHK_BOOL(OpenClipboard(null));
-    CHK_BOOL(EmptyClipboard());
-    CHK_BOOL(SetClipboardData(CF_DIBV5, hData));
-    CHK_BOOL(CloseClipboard());
+    defer(CloseClipboard());
 
-    return S_OK;
+    CHK_BOOL(EmptyClipboard());
+
+    CHK_BOOL(SetClipboardData(CF_DIBV5, dibv5_data));
+    CHK_BOOL(SetClipboardData(CF_DIB, dib_data));
+
+    return copy_pixels_as_png(pixels, w, h);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT App::save_image(image_file *f, std::wstring const &filename)
+{
+    return save_image_file(filename.c_str(), f->img.pixels, f->img.width, f->img.height, f->img.row_pitch);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -2710,7 +2822,7 @@ HRESULT App::on_drop_string(wchar const *str)
     if(file_exists(bare_name.c_str())) {
         return load_image(bare_name.c_str());
     }
-    set_message(format(L"Can't load %s - not a file", bare_name.c_str()).c_str(), 2.0f);
+    set_message(format(L"Can't load %s", bare_name.c_str()).c_str(), 2.0f);
     return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 }
 

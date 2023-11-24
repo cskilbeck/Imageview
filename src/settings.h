@@ -82,15 +82,15 @@ DECL_SETTING(vec4, crosshair_color2, 1, 1, 1, 0.25f);
 
 // which mouse button for interactive zoom
 
-DECL_SETTING(int, zoom_button, btn_middle);
+DECL_SETTING(uint, zoom_button, btn_middle);
 
 // which mouse button for dragging image
 
-DECL_SETTING(int, drag_button, btn_right);
+DECL_SETTING(uint, drag_button, btn_right);
 
 // which mouse button for selection
 
-DECL_SETTING(int, select_button, btn_left);
+DECL_SETTING(uint, select_button, btn_left);
 
 //////////////////////////////////////////////////////////////////////
 // window
@@ -137,7 +137,7 @@ DECL_SETTING(exif_option, image_rotation_option, exif_option::apply);
 
 // how much memory to use for caching files and decoded images
 
-DECL_SETTING(size_t, cache_size, 1048576llu * 1024); // 1GB memory cache by default
+DECL_SETTING(size_t, cache_size, 1048576llu * 1024);    // 1GB memory cache by default
 
 // what happens when you press 'z'
 

@@ -1,14 +1,21 @@
 //////////////////////////////////////////////////////////////////////
-// subset of WICTextureLoader11.cpp
 // Always decodes to 32 bit BGRA
 // Always ignores SRGB
-// Also handles exif rotate transforms
+// Handles exif rotate transforms
 // Doesn't create D3D texture, just gets the pixels (create texture in main thread)
-// Using D3D Feature Level 11 which allows non-square, non-power-of-2 texture sizes up to 16384
+// Using D3D Feature Level 11 allows non-square, non-power-of-2 texture sizes up to 16384
 
 #include "pch.h"
 
 //////////////////////////////////////////////////////////////////////
+
+std::map<std::wstring, output_image_format> save_formats{
+    { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, with_alpha } },
+    { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
+    { L"JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
+    { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, without_alpha } },
+    { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, with_alpha } }
+};
 
 namespace
 {
@@ -38,7 +45,8 @@ namespace
         uint32 orientation;
     };
 
-    exif_transform_translator_t exif_transform_translation[] = {    //
+    exif_transform_translator_t exif_transform_translation[] = {
+        //
         { WICBitmapTransformRotate0, PHOTO_ORIENTATION_NORMAL },
         { WICBitmapTransformRotate90, PHOTO_ORIENTATION_ROTATE270 },
         { WICBitmapTransformRotate180, PHOTO_ORIENTATION_ROTATE180 },
@@ -130,6 +138,88 @@ HRESULT get_image_size(wchar const *filename, uint32 &width, uint32 &height, uin
     width = s.w;
     height = s.h;
     total_size = bytes_per_row(s.w) * s.h;
+
+    return S_OK;
+}
+
+/////////////////////////////////////////////////////////////////////
+// copy image as a png to the clipboard
+
+HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h)
+{
+    auto wic = get_wic();
+
+    if(wic == null) {
+        return E_NOINTERFACE;
+    }
+
+    ComPtr<IWICBitmapEncoder> png_encoder;
+    CHK_HR(wic->CreateEncoder(GUID_ContainerFormatPng, nullptr, png_encoder.GetAddressOf()));
+
+    ComPtr<IStream> stream;
+
+    stream.Attach(SHCreateMemStream(nullptr, 0));
+
+    if(!stream) {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    png_encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache);
+
+    ComPtr<IPropertyBag2> property_bag;
+    ComPtr<IWICBitmapFrameEncode> frame;
+
+    CHK_HR(png_encoder->CreateNewFrame(frame.GetAddressOf(), property_bag.GetAddressOf()));
+
+    CHK_HR(frame->Initialize(property_bag.Get()));
+
+    CHK_HR(frame->SetSize(w, h));
+
+    auto format = GUID_WICPixelFormat32bppBGRA;
+    auto requested_format = format;
+
+    // encoder sets format to the best one it can manage
+    CHK_HR(frame->SetPixelFormat(&format));
+
+    if(format != requested_format) {
+        Log(L"Can't encode as PNG, format not supported");
+        return E_FAIL;
+    }
+
+    UINT stride = static_cast<UINT>(bytes_per_row(w));
+    UINT img_size = stride * h;
+    CHK_HR(frame->WritePixels(h, stride, img_size, const_cast<BYTE *>(pixels)));
+
+    frame->Commit();
+    png_encoder->Commit();
+
+    uint64_t stream_size;
+
+    CHK_HR(stream->Seek({ 0 }, STREAM_SEEK_END, reinterpret_cast<ULARGE_INTEGER *>(&stream_size)));
+    CHK_HR(stream->Seek({ 0 }, STREAM_SEEK_SET, nullptr));
+
+    HANDLE hData = GlobalAlloc(GHND | GMEM_SHARE, stream_size);
+
+    if(hData == null) {
+        return HRESULT_FROM_WIN32(ERROR_OUTOFMEMORY);
+    }
+    byte *pData = reinterpret_cast<byte *>(GlobalLock(hData));
+
+    if(pData == null) {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    ULONG got;
+    CHK_HR(stream->Read(pData, static_cast<ULONG>(stream_size), &got));
+    if(got != stream_size) {
+        return E_FAIL;
+    }
+
+    GlobalUnlock(hData);
+
+    ComPtr<IDataObject> data_object;
+
+    CHK_BOOL(SetClipboardData(RegisterClipboardFormat(TEXT("PNG")), hData));
 
     return S_OK;
 }
@@ -331,3 +421,94 @@ HRESULT decode_image(byte const *bytes,
 
     return S_OK;
 }
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT save_image_file(wchar_t const *filename, byte const *bytes, uint width, uint height, uint pitch)
+{
+    std::wstring extension;
+    CHK_HR(file_get_extension(filename, extension));
+
+    if(extension[0] == L'.') {
+        extension = extension.substr(1);
+    }
+
+    make_uppercase(extension);
+
+    auto found = save_formats.find(extension);
+
+    if(found == save_formats.end()) {
+        return ERROR_UNSUPPORTED_TYPE;
+    }
+
+    output_image_format const &format = found->second;
+
+    auto wic = get_wic();
+
+    if(wic == null) {
+        return E_NOINTERFACE;
+    }
+
+    ComPtr<IWICStream> file_stream;
+    CHK_HR(wic->CreateStream(&file_stream));
+    CHK_HR(file_stream->InitializeFromFilename(filename, GENERIC_WRITE));
+
+    ComPtr<IWICBitmapEncoder> encoder;
+    CHK_HR(wic->CreateEncoder(format.file_format, NULL, &encoder));
+    CHK_HR(encoder->Initialize(file_stream.Get(), WICBitmapEncoderNoCache));
+
+    ComPtr<IWICBitmapFrameEncode> frame;
+    ComPtr<IPropertyBag2> property_bag;
+    CHK_HR(encoder->CreateNewFrame(&frame, &property_bag));
+    CHK_HR(frame->Initialize(NULL));
+    CHK_HR(frame->SetSize(width, height));
+
+    WICPixelFormatGUID pixel_format = format.pixel_format;
+
+    CHK_HR(frame->SetPixelFormat(&pixel_format));
+
+    // create a new wicbitmap using the new pixel format
+
+    uint dst_row_pitch = width * sizeof(uint32);
+    uint64 dst_size = (uint64)dst_row_pitch * height;
+    if(dst_size > UINT_MAX) {
+        return ERROR_NOT_SUPPORTED;
+    }
+    std::vector<byte> buffer(dst_size);
+    byte *dst = buffer.data();
+    byte const *src = bytes;
+
+    if(format.alpha == alpha_supported::with_alpha) {
+        for(uint y = 0; y < height; ++y) {
+            memcpy(dst, src, dst_row_pitch);
+            dst += dst_row_pitch;
+            src += pitch;
+        }
+    } else {
+        for(uint y = 0; y < height; ++y) {
+
+            uint32 const *src_pixel = reinterpret_cast<uint32 const *>(src);
+            byte *dst_pixel = dst;
+            for(uint x = 0; x < width; ++x) {
+                uint32 pixel = *src_pixel++;
+                byte red = pixel & 0xff;
+                byte grn = (pixel >> 8) & 0xff;
+                byte blu = (pixel >> 16) & 0xff;
+                *dst_pixel++ = red;
+                *dst_pixel++ = grn;
+                *dst_pixel++ = blu;
+            }
+
+            dst += dst_row_pitch;
+            src += pitch;
+        }
+    }
+
+    CHK_HR(frame->WritePixels(height, dst_row_pitch, (uint)dst_size, buffer.data()));
+    CHK_HR(frame->Commit());
+    CHK_HR(encoder->Commit());
+
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////

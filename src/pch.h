@@ -93,9 +93,11 @@ using Microsoft::WRL::ComPtr;
 #include <thread>
 #include <set>
 #include <algorithm>
+#include <map>
 #include <unordered_map>
 #include <utility>
 #include <array>
+#include <cstdlib>
 
 //////////////////////////////////////////////////////////////////////
 // Resource IDs

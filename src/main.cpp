@@ -106,7 +106,18 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     CHECK(application.get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
     HWND hwnd;
-    CHK_NULL(hwnd = CreateWindowExW(window_ex_style, App::window_class, localize(IDS_AppName), window_style, rc.x(), rc.y(), rc.w(), rc.h(), null, null, hInstance, &application));
+    CHK_NULL(hwnd = CreateWindowExW(window_ex_style,
+                                    App::window_class,
+                                    localize(IDS_AppName),
+                                    window_style,
+                                    rc.x(),
+                                    rc.y(),
+                                    rc.w(),
+                                    rc.h(),
+                                    null,
+                                    null,
+                                    hInstance,
+                                    &application));
 
     application.setup_initial_windowplacement();
 

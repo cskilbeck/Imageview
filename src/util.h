@@ -93,6 +93,22 @@ template <typename T> T div_point(T a, T b)
 }
 
 //////////////////////////////////////////////////////////////////////
+
+template <typename T> void make_uppercase(T &str)
+{
+    std::transform(
+        str.begin(), str.end(), str.begin(), [](T::value_type x) { return static_cast<T::value_type>(::toupper(x)); });
+}
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T> void make_lowercase(T &str)
+{
+    std::transform(
+        str.begin(), str.end(), str.begin(), [](T::value_type x) { return static_cast<T::value_type>(::tolower(x)); });
+}
+
+//////////////////////////////////////////////////////////////////////
 // wide string conversion
 
 __declspec(selectany) std::wstring_convert<std::codecvt_utf8<wchar>, wchar> wstr_converter;
@@ -196,4 +212,3 @@ inline void display_error(wchar const *message, HRESULT hr)
 
 // if(x == null) { return HRESULT_FROM_WIN32(GetLastError()); }
 #define CHK_NULL(x) _DO_NULL(x, __COUNTER__)
-

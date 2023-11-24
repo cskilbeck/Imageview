@@ -59,6 +59,7 @@ struct App : public CDragDropHelper
         int view_count{ 0 };             // how many times this has been viewed since being loaded
         bool is_cache_load{ false };     // true if being loaded just for cache (don't call warm_cache when it arrives)
         std::vector<byte> pixels;        // decoded pixels from the file, format is always BGRA32
+        bool is_clipboard{ false };      // is it the dummy clipboard image_file?
 
         image img;
 
@@ -142,7 +143,7 @@ struct App : public CDragDropHelper
     void on_process_exit();
     void on_mouse_move(point_s pos);
     void on_raw_mouse_move(point_s pos);
-    void on_mouse_button(point_s pos, int button, int state);
+    void on_mouse_button(point_s pos, uint button, int state);
     void on_mouse_wheel(point_s pos, int delta);
     void on_key_down(int vk_key, LPARAM flags);
     void on_key_up(int vk_key);
@@ -213,7 +214,7 @@ private:
     {
         start_windowed,      // start up windowed
         start_fullscreen,    // start up fullscreen
-        start_remember       // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
+        start_remember    // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
     };
 
     // whether to remember the window position or not
@@ -285,7 +286,8 @@ private:
         HRESULT serialize(serialize_action action, wchar const *save_key_name);
 
         // write or read a settings field to or from the registry - helper for serialize()
-        static HRESULT serialize_setting(settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
+        static HRESULT serialize_setting(
+            settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
     };
 
     settings_t settings;
@@ -308,6 +310,9 @@ private:
 
     // the most recently requested file to show - when a file_load succeeds, if it's this one, show it
     image_file *requested_file{ null };
+
+    // the most recently requested file to show - when a file_load succeeds, if it's this one, show it
+    image_file clipboard_image_file;
 
     // folder scanner thread id so we can PostMessage to it
     uint scanner_thread_id{ (uint)-1 };
@@ -338,6 +343,9 @@ private:
     // kick off a file_loader thread
     void start_file_loader(image_file *f);
 
+    // save current image to a file
+    HRESULT save_image(image_file *f, std::wstring const &filename);
+
     // set this image to the window
     HRESULT show_image(image_file *f);
 
@@ -362,7 +370,7 @@ private:
     // device was lost (eg sleep/resume, another app goes fullscreen)
     HRESULT on_device_lost();
 
-    // copy the current selection into a CF_DIBV5
+    // copy the current selection into a CF_DIBV5, CF_DIB and filecontents (PNG)
     HRESULT copy_selection();
 
     // crop the image to the current selection
@@ -403,7 +411,13 @@ private:
     vec2 clamp_to_texture(vec2 pos) const;
 
     // draw a string with a border and background fill
-    HRESULT draw_string(std::wstring const &text, IDWriteTextFormat *format, vec2 pos, vec2 pivot, float opacity = 1.0f, float corner_radius = 4.0f, float padding = 4.0f);
+    HRESULT draw_string(std::wstring const &text,
+                        IDWriteTextFormat *format,
+                        vec2 pos,
+                        vec2 pivot,
+                        float opacity = 1.0f,
+                        float corner_radius = 4.0f,
+                        float padding = 4.0f);
 
     // get string dimensions with padding
     HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size) const;
@@ -440,6 +454,8 @@ private:
     int window_height{ 720 };
     int old_window_width{ 1280 };
     int old_window_height{ 720 };
+
+    bool popup_menu_active{ false };
 
     // when we're calling SetWindowPos, suppress DPI change handling because it causes a weird problem
     // this isn't a great solution but it does get by. Nobody seems to know the right way to handle that
@@ -521,6 +537,7 @@ private:
     point_s cur_mouse_pos;
     point_s shift_mouse_pos;
     point_s ctrl_mouse_pos;
+    uint64 mouse_click_timestamp[btn_count];
 
     enum class shift_snap_axis_t
     {
@@ -570,12 +587,13 @@ private:
     static cursor_def sel_hover_cursors[16];
 
     // selection admin
-    bool selecting{ false };              // dragging new selection rectangle
-    bool selection_active{ false };       // a defined selection rectangle exists
-    bool drag_selection{ false };         // dragging the existing selection rectangle
-    selection_hover_t selection_hover;    // which part of the selection rectangle being hovered over (all, corner, edge)
-    vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
-    vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
+    bool selecting{ false };           // dragging new selection rectangle
+    bool selection_active{ false };    // a defined selection rectangle exists
+    bool drag_selection{ false };      // dragging the existing selection rectangle
+    selection_hover_t
+        selection_hover;             // which part of the selection rectangle being hovered over (all, corner, edge)
+    vec2 drag_select_pos{ 0, 0 };    // where they originally grabbed the selection rectangle in texels
+    vec2 selection_size{ 0, 0 };     // size of selection rectangle in texels
 
     HCURSOR current_mouse_cursor;
 
@@ -611,7 +629,6 @@ private:
 
     // which frame rendering
     int m_frame{ 0 };
-
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(App::selection_hover_t);
