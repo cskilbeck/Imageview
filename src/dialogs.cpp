@@ -35,13 +35,54 @@ HRESULT select_file_dialog(HWND window, std::wstring &path)
 
 HRESULT save_file_dialog(HWND window, std::wstring &path)
 {
-    // TODO (chs): get this from the list of save_formats in image_decoder.cpp
+    // get file type filter list from save_formats in image_decoder.cpp
 
-    COMDLG_FILTERSPEC file_types[] = { { L"JPEG files", L"*.jpg" },
-                                       { L"PNG files", L"*.png" },
-                                       { L"TIFF files", L"*.tiff" },
-                                       { L"BMP Files", L"*.bmp" } };
-    uint num_file_types = (uint)std::size(file_types);
+    struct filterspec
+    {
+        std::wstring description;
+        std::wstring filter;
+    };
+
+    struct GUIDComparer
+    {
+        bool operator()(const GUID &Left, const GUID &Right) const
+        {
+            return memcmp(&Left, &Right, sizeof(Right)) < 0;
+        }
+    };
+
+    // file type guid can be referenced by more than one extension (eg jpg, jpeg both point at same guid)
+
+    std::map<GUID, filterspec, GUIDComparer> slots;
+
+    for(auto const &fmt : save_formats) {
+
+        std::wstring const &extension = fmt.first;
+        output_image_format const &image_format = fmt.second;
+
+        auto found = slots.find(image_format.file_format);
+
+        if(found == slots.end()) {
+
+            slots[image_format.file_format] = { format(L"%s files", extension.c_str()),
+                                                format(L"*.%s", extension.c_str()) };
+        } else {
+
+            filterspec &spec = found->second;
+            spec.filter = format(L"%s;*.%s", spec.filter.c_str(), extension.c_str());
+        }
+    }
+
+    std::vector<COMDLG_FILTERSPEC> file_specs;
+
+    for(auto &spec : slots) {
+        make_lowercase(spec.second.filter);
+        file_specs.push_back({ spec.second.description.c_str(), spec.second.filter.c_str() });
+    }
+
+    file_specs.push_back({ L"All files", L"*.*" });
+
+    uint num_file_types = static_cast<uint>(file_specs.size());
 
     ComPtr<IFileDialog> pfd;
     DWORD dwFlags;
@@ -52,7 +93,7 @@ HRESULT save_file_dialog(HWND window, std::wstring &path)
     CHK_HR(pfd->GetOptions(&dwFlags));
     CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION |
                            FOS_OVERWRITEPROMPT | FOS_STRICTFILETYPES));
-    CHK_HR(pfd->SetFileTypes(num_file_types, file_types));
+    CHK_HR(pfd->SetFileTypes(num_file_types, file_specs.data()));
     CHK_HR(pfd->SetFileTypeIndex(2));
     CHK_HR(pfd->SetOkButtonLabel(L"Save"));
     CHK_HR(pfd->SetTitle(format(L"%s%s%s", localize(IDS_AppName), L" : ", localize(IDS_SelectFile)).c_str()));

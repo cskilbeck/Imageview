@@ -23,9 +23,11 @@ public:
     virtual ULONG STDMETHODCALLTYPE Release();
 
     // IDWriteFontCollectionLoader methods
-    virtual HRESULT STDMETHODCALLTYPE CreateEnumeratorFromKey(IDWriteFactory *factory,
-                                                              void const *collectionKey,    // [collectionKeySize] in bytes
-                                                              UINT32 collectionKeySize, OUT IDWriteFontFileEnumerator **fontFileEnumerator);
+    virtual HRESULT STDMETHODCALLTYPE
+    CreateEnumeratorFromKey(IDWriteFactory *factory,
+                            void const *collectionKey,    // [collectionKeySize] in bytes
+                            UINT32 collectionKeySize,
+                            OUT IDWriteFontFileEnumerator **fontFileEnumerator);
 
     // Gets the singleton loader instance.
     static IDWriteFontCollectionLoader *GetLoader()
@@ -54,13 +56,13 @@ public:
     ResourceFontContext() = default;
     ~ResourceFontContext();
 
-    HRESULT ResourceFontContext::Initialize(IDWriteFactory *factory);
+    HRESULT Initialize(IDWriteFactory *factory);
 
     HRESULT CreateFontCollection(UINT const *fontCollectionKey,    // [keySize] in bytes
-                                 UINT32 keySize, OUT IDWriteFontCollection **result);
+                                 UINT32 keySize,
+                                 OUT IDWriteFontCollection **result);
 
 private:
-
     // Not copyable or assignable.
     ResourceFontContext(ResourceFontContext const &) = delete;
     void operator=(ResourceFontContext const &) = delete;
@@ -137,8 +139,10 @@ public:
     virtual ULONG STDMETHODCALLTYPE Release();
 
     // IDWriteFontFileLoader methods
-    virtual HRESULT STDMETHODCALLTYPE CreateStreamFromKey(void const *fontFileReferenceKey,    // [fontFileReferenceKeySize] in bytes
-                                                          UINT32 fontFileReferenceKeySize, OUT IDWriteFontFileStream **fontFileStream);
+    virtual HRESULT STDMETHODCALLTYPE
+    CreateStreamFromKey(void const *fontFileReferenceKey,    // [fontFileReferenceKeySize] in bytes
+                        UINT32 fontFileReferenceKeySize,
+                        OUT IDWriteFontFileStream **fontFileStream);
 
     // Gets the singleton loader instance.
     static IDWriteFontFileLoader *GetLoader()
@@ -179,7 +183,9 @@ public:
 
     // IDWriteFontFileStream methods
     virtual HRESULT STDMETHODCALLTYPE ReadFileFragment(void const **fragmentStart,    // [fragmentSize] in bytes
-                                                       UINT64 fileOffset, UINT64 fragmentSize, OUT void **fragmentContext);
+                                                       UINT64 fileOffset,
+                                                       UINT64 fragmentSize,
+                                                       OUT void **fragmentContext);
 
     virtual void STDMETHODCALLTYPE ReleaseFileFragment(void *fragmentContext);
 

@@ -9,10 +9,12 @@
 
 //////////////////////////////////////////////////////////////////////
 
+// TODO (chs): use this table to set up the save dialog file types filter
+
 std::map<std::wstring, output_image_format> save_formats{
     { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, with_alpha } },
-    { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
     { L"JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
+    { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
     { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, without_alpha } },
     { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, with_alpha } }
 };

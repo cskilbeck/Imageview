@@ -145,6 +145,7 @@ struct App : public CDragDropHelper
     void on_raw_mouse_move(point_s pos);
     void on_mouse_button(point_s pos, uint button, int state);
     void on_mouse_wheel(point_s pos, int delta);
+    void on_command(uint command);
     void on_key_down(int vk_key, LPARAM flags);
     void on_key_up(int vk_key);
     bool on_setcursor();
@@ -275,7 +276,7 @@ private:
         HRESULT load();
 
         // where in the registry to put the settings. this does not need to be localized... right?
-        static wchar constexpr *settings_key_name{ L"Software\\ImageView" };
+        static wchar constexpr settings_key_name[] = L"Software\\ImageView";
 
         enum class serialize_action
         {
@@ -289,6 +290,8 @@ private:
         static HRESULT serialize_setting(
             settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
     };
+
+    void reset_settings();
 
     settings_t settings;
     settings_t default_settings;

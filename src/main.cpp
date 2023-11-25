@@ -308,14 +308,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     } break;
 
     case WM_COMMAND:
-        switch(LOWORD(wParam)) {
-        case ID_ACCELERATOR_PASTE:
-            app->on_paste();
-            break;
-        case ID_ACCELERATOR_COPY:
-            app->on_copy();
-            break;
-        }
+        app->on_command(LOWORD(wParam));
         break;
 
     case WM_KEYDOWN:

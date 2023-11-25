@@ -13,6 +13,8 @@
 // use utf_8 everywhere
 // clean up namespaces
 // switch to C++20/format {}
+// logging with levels
+// fix all the leaks
 
 #include "pch.h"
 
@@ -274,6 +276,9 @@ HRESULT App::on_paste()
 
     image_file &f = clipboard_image_file;
     f.is_clipboard = true;
+    f.bytes.clear();
+    f.pixels.clear();
+    f.hresult = E_FAIL;
 
     if(IsClipboardFormatAvailable(cf_png)) {
 
@@ -1260,6 +1265,7 @@ void App::on_mouse_button(point_s pos, uint button, int state)
 
                     popup_menu_active = true;
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
+                    m_timer.reset();
                     popup_menu_active = false;
                 }
             }
@@ -1522,127 +1528,140 @@ void App::on_key_up(int vk_key)
 }
 
 //////////////////////////////////////////////////////////////////////
-// WM_KEYDOWN
 
-void App::on_key_down(int vk_key, LPARAM flags)
+void App::on_command(uint command)
 {
-    uint f = HIWORD(flags);
-    bool repeat = (f & KF_REPEAT) == KF_REPEAT;    // previous key-state flag, 1 on autorepeat
+    switch(command) {
 
-    if(repeat) {
-        return;
-    }
-
-    bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-    bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-
-    switch(vk_key) {
-
-    case ' ':
+    case ID_VIEW_FULLSCREEN:
         toggle_fullscreen();
         break;
 
-    case 'Z':
+    case ID_PASTE:
+        on_paste();
+        break;
+
+    case ID_COPY:
+        on_copy();
+        break;
+
+    case ID_ZOOM_RESET:
         reset_zoom(settings.zoom_mode);
         break;
 
-    case 'C':
-        if(shift && !ctrl) {
-            crop_to_selection();
-        } else if(!shift && !ctrl) {
-            center_in_window();
-        }
+    case ID_ZOOM_CENTER:
+        center_in_window();
         break;
 
-    case 'A':
-        if(ctrl) {
-            select_all();
-        } else {
-            settings.grid_enabled = !settings.grid_enabled;
-        }
+    case ID_SELECT_CROP:
+        crop_to_selection();
         break;
 
-    case 'G':
-        if(shift) {
-            settings.fixed_grid = !settings.fixed_grid;
-        } else {
-            settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
-        }
+    case ID_SELECT_ALL:
+        select_all();
         break;
 
-    case 'R':
-        if(shift && ctrl &&
-           MessageBox(window, L"Reset settings to factory defaults!?", localize(IDS_AppName), MB_YESNO) == IDYES) {
-
-            bool old_fullscreen = settings.fullscreen;
-            WINDOWPLACEMENT old_windowplacement = settings.window_placement;
-            settings = default_settings;
-            if(old_fullscreen != settings.fullscreen) {
-                toggle_fullscreen();
-            }
-        }
+    case ID_SELECT_NONE:
+        selection_active = false;
         break;
 
-    case '1':
+    case ID_VIEW_ALPHA:
+        settings.grid_enabled = !settings.grid_enabled;
+        break;
+
+    case ID_VIEW_FIXEDGRID:
+        settings.fixed_grid = !settings.fixed_grid;
+        break;
+
+    case ID_VIEW_GRIDSIZE:
+        settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
+        break;
+
+    case ID_VIEW_SETBACKGROUNDCOLOR: {
+        uint32 bg_color = color_to_uint32(settings.background_color);
+        if(SUCCEEDED(select_color_dialog(window, bg_color, L"Choose background color"))) {
+            settings.background_color = uint32_to_color(bg_color);
+        }
+    }
+
+    case ID_ZOOM_1:
         settings.zoom_mode = reset_zoom_mode::one_to_one;
         reset_zoom(settings.zoom_mode);
         break;
 
-    case 'F':
+    case ID_ZOOM_FIT:
         settings.zoom_mode = reset_zoom_mode::fit_to_window;
         reset_zoom(settings.zoom_mode);
         break;
 
-    case 'S':
-        if(ctrl) {
-            std::wstring filename;
-            if(SUCCEEDED(save_file_dialog(window, filename))) {
-
-                image const &img = current_image_file->img;
-                HRESULT hr = save_image_file(filename.c_str(), img.pixels, img.width, img.height, img.row_pitch);
-                if(FAILED(hr)) {
-                    MessageBox(window, windows_error_message(hr).c_str(), L"Can't save file", MB_ICONEXCLAMATION);
-                }
-            }
-        } else {
-            settings.zoom_mode = reset_zoom_mode::shrink_to_fit;
-            reset_zoom(settings.zoom_mode);
-        }
+    case ID_ZOOM_SHRINKTOFIT:
+        settings.zoom_mode = reset_zoom_mode::shrink_to_fit;
+        reset_zoom(settings.zoom_mode);
         break;
 
-    case 'X':
+    case ID_ZOOM_SELECTION:
         zoom_to_selection();
         break;
 
-    case VK_LEFT:
+    case ID_FILE_PREV:
         move_file_cursor(-1);
         break;
 
-    case VK_RIGHT:
+    case ID_FILE_NEXT:
         move_file_cursor(1);
         break;
 
-    case 'O': {
+    case ID_FILE_OPEN: {
         std::wstring selected_filename;
         if(SUCCEEDED(select_file_dialog(window, selected_filename))) {
             load_image(selected_filename.c_str());
         }
     } break;
 
-    case 'B': {
-        uint32 bg_color = color_to_uint32(settings.background_color);
-        if(SUCCEEDED(select_color_dialog(window, bg_color, L"Choose background color"))) {
-            settings.background_color = uint32_to_color(bg_color);
+    case ID_FILE_SAVE: {
+
+        std::wstring filename;
+        if(SUCCEEDED(save_file_dialog(window, filename))) {
+
+            image const &img = current_image_file->img;
+            HRESULT hr = save_image_file(filename.c_str(), img.pixels, img.width, img.height, img.row_pitch);
+            if(FAILED(hr)) {
+                MessageBox(window, windows_error_message(hr).c_str(), L"Can't save file", MB_ICONEXCLAMATION);
+            } else {
+                set_message(format(L"Saved %s", filename.c_str()).c_str(), 5);
+            }
         }
     } break;
 
-    case 'N':
-        selection_active = false;
-        break;
-
-    case VK_ESCAPE:
+    case ID_EXIT:
         DestroyWindow(window);
         break;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void App::reset_settings()
+{
+    if(MessageBox(window, L"Reset settings to factory defaults!?", localize(IDS_AppName), MB_YESNO) == IDYES) {
+
+        bool old_fullscreen = settings.fullscreen;
+        WINDOWPLACEMENT old_windowplacement = settings.window_placement;
+        settings = default_settings;
+        if(old_fullscreen != settings.fullscreen) {
+            toggle_fullscreen();
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+// WM_KEYDOWN
+
+void App::on_key_down(int vk_key, LPARAM flags)
+{
+    UNREFERENCED_PARAMETER(flags);
+
+    switch(vk_key) {
 
     case VK_SHIFT:
         shift_mouse_pos = cur_mouse_pos;
@@ -1663,12 +1682,14 @@ HRESULT App::update()
 {
     m_timer.update();
 
-    auto lerp = [&](float &a, float &b) {
+    float delta_t = static_cast<float>(std::min(m_timer.delta(), 0.25));
+
+    auto lerp = [=](float &a, float &b) {
         float d = b - a;
         if(fabsf(d) <= 1.0f) {
             a = b;
         } else {
-            a += d * 20 * (float)m_timer.delta();
+            a += d * 20 * delta_t;
         }
     };
 
