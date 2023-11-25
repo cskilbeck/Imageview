@@ -185,6 +185,7 @@ BEGIN
             MENUITEM "Alpha\tA",                    ID_VIEW_ALPHA
             MENUITEM "Set background color\tB",     ID_VIEW_SETBACKGROUNDCOLOR
             MENUITEM "Cycle grid size\tG",          ID_VIEW_GRIDSIZE
+            MENUITEM "Fixed grid\tShift-G",         ID_VIEW_FIXEDGRID
         END
         POPUP "Select"
         BEGIN

@@ -53,13 +53,13 @@ HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    void *data = GlobalLock(reinterpret_cast<HGLOBAL>(c));
+    void *data = GlobalLock(c);
     if(data == null) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
     defer(GlobalUnlock(c));
 
-    size_t size = GlobalSize(reinterpret_cast<HGLOBAL>(c));
+    size_t size = GlobalSize(c);
     if(size == 0) {
         return HRESULT_FROM_WIN32(GetLastError());
     }

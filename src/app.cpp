@@ -12,7 +12,7 @@
 // use std::string everywhere
 // use utf_8 everywhere
 // clean up namespaces
-//
+// switch to C++20/format {}
 
 #include "pch.h"
 
@@ -265,32 +265,40 @@ HRESULT App::on_paste()
         return E_UNEXPECTED;
     }
 
-    if(IsClipboardFormatAvailable(CF_DIBV5)) {
+    // if clipboard contains a PNG or DIB, make it look like a file we just loaded
 
-        // if clipboard contains a DIB, make it look like a file we just loaded
-        image_file &f = clipboard_image_file;
-        f.is_clipboard = true;
+    UINT cf_png = RegisterClipboardFormat(L"PNG");
+    UINT cf_filename = RegisterClipboardFormat(CFSTR_FILENAMEW);
+
+    bool got_clipboard = false;
+
+    image_file &f = clipboard_image_file;
+    f.is_clipboard = true;
+
+    if(IsClipboardFormatAvailable(cf_png)) {
+
+        CHK_HR(append_clipboard_to_buffer(f.bytes, cf_png));
+        got_clipboard = true;
+
+    } else if(IsClipboardFormatAvailable(CF_DIB)) {
 
         f.bytes.resize(sizeof(BITMAPFILEHEADER));
-        CHK_HR(append_clipboard_to_buffer(f.bytes, CF_DIBV5));
+        CHK_HR(append_clipboard_to_buffer(f.bytes, CF_DIB));
+        got_clipboard = true;
 
         BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(f.bytes.data());
-
-        BITMAPV5HEADER *i = reinterpret_cast<BITMAPV5HEADER *>(b + 1);
-
+        BITMAPINFOHEADER *i = reinterpret_cast<BITMAPINFOHEADER *>(b + 1);
         memset(b, 0, sizeof(*b));
         b->bfType = 'MB';
         b->bfSize = (DWORD)f.bytes.size();
-        b->bfOffBits = sizeof(BITMAPV5HEADER) + sizeof(BITMAPFILEHEADER) + i->bV5ProfileSize;
-
-        if(i->bV5Compression == BI_BITFIELDS) {
+        b->bfOffBits = sizeof(BITMAPINFOHEADER) + sizeof(BITMAPFILEHEADER);
+        if(i->biCompression == BI_BITFIELDS) {
             b->bfOffBits += 12;
         }
+    }
 
+    if(got_clipboard) {
         selection_active = false;
-
-        // TODO(chs): fix this mess:
-
         f.filename = L"Clipboard";
         f.hresult = S_OK;
         f.index = -1;
@@ -302,17 +310,18 @@ HRESULT App::on_paste()
         return show_image(&f);
     }
 
-    UINT filename_fmt = RegisterClipboardFormat(CFSTR_FILENAMEW);
     UINT fmt = 0;
-    if(IsClipboardFormatAvailable(filename_fmt)) {
-        fmt = filename_fmt;
+    if(IsClipboardFormatAvailable(cf_filename)) {
+        fmt = cf_filename;
     } else if(IsClipboardFormatAvailable(CF_UNICODETEXT)) {
         fmt = CF_UNICODETEXT;
     }
-
-    std::vector<byte> buffer;
-    CHK_HR(append_clipboard_to_buffer(buffer, fmt));
-    return on_drop_string(reinterpret_cast<wchar const *>(buffer.data()));
+    if(fmt != 0) {
+        std::vector<byte> buffer;
+        CHK_HR(append_clipboard_to_buffer(buffer, fmt));
+        return on_drop_string(reinterpret_cast<wchar const *>(buffer.data()));
+    }
+    return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////

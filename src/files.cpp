@@ -17,7 +17,8 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
     }
 
     // create an async file handle
-    HANDLE file_handle = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
+    HANDLE file_handle =
+        CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
     if(file_handle == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -45,7 +46,8 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
     defer(CloseHandle(overlapped.hEvent));
 
     // issue the file read
-    if(!ReadFile(file_handle, buffer.data(), file_size.LowPart, null, &overlapped) && GetLastError() != ERROR_IO_PENDING) {
+    if(!ReadFile(file_handle, buffer.data(), file_size.LowPart, null, &overlapped) &&
+       GetLastError() != ERROR_IO_PENDING) {
 
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -103,14 +105,19 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT scan_folder2(wchar const *path, std::vector<wchar const *> extensions, scan_folder_sort_field sort_field, scan_folder_sort_order order, folder_scan_result **result,
+HRESULT scan_folder2(wchar const *path,
+                     std::vector<wchar const *> extensions,
+                     scan_folder_sort_field sort_field,
+                     scan_folder_sort_order order,
+                     folder_scan_result **result,
                      HANDLE cancel_event)
 {
     if(result == null) {
         return ERROR_BAD_ARGUMENTS;
     }
 
-    HANDLE dir_handle = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
+    HANDLE dir_handle =
+        CreateFile(path, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
 
     if(dir_handle == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -189,7 +196,8 @@ HRESULT scan_folder2(wchar const *path, std::vector<wchar const *> extensions, s
                             if(_wcsnicmp(i, find_ext, ext_len) == 0) {
 
                                 // it's in the list, add it to the vector of files
-                                files.emplace_back(std::wstring(f->FileName, f->FileName + namelen), f->LastWriteTime.QuadPart);
+                                files.emplace_back(std::wstring(f->FileName, f->FileName + namelen),
+                                                   f->LastWriteTime.QuadPart);
                                 break;
                             }
                         }
@@ -250,7 +258,8 @@ HRESULT scan_folder2(wchar const *path, std::vector<wchar const *> extensions, s
 BOOL file_exists(wchar const *name)
 {
     DWORD x = GetFileAttributes(name);
-    return x != 0xffffffff && (x & FILE_ATTRIBUTE_NORMAL) != 0;
+    DWORD const not_file = FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_OFFLINE;
+    return x != INVALID_FILE_ATTRIBUTES && ((x & not_file) == 0);
 }
 
 //////////////////////////////////////////////////////////////////////

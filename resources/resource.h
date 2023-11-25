@@ -42,13 +42,14 @@
 #define ID_SELECT_ALL                   40032
 #define ID_SELECT_NONE                  40033
 #define ID_RECENT_DUMMY                 40034
+#define ID_VIEW_FIXEDGRID               40035
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        113
-#define _APS_NEXT_COMMAND_VALUE         40035
+#define _APS_NEXT_COMMAND_VALUE         40036
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
