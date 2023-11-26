@@ -1,6 +1,5 @@
 //////////////////////////////////////////////////////////////////////
 // fix the cache
-// monitor DPI / orientation awareness
 // show message if file load is slow
 // settings dialog
 // customise keyboard shortcuts / help screen
@@ -54,7 +53,7 @@ namespace
     {
         return (GetAsyncKeyState(key) & 0x8000) != 0;
     }
-};    // namespace
+}
 
 #define d3d_name(x) set_d3d_debug_name(x, #x)
 
@@ -540,6 +539,7 @@ HRESULT App::warm_cache()
 
                     uint64 img_size;
                     if(SUCCEEDED(get_image_file_size(this_file.c_str(), &img_size))) {
+
                         if(img_size < settings.cache_size) {
 
                             while(cache_in_use + img_size > settings.cache_size) {
@@ -667,15 +667,6 @@ HRESULT App::load_image(wchar const *filepath)
 
     std::wstring filename = std::wstring(filepath);
 
-    // if filename is '?open', show OpenFileDialog
-
-    // if(filename.compare(L"?open") == 0) {
-
-    //    std::wstring selected_filename;
-    //    CHK_HR(select_file_dialog(window, selected_filename));
-    //    filename = selected_filename.c_str();
-    //}
-
     // get somewhat canonical filepath and parts thereof
 
     std::wstring folder;
@@ -692,12 +683,12 @@ HRESULT App::load_image(wchar const *filepath)
         folder.pop_back();
     }
 
-    // if it's in the cache already, just decode and show it
+    // if it's in the cache already, just show it
 
     auto found = loaded_files.find(fullpath);
     if(found != loaded_files.end()) {
         Log(L"Already got %s", name.c_str());
-        display_image(found->second);
+        CHK_HR(display_image(found->second));
         CHK_HR(warm_cache());
         return S_OK;
     }
@@ -734,6 +725,8 @@ HRESULT App::load_image(wchar const *filepath)
 
         // tell the scanner thread to scan this new folder
         // when it's done it will notify main thread with a windows message
+
+        // TODO(chs): CLEAR THE CACHE HERE....
 
         current_folder = folder;
 
@@ -797,6 +790,8 @@ void App::on_file_load_complete(LPARAM lparam)
     // transfer from loading to loaded
     loading_files.erase(f->filename);
     loaded_files[f->filename] = f;
+
+    std::lock_guard lock(cache_mutex);
 
     // update cache total size
     cache_in_use += f->total_size();
@@ -1164,6 +1159,137 @@ void App::check_selection_hover(vec2 pos)
 }
 
 //////////////////////////////////////////////////////////////////////
+
+HRESULT App::load_accelerators()
+{
+    CHK_NULL(accelerators = LoadAccelerators(GetModuleHandle(null), MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+// Setup the shortcut key labels in a menu based in the accelerators
+
+HRESULT App::setup_menu_accelerators(HMENU menu)
+{
+    if(accelerators == null) {
+        return ERROR_INVALID_DATA;
+    }
+
+    HKL keyboard_layout = GetKeyboardLayout(GetCurrentThreadId());
+
+    CHK_NULL(keyboard_layout);
+
+    UINT num_accelerators = CopyAcceleratorTable(accelerators, null, 0);
+
+    if(num_accelerators == 0) {
+        return ERROR_NOT_FOUND;
+    }
+
+    std::vector<ACCEL> accel_table;
+    accel_table.resize(num_accelerators);
+
+    UINT num_accelerators_got = CopyAcceleratorTable(accelerators, accel_table.data(), num_accelerators);
+
+    if(num_accelerators_got != num_accelerators) {
+        return ERROR_NOT_ALL_ASSIGNED;
+    }
+
+    byte keys[256];
+    memset(keys, 0, sizeof(keys));
+
+    // for each accelerator
+
+    for(auto const &a : accel_table) {
+
+        MENUITEMINFO mii;
+        mii.cbSize = sizeof(mii);
+        mii.fMask = MIIM_STRING | MIIM_FTYPE | MIIM_ID;
+        mii.dwItemData = 0;
+        mii.dwTypeData = null;
+
+        // find the menu item which that accelerator is the hotkey for
+
+        if(GetMenuItemInfo(menu, a.cmd, MF_BYCOMMAND, &mii)) {
+
+            // setup the menu item string by appending a tab and then the hotkey text
+
+            if(mii.fType == MFT_STRING) {
+
+                std::wstring text;
+                text.resize(mii.cbSize + 1);
+                mii.dwTypeData = text.data();
+                mii.cch = static_cast<uint>(text.size());
+                CHK_BOOL(GetMenuItemInfo(menu, a.cmd, MF_BYCOMMAND, &mii));
+
+                // truncate if there's already a tab
+
+                text = text.substr(0, text.find(L'\t'));
+
+                // handle some keys differently because GetKeyNameText is not always useful
+
+                wchar key_name[256];
+                switch(a.key) {
+                case VK_LEFT:
+                    wcsncpy_s(key_name, L"Left", 256);
+                    break;
+                case VK_RIGHT:
+                    wcsncpy_s(key_name, L"Right", 256);
+                    break;
+                case VK_UP:
+                    wcsncpy_s(key_name, L"Up", 256);
+                    break;
+                case VK_DOWN:
+                    wcsncpy_s(key_name, L"Down", 256);
+                    break;
+                case VK_PRIOR:
+                    wcsncpy_s(key_name, L"Page Up", 256);
+                    break;
+                case VK_NEXT:
+                    wcsncpy_s(key_name, L"Page Down", 256);
+                    break;
+                default:
+                    uint scan_code = MapVirtualKeyEx(a.key, MAPVK_VK_TO_VSC, keyboard_layout);
+                    GetKeyNameText((scan_code & 0x7f) << 16, key_name, 256);
+                    break;
+                }
+
+                // build the label with modifier keys
+
+                std::wstring key_label;
+
+                auto append = [](std::wstring &a, wchar const *b) {
+                    if(!a.empty()) {
+                        a.append(L"-");
+                    }
+                    a.append(b);
+                };
+
+                if(a.fVirt & FCONTROL) {
+                    append(key_label, L"Ctrl");
+                }
+                if(a.fVirt & FSHIFT) {
+                    append(key_label, L"Shift");
+                }
+                if(a.fVirt & FALT) {
+                    append(key_label, L"Alt");
+                }
+                append(key_label, key_name);
+
+                // setup the menu item text
+
+                text = format(L"%s\t%s", text.c_str(), key_label.c_str());
+                mii.dwTypeData = text.data();
+                mii.cch = static_cast<uint>(text.size());
+                mii.fMask = MIIM_STRING;
+
+                CHK_BOOL(SetMenuItemInfo(menu, a.cmd, MF_BYCOMMAND, &mii));
+            }
+        }
+    }
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
 // call this from WM_NCCREATE when window is first created
 
 HRESULT App::set_window(HWND hwnd)
@@ -1263,6 +1389,8 @@ void App::on_mouse_button(point_s pos, uint button, int state)
                     POINT screen_pos{ click_pos.x, click_pos.y };
                     ClientToScreen(window, &screen_pos);
 
+                    setup_menu_accelerators(popup_menu);
+
                     popup_menu_active = true;
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
                     m_timer.reset();
@@ -1311,6 +1439,7 @@ void App::on_mouse_move(point_s pos)
     }
 
     if(shift_snap) {
+
         switch(shift_snap_axis) {
 
         case shift_snap_axis_t::none: {
@@ -1520,6 +1649,7 @@ void App::on_key_up(int vk_key)
         ScreenToClient(window, &p);
         shift_snap = false;
         on_mouse_move(p);
+        Log(L"!!!!!!!!!!!!!!!!");
     } break;
     case VK_CONTROL:
         ctrl_snap = false;
@@ -1661,12 +1791,17 @@ void App::on_key_down(int vk_key, LPARAM flags)
 {
     UNREFERENCED_PARAMETER(flags);
 
+    uint f = HIWORD(flags);
+    bool repeat = (f & KF_REPEAT) == KF_REPEAT;    // previous key-state flag, 1 on autorepeat
+
     switch(vk_key) {
 
     case VK_SHIFT:
-        shift_mouse_pos = cur_mouse_pos;
-        shift_snap = true;
-        shift_snap_axis = shift_snap_axis_t::none;
+        if(!repeat) {
+            shift_mouse_pos = cur_mouse_pos;
+            shift_snap = true;
+            shift_snap_axis = shift_snap_axis_t::none;
+        }
         break;
 
     case VK_CONTROL:
@@ -1843,9 +1978,13 @@ HRESULT App::update()
 void App::select_all()
 {
     if(image_texture.Get() != 0) {
+        drag_select_pos = { 0, 0 };
         select_anchor = { 0, 0 };
         select_current = { (float)texture_width - 1, (float)texture_height - 1 };
+        selection_size = sub_point(select_current, select_anchor);
         selection_active = true;
+        selecting = false;
+        drag_selection = false;
     }
 }
 
@@ -1857,8 +1996,6 @@ HRESULT App::crop_to_selection()
     if(!selection_active) {
         return E_ABORT;
     }
-
-    // create a file_loader which represents the contents of the selection
 
     return S_OK;
 }

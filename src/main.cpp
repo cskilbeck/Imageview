@@ -128,15 +128,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     Rid[0].hwndTarget = hwnd;
     RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
-    HACCEL haccel;
-
-    CHK_NULL(haccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
+    CHK_HR(application.load_accelerators());
 
     MSG msg;
 
     do {
         if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
-            if(!TranslateAccelerator(hwnd, haccel, &msg)) {
+            if(!TranslateAccelerator(hwnd, application.accelerators, &msg)) {
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }

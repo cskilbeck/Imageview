@@ -1,5 +1,6 @@
 // Microsoft Visual C++ generated resource script.
 //
+// clang-format off
 #include "resource.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
@@ -8,7 +9,6 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "winres.h"
-
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
@@ -16,18 +16,56 @@
 // English (Neutral) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-LANGUAGE LANG_ENGLISH,
-    SUBLANG_NEUTRAL
+LANGUAGE LANG_ENGLISH, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-        /////////////////////////////////////////////////////////////////////////////
-        //
-        // String Table
-        //
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
 
-        STRINGTABLE BEGIN IDS_AppName "ImageView" IDS_OldCpu "Your computer is too old to run %s" END
+STRINGTABLE
+BEGIN
+    IDS_AppName             "ImageView"
+    IDS_OldCpu              "Your computer is too old to run %s"
+END
 
-            STRINGTABLE BEGIN IDS_SelectFile "Select file" END
+STRINGTABLE
+BEGIN
+    IDS_SelectFile          "Select file"
+END
+
+STRINGTABLE
+BEGIN
+    ID_SELECT_ALL           "Select all"
+    ID_SELECT_NONE          "Select none"
+    ID_VIEW_FIXEDGRID       "Toggle fixed grid"
+    ID_ZOOM_RESET           "Reset zoom"
+    ID_COPY                 "Copy"
+    ID_PASTE                "Paste"
+    ID_EXIT                 "Exit"
+    ID_FILE_OPEN            "Open file"
+    ID_SELECT_CROP          "Crop to selection"
+END
+
+STRINGTABLE
+BEGIN
+    ID_FILE_NEXT            "Next file"
+    ID_FILE_PREV            "Previous file"
+    ID_VIEW_SETBACKGROUNDCOLOR "Set backlground color"
+    ID_ZOOM_SHRINKTOFIT     "Zoom shrink to fit"
+    ID_VIEW_GRIDSIZE        "Cycle grid size"
+    ID_VIEW_FULLSCREEN      "Toggle fullscreen"
+END
+
+STRINGTABLE
+BEGIN
+    ID_FILE_SAVE            "Save File"
+    ID_VIEW_ALPHA           "Toggle Alpha"
+    ID_ZOOM_FIT             "Zoom to fit"
+    ID_ZOOM_SELECTION       "Zoom to selection"
+    ID_ZOOM_1               "Zoom 1:1"
+END
 
 #endif    // English (Neutral) resources
 /////////////////////////////////////////////////////////////////////////////
@@ -37,18 +75,24 @@ LANGUAGE LANG_ENGLISH,
 // French (Neutral) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_FRA)
-                LANGUAGE LANG_FRENCH,
-    SUBLANG_NEUTRAL
+LANGUAGE LANG_FRENCH, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-        /////////////////////////////////////////////////////////////////////////////
-        //
-        // String Table
-        //
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
 
-        STRINGTABLE BEGIN IDS_AppName "L'ImageVieweur" IDS_OldCpu "Votre ordinateur est trop vieux pour exécuter %s" END
+STRINGTABLE
+BEGIN
+    IDS_AppName             "L'ImageVieweur"
+    IDS_OldCpu              "Votre ordinateur est trop vieux pour exécuter %s"
+END
 
-            STRINGTABLE BEGIN IDS_SelectFile "Choisir le dossier" END
+STRINGTABLE
+BEGIN
+    IDS_SelectFile          "Choisir le dossier"
+END
 
 #endif    // French (Neutral) resources
 /////////////////////////////////////////////////////////////////////////////
@@ -58,16 +102,15 @@ LANGUAGE LANG_ENGLISH,
 // English (United States) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-                LANGUAGE LANG_ENGLISH,
-    SUBLANG_ENGLISH_US
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
 
-        /////////////////////////////////////////////////////////////////////////////
-        //
-        // Cursor
-        //
+/////////////////////////////////////////////////////////////////////////////
+//
+// Cursor
+//
 
-        IDC_CURSOR_HAND CURSOR "hand.cur"
+IDC_CURSOR_HAND         CURSOR                  "hand.cur"
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
@@ -77,81 +120,137 @@ LANGUAGE LANG_ENGLISH,
 // English (United Kingdom) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
-    LANGUAGE LANG_ENGLISH,
-    SUBLANG_ENGLISH_UK
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 #pragma code_page(1252)
 
 #ifdef APSTUDIO_INVOKED
-    /////////////////////////////////////////////////////////////////////////////
-    //
-    // TEXTINCLUDE
-    //
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
 
-    1 TEXTINCLUDE BEGIN "resource.h\0" END
+1 TEXTINCLUDE
+BEGIN
+    "resource.h\0"
+END
 
-    2 TEXTINCLUDE BEGIN "#include winres.h\r\n"
-                        "\0" END
+2 TEXTINCLUDE
+BEGIN
+    "#include winres.h\0"
+END
 
-    3 TEXTINCLUDE BEGIN "\r\n"
-                        "\0" END
+3 TEXTINCLUDE
+BEGIN
+    "\r\n"
+    "\0"
+END
 
 #endif    // APSTUDIO_INVOKED
 
 
-                            /////////////////////////////////////////////////////////////////////////////
-                            //
-                            // Icon
-                            //
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
 
-                            // Icon with lowest ID value placed first to ensure application icon
-                            // remains consistent on all systems.
-                            IDI_ICON_DEFAULT ICON "magnifying_glass.ico"
-
-
-    /////////////////////////////////////////////////////////////////////////////
-    //
-    // Font
-    //
-
-    IDR_FONT_NOTO FONT "NotoSans-Regular.ttf"
-
-    IDR_FONT_ROBOTO FONT "RobotoMono-Regular.ttf"
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON_DEFAULT        ICON                    "magnifying_glass.ico"
 
 
-    /////////////////////////////////////////////////////////////////////////////
-    //
-    // Accelerator
-    //
+/////////////////////////////////////////////////////////////////////////////
+//
+// Font
+//
 
-    IDR_ACCELERATORS_EN_UK ACCELERATORS BEGIN "C",
-    ID_COPY, VIRTKEY, CONTROL, NOINVERT VK_ESCAPE, ID_EXIT, VIRTKEY, NOINVERT VK_RIGHT, ID_FILE_NEXT, VIRTKEY,
-    NOINVERT "O", ID_FILE_OPEN, VIRTKEY, NOINVERT VK_LEFT, ID_FILE_PREV, VIRTKEY, NOINVERT "S", ID_FILE_SAVE, VIRTKEY,
-    CONTROL, NOINVERT "V", ID_PASTE, VIRTKEY, CONTROL, NOINVERT "A", ID_SELECT_ALL, VIRTKEY, NOINVERT "C",
-    ID_SELECT_CROP, VIRTKEY, SHIFT, CONTROL, NOINVERT "N", ID_SELECT_NONE, VIRTKEY, NOINVERT "A", ID_VIEW_ALPHA,
-    VIRTKEY, NOINVERT "G", ID_VIEW_FIXEDGRID, VIRTKEY, SHIFT, CONTROL, NOINVERT VK_SPACE, ID_VIEW_FULLSCREEN, VIRTKEY,
-    NOINVERT "G", ID_VIEW_GRIDSIZE, VIRTKEY, NOINVERT "B", ID_VIEW_SETBACKGROUNDCOLOR, VIRTKEY, NOINVERT "1", ID_ZOOM_1,
-    VIRTKEY, NOINVERT "F", ID_ZOOM_FIT, VIRTKEY, NOINVERT "Z", ID_ZOOM_RESET, VIRTKEY, NOINVERT "S",
-    ID_ZOOM_SHRINKTOFIT, VIRTKEY, NOINVERT "X", ID_ZOOM_SELECTION, VIRTKEY,
-    NOINVERT END
+IDR_FONT_NOTO           FONT                    "NotoSans-Regular.ttf"
+
+IDR_FONT_ROBOTO         FONT                    "RobotoMono-Regular.ttf"
 
 
-        /////////////////////////////////////////////////////////////////////////////
-        //
-        // Menu
-        //
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
 
-        IDR_MENU_POPUP MENU BEGIN POPUP "Popup" BEGIN POPUP "FIle" BEGIN MENUITEM "Open\tO",
-    ID_FILE_OPEN MENUITEM "Save\tCtrl-S", ID_FILE_SAVE POPUP "Open recent" BEGIN MENUITEM "DUMMY",
-    ID_RECENT_DUMMY END MENUITEM "Next\tRight", ID_FILE_NEXT MENUITEM "Previous\tLeft",
-    ID_FILE_PREVIOUS MENUITEM SEPARATOR MENUITEM "Settings", ID_FILE_SETTINGS END POPUP "Zoom" BEGIN MENUITEM "1:1\t1",
-    ID_ZOOM_1 MENUITEM "Fit to window\tF", ID_ZOOM_FIT MENUITEM "Shrink to fit\tS",
-    ID_ZOOM_SHRINKTOFIT MENUITEM "Selection\tX", ID_ZOOM_SELECTION MENUITEM "Center\tC",
-    ID_ZOOM_CENTER MENUITEM "Reset\tZ", ID_ZOOM_RESET END POPUP "View" BEGIN MENUITEM "Fullscreen\tSPACE",
-    ID_VIEW_FULLSCREEN MENUITEM "Alpha\tA", ID_VIEW_ALPHA MENUITEM "Set background color\tB",
-    ID_VIEW_SETBACKGROUNDCOLOR MENUITEM "Cycle grid size\tG", ID_VIEW_GRIDSIZE MENUITEM "Fixed grid\tShift-G",
-    ID_VIEW_FIXEDGRID END POPUP "Select" BEGIN MENUITEM "All\tA", ID_SELECT_ALL MENUITEM "None\tN",
-    ID_SELECT_NONE MENUITEM "Crop", ID_SELECT_CROP END MENUITEM SEPARATOR MENUITEM "Copy\tCtrl-C",
-    ID_COPY MENUITEM "Paste\tCtrl-V", ID_PASTE MENUITEM SEPARATOR MENUITEM "Exit\tESC", ID_EXIT END END
+IDR_ACCELERATORS_EN_UK ACCELERATORS
+BEGIN
+    "C",            ID_COPY,                VIRTKEY, CONTROL, NOINVERT
+    VK_ESCAPE,      ID_EXIT,                VIRTKEY, NOINVERT
+    VK_RIGHT,       ID_FILE_NEXT,           VIRTKEY, NOINVERT
+    "O",            ID_FILE_OPEN,           VIRTKEY, NOINVERT
+    VK_LEFT,        ID_FILE_PREV,           VIRTKEY, NOINVERT
+    "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL, NOINVERT
+    "V",            ID_PASTE,               VIRTKEY, CONTROL, NOINVERT
+    "A",            ID_SELECT_ALL,          VIRTKEY, NOINVERT
+    "C",            ID_SELECT_CROP,         VIRTKEY, SHIFT, CONTROL, NOINVERT
+    "N",            ID_SELECT_NONE,         VIRTKEY, NOINVERT
+    "A",            ID_VIEW_ALPHA,          VIRTKEY, NOINVERT
+    "G",            ID_VIEW_FIXEDGRID,      VIRTKEY, SHIFT, CONTROL, NOINVERT
+    VK_SPACE,       ID_VIEW_FULLSCREEN,     VIRTKEY, NOINVERT
+    "G",            ID_VIEW_GRIDSIZE,       VIRTKEY, NOINVERT
+    "B",            ID_VIEW_SETBACKGROUNDCOLOR, VIRTKEY, NOINVERT
+    "1",            ID_ZOOM_1,              VIRTKEY, NOINVERT
+    "F",            ID_ZOOM_FIT,            VIRTKEY, NOINVERT
+    "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
+    "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
+    "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
+    VK_RETURN,      ID_ZOOM_CENTER,         VIRTKEY, NOINVERT
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU_POPUP MENU
+BEGIN
+    POPUP "Popup"
+    BEGIN
+        POPUP "File"
+        BEGIN
+            MENUITEM "Open\tO",                     ID_FILE_OPEN
+            MENUITEM "Save\tCtrl-S",                ID_FILE_SAVE
+            MENUITEM "Next\tRight",                 ID_FILE_NEXT
+            MENUITEM "Previous\tLeft",              ID_FILE_PREV
+            MENUITEM "Settings",                    ID_FILE_SETTINGS
+        END
+        MENUITEM SEPARATOR
+        POPUP "Zoom"
+        BEGIN
+            MENUITEM "1:1\t1",                      ID_ZOOM_1
+            MENUITEM "Fit to window\tF",            ID_ZOOM_FIT
+            MENUITEM "Shrink to fit\tS",            ID_ZOOM_SHRINKTOFIT
+            MENUITEM "Selection\tX",                ID_ZOOM_SELECTION
+            MENUITEM "Center\tC",                   ID_ZOOM_CENTER
+            MENUITEM "Reset\tZ",                    ID_ZOOM_RESET
+        END
+        POPUP "View"
+        BEGIN
+            MENUITEM "Fullscreen\tSPACE",           ID_VIEW_FULLSCREEN
+            MENUITEM "Alpha\tA",                    ID_VIEW_ALPHA
+            MENUITEM "Set background color\tB",     ID_VIEW_SETBACKGROUNDCOLOR
+            MENUITEM "Cycle grid size\tG",          ID_VIEW_GRIDSIZE
+            MENUITEM "Fixed grid\tShift-G",         ID_VIEW_FIXEDGRID
+        END
+        POPUP "Select"
+        BEGIN
+            MENUITEM "All\tA",                      ID_SELECT_ALL
+            MENUITEM "None\tN",                     ID_SELECT_NONE
+            MENUITEM "Crop\tCtrl-Shift-C",          ID_SELECT_CROP
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Copy\tCtrl-C",                ID_COPY
+        MENUITEM "Paste\tCtrl-V",               ID_PASTE
+        MENUITEM SEPARATOR
+        POPUP "Open recent"
+        BEGIN
+            MENUITEM "DUMMY",                       ID_RECENT_DUMMY
+        END
+        MENUITEM "Exit\tESC",                   ID_EXIT
+    END
+END
 
 #endif    // English (United Kingdom) resources
 /////////////////////////////////////////////////////////////////////////////
@@ -167,3 +266,4 @@ LANGUAGE LANG_ENGLISH,
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
+

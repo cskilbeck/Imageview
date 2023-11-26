@@ -112,6 +112,8 @@ struct App : public CDragDropHelper
     // get some defaults for window creation
     HRESULT get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style);
 
+    HRESULT load_accelerators();
+
     // call in WM_NCCREATE after GWLP_USERDATA points at this
     HRESULT set_window(HWND window);
 
@@ -190,6 +192,8 @@ struct App : public CDragDropHelper
         sel_hover_bottom = 8,
         sel_hover_outside = 0x80000000
     };
+
+    HACCEL accelerators{ null };
 
 private:
     //////////////////////////////////////////////////////////////////////
@@ -333,6 +337,8 @@ private:
     // preload some files either side of the current file
     HRESULT warm_cache();
 
+    HRESULT setup_menu_accelerators(HMENU menu);
+
     // set this to signal that the application is exiting
     // all threads should quit asap when this is set
     HANDLE quit_event;
@@ -445,6 +451,7 @@ private:
     uint64 system_memory_size_kb{ 0 };
 
     uint64 cache_in_use{ 0 };
+    std::mutex cache_mutex;
 
     // for IUnknown
     long refcount;
