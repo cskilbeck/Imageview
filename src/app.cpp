@@ -1,21 +1,22 @@
 //////////////////////////////////////////////////////////////////////
-// fix the cache
-// show message if file load is slow
+// TO DO
 // settings dialog
 // customise keyboard shortcuts / help screen
 // localization
 // installation/file associations
+// show message if file load is slow
 //////////////////////////////////////////////////////////////////////
-//
 // TO FIX
-// use std::string everywhere
-// use utf_8 everywhere
 // clean up namespaces
-// switch to C++20/format {}
+// switch to format {}
 // logging with levels
-// fix all the leaks
+// std::string everywhere
+// utf8 everywhere
+// the cache
+// all the leaks
 
 #include "pch.h"
+#include <dcomp.h>
 
 #include "shader_inc/vs_rectangle.h"
 #include "shader_inc/ps_drawimage.h"
@@ -988,7 +989,7 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
         return E_INVALIDARG;
     }
 
-    *ex_style = 0;    // WS_EX_NOREDIRECTIONBITMAP
+    *ex_style = WS_EX_NOREDIRECTIONBITMAP;
 
     // if settings.fullscreen, use settings.fullscreen_rect (which will be on a monitor (which may
     // or may not still exist...))
@@ -1649,7 +1650,6 @@ void App::on_key_up(int vk_key)
         ScreenToClient(window, &p);
         shift_snap = false;
         on_mouse_move(p);
-        Log(L"!!!!!!!!!!!!!!!!");
     } break;
     case VK_CONTROL:
         ctrl_snap = false;
@@ -1875,7 +1875,7 @@ HRESULT App::update()
                 min.x = 0.0f;
             } else if(selection_hover & sel_hover_right) {
                 x = &select_current.x;
-                max.x = (float)texture_width;
+                max.x = (float)texture_width - 1;
                 min.x = select_anchor.x;
             }
 
@@ -1885,13 +1885,14 @@ HRESULT App::update()
                 min.y = 0.0f;
             } else if(selection_hover & sel_hover_bottom) {
                 y = &select_current.y;
-                max.y = (float)texture_height;
+                max.y = (float)texture_height - 1;
                 min.y = select_anchor.y;
             }
 
             if(selection_hover == sel_hover_inside) {
                 min = { 0, 0 };
-                max = sub_point(texture_size(), selection_size);
+                vec2 ts = sub_point(texture_size(), { 1, 1 });
+                max = sub_point(ts, selection_size);
             }
 
             // get actual movement
@@ -1980,7 +1981,7 @@ void App::select_all()
     if(image_texture.Get() != 0) {
         drag_select_pos = { 0, 0 };
         select_anchor = { 0, 0 };
-        select_current = { (float)texture_width - 1, (float)texture_height - 1 };
+        select_current = sub_point(texture_size(), { 1, 1 });
         selection_size = sub_point(select_current, select_anchor);
         selection_active = true;
         selecting = false;
@@ -2661,7 +2662,6 @@ HRESULT App::on_window_size_changed(int width, int height)
         reset_zoom(last_zoom_mode);
         current_rect = target_rect;
     }
-
     return S_OK;
 }
 
@@ -2799,9 +2799,9 @@ HRESULT App::create_resources()
     const UINT backBufferWidth = static_cast<UINT>(window_width);
     const UINT backBufferHeight = static_cast<UINT>(window_height);
     const DXGI_FORMAT backBufferFormat = DXGI_FORMAT_B8G8R8A8_UNORM;    // DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    constexpr UINT backBufferCount = 1;
+    constexpr UINT backBufferCount = 2;
     const DXGI_SCALING scaling_mode = DXGI_SCALING_STRETCH;
-    const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_DISCARD;
+    const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     const DXGI_SWAP_CHAIN_FLAG swap_flags = (DXGI_SWAP_CHAIN_FLAG)0;
 
     // If the swap chain already exists, resize it, otherwise create one.
@@ -2845,10 +2845,14 @@ HRESULT App::create_resources()
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
         fsSwapChainDesc.Windowed = TRUE;
 
-        CHK_HR(dxgiFactory->CreateSwapChainForHwnd(
-            d3d_device.Get(), window, &swapChainDesc, &fsSwapChainDesc, null, &swap_chain));
+        CHK_HR(dxgiFactory->CreateSwapChainForComposition(d3d_device.Get(), &swapChainDesc, NULL, &swap_chain));
 
-        CHK_HR(dxgiFactory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER));
+        CHK_HR(DCompositionCreateDevice(NULL, IID_PPV_ARGS(&dcomp)));
+        CHK_HR(dcomp->CreateTargetForHwnd(window, FALSE, &target));
+        CHK_HR(dcomp->CreateVisual(&visual));
+        CHK_HR(target->SetRoot(visual.Get()));
+        CHK_HR(visual->SetContent(swap_chain.Get()));
+        CHK_HR(dcomp->Commit());
     }
 
     ComPtr<ID3D11Texture2D> backBuffer;

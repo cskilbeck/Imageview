@@ -192,13 +192,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         DestroyWindow(hWnd);
         break;
 
+    case WM_NCCALCSIZE: {
+        DefWindowProc(hWnd, message, wParam, lParam);
+        NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
+        rect const &new_client_rect = params->rgrc[0];
+        app->on_window_size_changed(new_client_rect.w(), new_client_rect.h());
+        return 0;
+    }
+
+    case WM_ERASEBKGND:
+        return 1;
+
     case WM_PAINT:
+        PAINTSTRUCT ps;
+        (void)BeginPaint(hWnd, &ps);
+        EndPaint(hWnd, &ps);
         if(s_in_sizemove) {
             app->update();
-        } else {
-            PAINTSTRUCT ps;
-            (void)BeginPaint(hWnd, &ps);
-            EndPaint(hWnd, &ps);
         }
         break;
 
@@ -253,7 +263,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 s_in_suspend = false;
             }
-            app->on_window_size_changed(LOWORD(lParam), HIWORD(lParam));
         }
         break;
 

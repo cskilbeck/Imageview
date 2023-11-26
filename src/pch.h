@@ -32,8 +32,8 @@
 //////////////////////////////////////////////////////////////////////
 // Support Windows 7 and later
 
-#define _WIN32_WINNT _WIN32_WINNT_WIN7
-#define NTDDI_VERSION NTDDI_WIN7
+#define _WIN32_WINNT _WIN32_WINNT_WIN8
+#define NTDDI_VERSION NTDDI_WIN8
 
 #include <winsdkver.h>
 
@@ -54,6 +54,7 @@
 #include <comdef.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
+#include <dcomp.h>
 #include <DirectXMath.h>
 #include <DirectXColors.h>
 #include <wincodec.h>
