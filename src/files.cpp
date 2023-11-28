@@ -22,7 +22,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
     if(file_handle == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    defer(CloseHandle(file_handle));
+    DEFER(CloseHandle(file_handle));
 
     // get the size of the file
     LARGE_INTEGER file_size;
@@ -43,7 +43,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
     if(overlapped.hEvent == null) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    defer(CloseHandle(overlapped.hEvent));
+    DEFER(CloseHandle(overlapped.hEvent));
 
     // issue the file read
     if(!ReadFile(file_handle, buffer.data(), file_size.LowPart, null, &overlapped) &&
@@ -123,7 +123,7 @@ HRESULT scan_folder2(wchar const *path,
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    defer(CloseHandle(dir_handle));
+    DEFER(CloseHandle(dir_handle));
 
     BY_HANDLE_FILE_INFORMATION main_dir_info;
     CHK_NULL(GetFileInformationByHandle(dir_handle, &main_dir_info));
@@ -342,7 +342,7 @@ HRESULT file_get_size(wchar const *filename, uint64_t &size)
     if(f == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    defer(CloseHandle(f));
+    DEFER(CloseHandle(f));
     LARGE_INTEGER file_size;
     CHK_BOOL(GetFileSizeEx(f, &file_size));
     size = file_size.QuadPart;

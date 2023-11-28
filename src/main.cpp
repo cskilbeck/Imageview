@@ -45,7 +45,7 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT check_heif_support(bool &heif_is_supported)
 {
     CHK_HR(MFStartup(MF_VERSION));
-    defer(MFShutdown());
+    DEFER(MFShutdown());
 
     IMFActivate **activate{};
     uint32 count{};
@@ -55,7 +55,7 @@ HRESULT check_heif_support(bool &heif_is_supported)
     input.guidSubtype = MFVideoFormat_HEVC;
 
     CHK_HR(MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SYNCMFT, &input, null, &activate, &count));
-    defer(CoTaskMemFree(activate));
+    DEFER(CoTaskMemFree(activate));
 
     for(uint32 i = 0; i < count; i++) {
         activate[i]->Release();
@@ -179,12 +179,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     // 2nd message is always WM_NCCREATE - setup app pointer for GWLP_USERDATA here
     case WM_NCCREATE: {
         LPCREATESTRUCT c = reinterpret_cast<LPCREATESTRUCT>(lParam);
+        App *app_ptr{ null };
         if(c != null && c->lpCreateParams != null) {
-            auto app_ptr = reinterpret_cast<App *>(c->lpCreateParams);
+            app_ptr = reinterpret_cast<App *>(c->lpCreateParams);
             SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(app_ptr));
             app_ptr->set_window(hWnd);
         }
-        return DefWindowProc(hWnd, message, wParam, lParam);
+        LRESULT r = DefWindowProc(hWnd, message, wParam, lParam);
+        if(app_ptr != null) {
+            app_ptr->on_post_create();
+        }
+        return r;
     } break;
 
     // app pointer is valid for all other windows messages

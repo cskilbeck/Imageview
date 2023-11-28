@@ -1,12 +1,13 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
-// enable/disable menu items based on...
 // settings / keyboard shortcuts dialog
 // localization
-// installation/file associations
+// file associations
 // show message if file load is slow
+// draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
 //////////////////////////////////////////////////////////////////////
 // TO FIX
+// maximize/minimize/restore bug
 // clean up namespaces
 // switch to format {}
 // logging with levels
@@ -69,6 +70,9 @@ namespace
 #define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
 
 LPCWSTR App::window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
+
+bool App::is_elevated{ false };
+
 
 ComPtr<ID3D11Debug> App::d3d_debug;
 
@@ -153,14 +157,14 @@ HRESULT App::settings_t::serialize_setting(
     case settings_t::serialize_action::save: {
         HKEY key;
         CHK_HR(RegCreateKeyEx(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_WRITE, null, &key, null));
-        defer(RegCloseKey(key));
+        DEFER(RegCloseKey(key));
         CHK_HR(RegSetValueEx(key, name, 0, REG_BINARY, var, size));
     } break;
 
     case settings_t::serialize_action::load: {
         HKEY key;
         CHK_HR(RegCreateKeyEx(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_READ | KEY_QUERY_VALUE, null, &key, null));
-        defer(RegCloseKey(key));
+        DEFER(RegCloseKey(key));
         DWORD cbsize = 0;
         if(FAILED(RegQueryValueEx(key, name, null, null, null, &cbsize)) || cbsize != size) {
             return S_FALSE;
@@ -313,7 +317,7 @@ HRESULT App::on_paste()
     }
 
     if(got_clipboard) {
-        selection_active = false;
+        select_active = false;
         f.filename = L"Clipboard";
         f.hresult = S_OK;
         f.index = -1;
@@ -347,7 +351,7 @@ HRESULT App::display_image(image_file *f)
     if(f == null) {
         return E_INVALIDARG;
     }
-    selection_active = false;
+    select_active = false;
 
     HRESULT load_hr = f->hresult;
 
@@ -382,7 +386,7 @@ HRESULT App::display_image(image_file *f)
 
 HRESULT App::show_image(image_file *f)
 {
-    current_image_file = f;
+    current_file = f;
 
     std::wstring name;
 
@@ -424,7 +428,7 @@ HRESULT App::show_image(image_file *f)
             CHK_HR(file_get_filename(f->filename.c_str(), name));
         }
         std::wstring msg = format(L"%s %dx%d", name.c_str(), texture_width, texture_height);
-        SetWindowText(window, msg.c_str());
+        set_window_text(msg);
         set_message(msg.c_str(), 2.0f);
 
     } else {
@@ -446,6 +450,18 @@ HRESULT App::show_image(image_file *f)
 }
 
 //////////////////////////////////////////////////////////////////////
+
+HRESULT App::set_window_text(std::wstring const &text)
+{
+    if(is_elevated) {
+        SetWindowText(window, format(L"** ADMIN! ** %s", text.c_str()).c_str());
+    } else {
+        SetWindowText(window, text.c_str());
+    }
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
 // scan a folder - this runs in the folder_scanner_thread
 // results are sent to the main thread with SendMessage
 
@@ -459,7 +475,11 @@ HRESULT App::do_folder_scan(wchar const *folder_path)
 
     Log(L"Scan folder %s", path.c_str());
 
-    std::vector<wchar const *> extensions{ L"jpg", L"png", L"bmp", L"tiff", L"jpeg" };
+    std::vector<wchar const *> extensions;
+
+    for(auto const &f : save_formats) {
+        extensions.push_back(f.first.c_str());
+    }
 
     scan_folder_sort_field sort_field = scan_folder_sort_field::name;
     scan_folder_sort_order order = scan_folder_sort_order::ascending;
@@ -531,13 +551,13 @@ void App::scanner_function()
 HRESULT App::warm_cache()
 {
     // if it's a normal file in the current folder
-    if(current_image_file != null && !current_image_file->is_clipboard && current_image_file->index != -1) {
+    if(current_file != null && !current_file->is_clipboard && current_file->index != -1) {
 
         int const num_images_to_cache = 12;
 
         for(int i = 0; i < num_images_to_cache; ++i) {
 
-            int y = current_image_file->index - (i + 2) / 2 * ((i & 1) * 2 - 1);
+            int y = current_file->index - (i + 2) / 2 * ((i & 1) * 2 - 1);
 
             if(y >= 0 && y < (int)current_folder_scan->files.size()) {
 
@@ -605,8 +625,8 @@ void App::on_folder_scanned(folder_scan_result *scan_result)
 
     current_folder_scan.reset(scan_result);
 
-    if(current_image_file != null && current_image_file->index == -1) {
-        update_file_index(current_image_file);
+    if(current_file != null && current_file->index == -1) {
+        update_file_index(current_file);
     }
 
     warm_cache();
@@ -1042,8 +1062,8 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
         // get client size of window rect for WS_OVERLAPPEDWINDOW
         rect z{ 0, 0, 0, 0 };
         AdjustWindowRectEx(&z, *style, false, *ex_style);
-        window_width = r->w() - z.w();
-        window_height = r->h() - z.h();
+        window_width = std::max(100, r->w() - z.w());
+        window_height = std::max(100, r->h() - z.h());
 
     } else {
 
@@ -1135,7 +1155,7 @@ void App::set_mouse_cursor(HCURSOR c)
 
 void App::check_selection_hover(vec2 pos)
 {
-    if(!selection_active) {
+    if(!select_active) {
         set_mouse_cursor(null);
         return;
     }
@@ -1203,10 +1223,42 @@ HRESULT App::setup_menu_accelerators(HMENU menu)
     std::vector<ACCEL> accel_table;
     CHK_HR(copy_accelerator_table(accelerators, accel_table));
 
-    byte keys[256];
-    memset(keys, 0, sizeof(keys));
+    // admin for enabling/disabling menu items based on app state
 
-    // scan the menu, adding hotkey info
+    auto got_selection = [this]() -> uint { return current_file != null && select_active ? 0 : MFS_DISABLED; };
+
+    auto got_image = [this]() -> uint { return current_file != null ? 0 : MFS_DISABLED; };
+
+    auto check_alpha = [this]() -> uint { return settings.grid_enabled ? MFS_CHECKED : 0; };
+
+    auto check_fullscreen = [this]() -> uint { return settings.fullscreen ? MFS_CHECKED : 0; };
+
+    auto check_fixedgrid = [this]() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
+
+    // clang-format off
+    std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
+        { ID_COPY, got_selection },
+        { ID_SELECT_ALL, got_selection },
+        { ID_SELECT_NONE, got_selection },
+        { ID_SELECT_CROP, got_selection },
+        { ID_FILE_SAVE, got_image },
+        { ID_FILE_NEXT, got_image },
+        { ID_FILE_PREV, got_image },
+        { ID_VIEW_ALPHA, check_alpha },
+        { ID_VIEW_FULLSCREEN, check_fullscreen },
+        { ID_VIEW_FIXEDGRID, check_fixedgrid },
+        { ID_ZOOM_1, got_image },
+        { ID_ZOOM_ALL, got_image },
+        { ID_ZOOM_CENTER, got_image },
+        { ID_ZOOM_FIT, got_image },
+        { ID_ZOOM_SHRINKTOFIT, got_image },
+        { ID_ZOOM_ORIGINAL, got_image },
+        { ID_ZOOM_RESET, got_image },
+        { ID_ZOOM_SELECTION, got_image },
+    };
+    // clang-format on
+
+    // scan the menu to enable/disable, add/remove checks and add hotkey info
 
     std::stack<HMENU> menu_stack;
 
@@ -1223,34 +1275,38 @@ HRESULT App::setup_menu_accelerators(HMENU menu)
 
             MENUITEMINFO mii;
             mii.cbSize = sizeof(mii);
-            mii.fMask = MIIM_STRING | MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
-            mii.dwItemData = 0;
-            mii.dwTypeData = null;
-
-            // find the menu item which that accelerator is the hotkey for
+            mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
 
             if(GetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii)) {
 
-                // setup the menu item string by appending a tab (or comma) and then the hotkey text
+                // if it's a sub menu, just push it
                 if(mii.hSubMenu != null) {
                     menu_stack.push(mii.hSubMenu);
                 }
 
+                // else setup the menu item string
                 else if(mii.fType == MFT_STRING) {
 
                     std::wstring text;
                     text.resize(mii.cbSize + 1);
-                    mii.fMask = MIIM_STRING;
+                    mii.fMask = MIIM_STRING | MIIM_STATE;
                     mii.dwItemData = 0;
                     mii.dwTypeData = text.data();
                     mii.cch = static_cast<uint>(text.size());
 
                     CHK_BOOL(GetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii));
 
+                    mii.fState = 0;
+
+                    auto process_fn = menu_process_table.find(mii.wID);
+                    if(process_fn != menu_process_table.end()) {
+                        mii.fState |= process_fn->second();
+                    }
+
                     // truncate if there's already a tab
                     text = text.substr(0, text.find(L'\t'));
 
-                    // for each accelerator
+                    // make string for matching hotkeys
 
                     wchar const *separator = L"\t";
 
@@ -1267,27 +1323,26 @@ HRESULT App::setup_menu_accelerators(HMENU menu)
                         }
                     }
 
-                    // setup the menu item text
+                    // set the menu item text and state
                     mii.dwTypeData = text.data();
                     mii.cch = static_cast<uint>(text.size());
-                    mii.fMask = MIIM_STRING;
 
                     CHK_BOOL(SetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii));
                 }
             }
         }
     }
-
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
 // call this from WM_NCCREATE when window is first created
 
-HRESULT
-App::set_window(HWND hwnd)
+HRESULT App::set_window(HWND hwnd)
 {
     window = hwnd;
+
+    get_is_process_elevated(is_elevated);
 
     SetEvent(window_created_event);
 
@@ -1303,6 +1358,13 @@ App::set_window(HWND hwnd)
         return on_paste();
     }
     return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT App::on_post_create()
+{
+    return set_window_text(localize(IDS_AppName));
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -1332,7 +1394,7 @@ void App::on_mouse_button(point_s pos, uint button, int state)
 
         if(button == settings.select_button) {
 
-            if(selection_active && selection_hover != selection_hover_t::sel_hover_outside) {
+            if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
 
                 // texel they were on when they grabbed the selection
                 drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
@@ -1343,7 +1405,7 @@ void App::on_mouse_button(point_s pos, uint button, int state)
 
                 select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
                 select_current = select_anchor;
-                selection_active = false;
+                select_active = false;
             }
 
         } else if(button == settings.zoom_button && !popup_menu_active) {
@@ -1464,7 +1526,7 @@ void App::on_mouse_move(point_s pos)
         vec2 diff = vec2(sub_point(mouse_click[settings.select_button], pos));
         float len = vec2::length(diff);
         if(len > settings.select_start_distance) {
-            selection_active = true;
+            select_active = true;
         }
     }
 
@@ -1548,7 +1610,7 @@ void App::do_zoom(point_s pos, int delta)
 
 void App::zoom_to_selection()
 {
-    if(!selection_active) {
+    if(!select_active) {
         reset_zoom(reset_zoom_mode::fit_to_window);
         return;
     }
@@ -1684,7 +1746,7 @@ void App::on_command(uint command)
         break;
 
     case ID_SELECT_NONE:
-        selection_active = false;
+        select_active = false;
         break;
 
     case ID_VIEW_ALPHA:
@@ -1745,7 +1807,7 @@ void App::on_command(uint command)
         std::wstring filename;
         if(SUCCEEDED(save_file_dialog(window, filename))) {
 
-            image const &img = current_image_file->img;
+            image const &img = current_file->img;
             HRESULT hr = save_image_file(filename.c_str(), img.pixels, img.width, img.height, img.row_pitch);
             if(FAILED(hr)) {
                 MessageBox(window, windows_error_message(hr).c_str(), L"Can't save file", MB_ICONEXCLAMATION);
@@ -1755,9 +1817,13 @@ void App::on_command(uint command)
         }
     } break;
 
-    case ID_FILE_SETTINGS:
-        show_settings_dialog(window);
-        break;
+    case ID_FILE_SETTINGS: {
+        LRESULT r = show_settings_dialog(window);
+        if(r == LRESULT_LAUNCH_AS_ADMIN) {
+            relaunch_as_admin = true;
+            DestroyWindow(window);
+        }
+    } break;
 
     case ID_EXIT:
         DestroyWindow(window);
@@ -1979,7 +2045,7 @@ void App::select_all()
         select_anchor = { 0, 0 };
         select_current = sub_point(texture_size(), { 1, 1 });
         selection_size = sub_point(select_current, select_anchor);
-        selection_active = true;
+        select_active = true;
         selecting = false;
         drag_selection = false;
     }
@@ -1990,23 +2056,58 @@ void App::select_all()
 
 HRESULT App::crop_to_selection()
 {
-    if(!selection_active) {
-        return E_ABORT;
+    if(!select_active) {
+        return E_NOT_VALID_STATE;
     }
 
-    return S_OK;
+    ComPtr<ID3D11Texture2D> tex;
+    CHK_HR(copy_selection_to_texture(tex.GetAddressOf()));
+
+    D3D11_TEXTURE2D_DESC desc;
+    tex->GetDesc(&desc);
+    int width = desc.Width;
+    int height = desc.Height;
+
+    select_active = false;
+
+    image_file &f = clipboard_image_file;
+
+    f.is_clipboard = true;
+    f.bytes.clear();
+    f.pixels.clear();
+    f.filename = L"Cropped";
+    f.hresult = S_OK;
+    f.index = -1;
+    f.is_cache_load = true;
+    f.view_count = 0;
+
+    D3D11_MAPPED_SUBRESOURCE mapped_resource{};
+    CHK_HR(d3d_context->Map(tex.Get(), 0, D3D11_MAP_READ, 0, &mapped_resource));
+    DEFER(d3d_context->Unmap(tex.Get(), 0));
+
+    f.pixels.resize(mapped_resource.RowPitch * height);
+
+    memcpy(f.pixels.data(), mapped_resource.pData, f.pixels.size());
+
+    f.img.pixels = f.pixels.data();
+    f.img.width = width;
+    f.img.height = height;
+    f.img.row_pitch = mapped_resource.RowPitch;
+
+    return show_image(&f);
 }
 
 //////////////////////////////////////////////////////////////////////
-// copy the current selection into clipboard as a DIBV5
 
-HRESULT App::copy_selection()
+HRESULT App::copy_selection_to_texture(ID3D11Texture2D **texture)
 {
-    if(!selection_active) {
-        return E_ABORT;
+    vec2 tl{ 0, 0 };
+    vec2 br{ static_cast<float>(texture_width) - 1, static_cast<float>(texture_height) - 1 };
+
+    if(select_active) {
+        tl = vec2::min(select_anchor, select_current);
+        br = vec2::max(select_anchor, select_current);
     }
-    vec2 tl = vec2::min(select_anchor, select_current);
-    vec2 br = vec2::max(select_anchor, select_current);
 
     // 1. Copy region into a texture
 
@@ -2040,7 +2141,6 @@ HRESULT App::copy_selection()
     desc.MiscFlags = 0;
 
     ComPtr<ID3D11Texture2D> tex;
-
     CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
     D3D_SET_NAME(tex);
 
@@ -2048,11 +2148,31 @@ HRESULT App::copy_selection()
 
     d3d_context->Flush();
 
+    *texture = tex.Detach();
+
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+// copy the current selection into clipboard as a DIBV5
+
+HRESULT App::copy_selection()
+{
+    // if nothing is selected, copy the whole texture
+
+    ComPtr<ID3D11Texture2D> tex;
+    CHK_HR(copy_selection_to_texture(tex.GetAddressOf()));
+
+    D3D11_TEXTURE2D_DESC desc;
+    tex->GetDesc(&desc);
+    int w = desc.Width;
+    int h = desc.Height;
+
     // 2. Map the texture so we can access the pixels
 
     D3D11_MAPPED_SUBRESOURCE mapped_resource{};
     CHK_HR(d3d_context->Map(tex.Get(), 0, D3D11_MAP_READ, 0, &mapped_resource));
-    defer(d3d_context->Unmap(tex.Get(), 0));
+    DEFER(d3d_context->Unmap(tex.Get(), 0));
 
     uint32 pitch = mapped_resource.RowPitch;
 
@@ -2165,7 +2285,7 @@ HRESULT App::copy_selection()
     // 5. stang them into the clipboard
 
     CHK_BOOL(OpenClipboard(null));
-    defer(CloseClipboard());
+    DEFER(CloseClipboard());
 
     CHK_BOOL(EmptyClipboard());
 
@@ -2351,7 +2471,7 @@ HRESULT App::render()
         vec2 sa = select_anchor;
         vec2 sc = select_current;
 
-        if(selection_active) {
+        if(select_active) {
 
             // convert selection to screen coords
 
@@ -2508,7 +2628,7 @@ HRESULT App::render()
                 text, small_text_format.Get(), screen_pos, { 1, 0 }, 1.0f, small_label_padding, small_label_padding);
         }
 
-        if(selection_active) {
+        if(select_active) {
             vec2 tl = vec2::min(sa, sc);
             vec2 br = vec2::max(sa, sc);
             vec2 s_tl = texture_to_screen_pos_unclamped(tl);
@@ -2583,6 +2703,13 @@ HRESULT App::present()
 
 HRESULT App::on_closing()
 {
+    if(relaunch_as_admin) {
+        wchar exe_path[MAX_PATH * 2];
+        uint32 got = GetModuleFileName(NULL, exe_path, _countof(exe_path));
+        if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
+            ShellExecute(null, L"runas", exe_path, 0, 0, SW_SHOWNORMAL);
+        }
+    }
     return S_OK;
 }
 
@@ -2969,8 +3096,8 @@ HRESULT App::on_device_lost()
 
     CHK_HR(create_resources());
 
-    if(current_image_file != null) {
-        CHK_HR(display_image(current_image_file));
+    if(current_file != null) {
+        CHK_HR(display_image(current_file));
     }
 
     return S_OK;
@@ -2986,7 +3113,7 @@ HRESULT App::on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
     CHK_HR(psia->GetItemAt(0, &shell_item));
     PWSTR path{};
     CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
-    defer(CoTaskMemFree(path));
+    DEFER(CoTaskMemFree(path));
     return load_image(path);
 }
 

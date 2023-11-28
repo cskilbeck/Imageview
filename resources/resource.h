@@ -15,6 +15,9 @@
 #define IDD_DIALOG_SETTINGS_MAIN        115
 #define IDD_DIALOG_SETTINGS_HOTKEYS     116
 #define IDD_DIALOG_SETTINGS_ABOUT       117
+#define IDD_DIALOG_SETTINGS_EXPLORER    118
+#define IDD_DIALOG_RELAUNCH             120
+#define IDD_DIALOG_SETTINGS_RELAUNCH    120
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002
@@ -24,6 +27,7 @@
 #define IDC_SETTINGS_BUTTON_APPLY       1004
 #define IDC_SETTINGS_BUTTON_EDIT_HOTKEY 1004
 #define IDC_SETTINGS_EDIT_ABOUT         1005
+#define IDC_BUTTON_SETTINGS_RELAUNCH    1009
 #define ID_FILE_LOAD                    40005
 #define ID_FILE_SAVE                    40006
 #define ID_VIEW_ALPHA                   40008
@@ -59,9 +63,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        119
-#define _APS_NEXT_COMMAND_VALUE         40073
-#define _APS_NEXT_CONTROL_VALUE         1006
+#define _APS_NEXT_RESOURCE_VALUE        122
+#define _APS_NEXT_COMMAND_VALUE         40075
+#define _APS_NEXT_CONTROL_VALUE         1010
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

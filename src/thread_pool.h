@@ -37,7 +37,8 @@ struct thread_pool_t
     // force a message pump to be created before returning the thread_id
     // so you can PostMessage to it safely as soon as this function returns
 
-    template <class FUNC, class... Args> HRESULT create_thread_with_message_pump(uint *thread_id, FUNC function, Args... arguments)
+    template <class FUNC, class... Args>
+    HRESULT create_thread_with_message_pump(uint *thread_id, FUNC function, Args... arguments)
     {
         if(thread_id == null) {
             return E_INVALIDARG;
@@ -46,7 +47,7 @@ struct thread_pool_t
         HANDLE msg_q_created;
         CHK_NULL(msg_q_created = CreateEvent(null, false, false, null));
 
-        defer(CloseHandle(msg_q_created));
+        DEFER(CloseHandle(msg_q_created));
 
         increment_thread_count();
 
@@ -63,7 +64,8 @@ struct thread_pool_t
 
                 decrement_thread_count();
             },
-            msg_q_created, arguments...);
+            msg_q_created,
+            arguments...);
 
         uint id;
         CHK_BOOL(id = GetThreadId(thread.native_handle()));

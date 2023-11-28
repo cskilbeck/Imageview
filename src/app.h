@@ -114,6 +114,8 @@ struct App : public CDragDropHelper
 
     HRESULT load_accelerators();
 
+    HRESULT on_post_create();
+
     // call in WM_NCCREATE after GWLP_USERDATA points at this
     HRESULT set_window(HWND window);
 
@@ -181,6 +183,10 @@ struct App : public CDragDropHelper
     IFACEMETHODIMP_(ULONG) Release();
 
     static LPCWSTR window_class;
+
+    static bool is_elevated;
+
+    static constexpr LRESULT LRESULT_LAUNCH_AS_ADMIN = 0x29034893;
 
     // public so DEFINE_ENUM_OPERATORS can see it
     enum selection_hover_t : uint
@@ -386,6 +392,10 @@ private:
     // crop the image to the current selection
     HRESULT crop_to_selection();
 
+    HRESULT set_window_text(std::wstring const &text);
+
+    HRESULT copy_selection_to_texture(ID3D11Texture2D **texture);
+
     // send the shader constants to the GPU
     HRESULT update_constants();
 
@@ -436,7 +446,7 @@ private:
     void set_message(wchar const *message, double fade_time);
 
     // which image currently being displayed
-    image_file *current_image_file{ null };
+    image_file *current_file{ null };
 
     // wait on this before sending a message to the window which must arrive safely
     HANDLE window_created_event{ null };
@@ -474,6 +484,8 @@ private:
 
     // current dpi for the window, updated by WM_DPICHANGED
     float dpi;
+
+    bool relaunch_as_admin{ false };
 
     // scale a number by the current dpi
     template <typename T> T dpi_scale(T x)
@@ -604,9 +616,9 @@ private:
     static cursor_def sel_hover_cursors[16];
 
     // selection admin
-    bool selecting{ false };           // dragging new selection rectangle
-    bool selection_active{ false };    // a defined selection rectangle exists
-    bool drag_selection{ false };      // dragging the existing selection rectangle
+    bool selecting{ false };         // dragging new selection rectangle
+    bool select_active{ false };     // a defined selection rectangle exists
+    bool drag_selection{ false };    // dragging the existing selection rectangle
     selection_hover_t
         selection_hover;             // which part of the selection rectangle being hovered over (all, corner, edge)
     vec2 drag_select_pos{ 0, 0 };    // where they originally grabbed the selection rectangle in texels

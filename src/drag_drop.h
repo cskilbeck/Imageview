@@ -47,7 +47,8 @@ template <class T> HRESULT SetInterface(T **ppT, IUnknown *punk)
 class CDragDropHelper : public IDropTarget
 {
 public:
-    CDragDropHelper() : _pdth(NULL), _pdtobj(NULL), _hwndRegistered(NULL), _dropImageType(DROPIMAGE_LABEL), _pszDropTipTemplate(NULL)
+    CDragDropHelper()
+        : _pdth(NULL), _pdtobj(NULL), _hwndRegistered(NULL), _dropImageType(DROPIMAGE_LABEL), _pszDropTipTemplate(NULL)
     {
         // if exceptions are not enabled then constructors are dumb (they can't do anything that might fail)
 
@@ -68,7 +69,9 @@ public:
         _pszDropTipTemplate = pszDropTipTemplate;
     }
 
-    void InitializeDragDropHelper(HWND hwnd, DROPIMAGETYPE dropImageType = DROPIMAGE_LABEL, PCWSTR pszDropTipTemplate = L"View")
+    void InitializeDragDropHelper(HWND hwnd,
+                                  DROPIMAGETYPE dropImageType = DROPIMAGE_LABEL,
+                                  PCWSTR pszDropTipTemplate = L"View")
     {
         _dropImageType = dropImageType;
         _pszDropTipTemplate = pszDropTipTemplate;
@@ -153,7 +156,7 @@ public:
         IShellItemArray *psia;
         if(SUCCEEDED(SHCreateShellItemArrayFromDataObject(_pdtobj, IID_PPV_ARGS(&psia)))) {
 
-            defer(psia->Release());
+            DEFER(psia->Release());
             CHK_HR(on_drop_shell_item(psia, grfKeyState));
             return S_OK;
         }
@@ -169,7 +172,7 @@ public:
         if(s.tymed == TYMED_HGLOBAL) {
 
             void *p = GlobalLock(s.hGlobal);
-            defer(GlobalUnlock(p));
+            DEFER(GlobalUnlock(p));
             return on_drop_string(reinterpret_cast<wchar const *>(p));
         }
 

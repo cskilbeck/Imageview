@@ -10,6 +10,8 @@ namespace
 
     HWND current_page = null;
 
+    HWND main_dialog = null;
+
     //////////////////////////////////////////////////////////////////////
 
     INT_PTR settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -18,6 +20,43 @@ namespace
         UNREFERENCED_PARAMETER(msg);
         UNREFERENCED_PARAMETER(wparam);
         UNREFERENCED_PARAMETER(lparam);
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
+    {
+        UNREFERENCED_PARAMETER(dlg);
+        UNREFERENCED_PARAMETER(msg);
+        UNREFERENCED_PARAMETER(wparam);
+        UNREFERENCED_PARAMETER(lparam);
+        switch(msg) {
+        case WM_COMMAND: {
+            switch(LOWORD(wparam)) {
+            case IDC_BUTTON_SETTINGS_RELAUNCH: {
+                EndDialog(main_dialog, App::LRESULT_LAUNCH_AS_ADMIN);
+            } break;
+            }
+        } break;
+        case WM_INITDIALOG: {
+        } break;
+        }
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
+    {
+        UNREFERENCED_PARAMETER(dlg);
+        UNREFERENCED_PARAMETER(msg);
+        UNREFERENCED_PARAMETER(wparam);
+        UNREFERENCED_PARAMETER(lparam);
+        switch(msg) {
+        case WM_INITDIALOG: {
+        } break;
+        }
         return 0;
     }
 
@@ -46,24 +85,32 @@ namespace
     // Populate listview rows
     // Allow user to edit them somehow
 
+    int selected_hotkey_index = -1;
+
     INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
     {
         UNREFERENCED_PARAMETER(wparam);
         UNREFERENCED_PARAMETER(lparam);
 
+        HWND listview = GetDlgItem(dlg, IDC_LIST_HOTKEYS);
+
         switch(msg) {
 
         case WM_INITDIALOG: {
 
-            HWND listview = GetDlgItem(dlg, IDC_LIST_HOTKEYS);
+            rect listview_rect;
+            GetWindowRect(listview, &listview_rect);
+
+            int width = listview_rect.w() - GetSystemMetrics(SM_CXVSCROLL);
+
             LVCOLUMN column;
             memset(&column, 0, sizeof(column));
             column.mask = LVCF_TEXT | LVCF_WIDTH;
             column.fmt = LVCFMT_LEFT;
-            column.cx = 250;
+            column.cx = width * 70 / 100;
             column.pszText = const_cast<LPWSTR>(L"Action");
             ListView_InsertColumn(listview, 0, &column);
-            column.cx = 100;
+            column.cx = width * 30 / 100;
             column.pszText = const_cast<LPWSTR>(L"Hotkey");
             ListView_InsertColumn(listview, 1, &column);
             ListView_SetExtendedListViewStyle(listview, LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT | LVS_EX_FLATSB);
@@ -105,6 +152,41 @@ namespace
             }
 
         } break;
+
+        // if being hidden, deselect listview item and hide change button
+        case WM_SHOWWINDOW: {
+            if(wparam == false && selected_hotkey_index != -1) {
+                ListView_SetItemState(listview, selected_hotkey_index, 0, LVIS_SELECTED | LVIS_FOCUSED);
+                selected_hotkey_index = -1;
+            }
+            // hide the change button regardless
+            ShowWindow(GetDlgItem(dlg, IDC_SETTINGS_BUTTON_EDIT_HOTKEY), SW_HIDE);
+        } break;
+
+        case WM_NOTIFY: {
+
+            LPNMHDR const nmhdr = reinterpret_cast<LPNMHDR const>(lparam);
+
+            switch(nmhdr->idFrom) {
+
+            case IDC_LIST_HOTKEYS: {
+
+                switch(nmhdr->code) {
+
+                case LVN_ITEMCHANGED: {
+
+                    LPNMLISTVIEW const nm = reinterpret_cast<LPNMLISTVIEW const>(lparam);
+                    if((nm->uNewState & LVIS_FOCUSED) != 0) {
+                        selected_hotkey_index = nm->iItem;
+                        ShowWindow(GetDlgItem(dlg, IDC_SETTINGS_BUTTON_EDIT_HOTKEY), SW_SHOW);
+                    }
+                    break;
+                } break;
+                }
+            }
+            }
+            break;
+        } break;
         }
 
         return 0;
@@ -112,16 +194,25 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    enum elevation_t
+    {
+        dont_care = 0,
+        hide_if_not_elevated = 1
+    };
+
     struct settings_tab_t
     {
         LPWSTR resource_id;
         DLGPROC handler;
+        elevation_t requires_elevation;
     };
 
     settings_tab_t tabs[] = {
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_MAIN), settings_handler },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_ABOUT), about_handler },
+        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
+        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -134,11 +225,8 @@ namespace
     // makes the child dialog transparent by supressing wm_erasebkgnd
     // make sure to set WS_EX_TRANSPARENT on the child dialog
 
-    LRESULT CALLBACK
-    child_proc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+    LRESULT CALLBACK child_proc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
     {
-        UNREFERENCED_PARAMETER(uIdSubclass);
-        UNREFERENCED_PARAMETER(dwRefData);
         switch(msg) {
 
         case WM_CTLCOLORBTN:
@@ -170,18 +258,22 @@ namespace
 
             auto &tab = tabs[i];
 
+            if(tab.requires_elevation == elevation_t::hide_if_not_elevated && !App::is_elevated) {
+                continue;
+            }
+
             HRSRC hrsrc;
             CHK_NULL(hrsrc = FindResource(NULL, tab.resource_id, RT_DIALOG));
 
             HGLOBAL hglb;
             CHK_NULL(hglb = LoadResource(GetModuleHandle(nullptr), hrsrc));
 
-            defer(FreeResource(hglb));
+            DEFER(FreeResource(hglb));
 
             DLGTEMPLATE *dlg_template;
             CHK_NULL(dlg_template = reinterpret_cast<DLGTEMPLATE *>(LockResource(hglb)));
 
-            defer(UnlockResource(dlg_template));
+            DEFER(UnlockResource(dlg_template));
 
             HWND page_dlg;
             CHK_NULL(page_dlg = CreateDialogIndirect(GetModuleHandle(nullptr), dlg_template, tab_ctrl, tab.handler));
@@ -278,6 +370,8 @@ namespace
 
         case WM_INITDIALOG: {
 
+            main_dialog = dlg;
+
             // center dialog in main window rect
 
             HWND parent;
@@ -323,9 +417,16 @@ namespace
             }
         } break;
 
+        case WM_USER: {
+        } break;
+
         case WM_COMMAND:
 
             switch(LOWORD(wparam)) {
+
+            case App::LRESULT_LAUNCH_AS_ADMIN:
+                EndDialog(dlg, App::LRESULT_LAUNCH_AS_ADMIN);
+                break;
 
             case IDOK:
                 EndDialog(dlg, 0);

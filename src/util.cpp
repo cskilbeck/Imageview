@@ -46,7 +46,7 @@ HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
 {
     CHK_BOOL(OpenClipboard(null));
 
-    defer(CloseClipboard());
+    DEFER(CloseClipboard());
 
     HANDLE c = GetClipboardData(format);
     if(c == null) {
@@ -57,7 +57,7 @@ HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
     if(data == null) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    defer(GlobalUnlock(c));
+    DEFER(GlobalUnlock(c));
 
     size_t size = GlobalSize(c);
     if(size == 0) {
@@ -332,5 +332,19 @@ HRESULT get_hotkey_description(ACCEL const &accel, std::wstring &text)
     wchar buffer[512];
     LoadString(GetModuleHandle(null), accel.cmd, buffer, _countof(buffer));
     text = buffer;
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT get_is_process_elevated(bool &is_elevated)
+{
+    HANDLE hToken = NULL;
+    TOKEN_ELEVATION elevation;
+    DWORD dwSize;
+    CHK_BOOL(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken));
+    DEFER(CloseHandle(hToken));
+    CHK_BOOL(GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize));
+    is_elevated = elevation.TokenIsElevated;
     return S_OK;
 }

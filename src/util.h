@@ -42,6 +42,8 @@ HRESULT get_accelerator_hotkey_text(ACCEL const &accel, HKL layout, std::wstring
 HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
 HRESULT get_hotkey_description(ACCEL const &accel, std::wstring &text);
 
+HRESULT get_is_process_elevated(bool &is_elevated);
+
 //////////////////////////////////////////////////////////////////////
 // localization
 

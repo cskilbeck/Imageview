@@ -11,7 +11,7 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
     // try the basic default first
     PIDLIST_ABSOLUTE pidl;
     if(SUCCEEDED(SHGetIDListFromObject(punk, &pidl))) {
-        defer(ILFree(pidl));
+        DEFER(ILFree(pidl));
         CHK_HR(SHCreateItemFromIDList(pidl, riid, ppv));
         return S_OK;
     }
@@ -19,19 +19,19 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
     // perhaps the input is from IE and if so we can construct an item from the URL
     IDataObject *pdo;
     CHK_HR(punk->QueryInterface(IID_PPV_ARGS(&pdo)));
-    defer(pdo->Release());
+    DEFER(pdo->Release());
 
     CLIPFORMAT g_cfURL = 0;
     FORMATETC fmte = { get_clipboard_format(&g_cfURL, CFSTR_SHELLURL), NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
     STGMEDIUM medium;
     CHK_HR(pdo->GetData(&fmte, &medium));
-    scoped([&]() { ReleaseStgMedium(&medium); });
+    SCOPED([&]() { ReleaseStgMedium(&medium); });
 
     PCSTR pszURL = (PCSTR)GlobalLock(medium.hGlobal);
     if(pszURL == null) {
         return ERROR_CANTREAD;
     }
-    defer(GlobalUnlock(medium.hGlobal));
+    DEFER(GlobalUnlock(medium.hGlobal));
 
     WCHAR szURL[2048];
     if(SHAnsiToUnicode(pszURL, szURL, ARRAYSIZE(szURL)) == 0) {

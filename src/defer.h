@@ -48,9 +48,9 @@ static struct
 
 #define DEFER_TOKENPASTE(x, y) x##y
 #define DEFER_TOKENPASTE2(x, y) DEFER_TOKENPASTE(x, y)
-#define scoped auto DEFER_TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = deferrer <<
-#define defer(X) \
-    scoped[=]    \
+#define SCOPED auto DEFER_TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = deferrer <<
+#define DEFER(X) \
+    SCOPED[=]    \
     {            \
         X;       \
     };
