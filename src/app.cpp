@@ -1306,22 +1306,13 @@ HRESULT App::setup_menu_accelerators(HMENU menu)
                     // truncate if there's already a tab
                     text = text.substr(0, text.find(L'\t'));
 
-                    // make string for matching hotkeys
+                    // get string for hotkeys
 
-                    wchar const *separator = L"\t";
+                    std::wstring key_label;
 
-                    for(auto const &a : accel_table) {
+                    CHK_HR(get_accelerator_hotkey_text(mii.wID, accel_table, keyboard_layout, key_label));
 
-                        if(a.cmd == mii.wID) {
-
-                            std::wstring key_label;
-
-                            CHK_HR(get_accelerator_hotkey_text(a, keyboard_layout, key_label));
-
-                            text = format(L"%s%s%s", text.c_str(), separator, key_label.c_str());
-                            separator = L", ";
-                        }
-                    }
+                    text = format(L"%s\t%s", text.c_str(), key_label.c_str());
 
                     // set the menu item text and state
                     mii.dwTypeData = text.data();
@@ -2158,8 +2149,6 @@ HRESULT App::copy_selection_to_texture(ID3D11Texture2D **texture)
 
 HRESULT App::copy_selection()
 {
-    // if nothing is selected, copy the whole texture
-
     ComPtr<ID3D11Texture2D> tex;
     CHK_HR(copy_selection_to_texture(tex.GetAddressOf()));
 
@@ -2168,7 +2157,7 @@ HRESULT App::copy_selection()
     int w = desc.Width;
     int h = desc.Height;
 
-    // 2. Map the texture so we can access the pixels
+    // copy the pixels
 
     D3D11_MAPPED_SUBRESOURCE mapped_resource{};
     CHK_HR(d3d_context->Map(tex.Get(), 0, D3D11_MAP_READ, 0, &mapped_resource));
@@ -2179,7 +2168,7 @@ HRESULT App::copy_selection()
     size_t pixel_size = 4llu;
     size_t pixel_buffer_size = pixel_size * (size_t)w * h;
 
-    // 3. Create CF_DIBV5 clipformat
+    // create CF_DIBV5 clipformat
 
     size_t dibv5_buffer_size = sizeof(BITMAPV5HEADER) + pixel_buffer_size;
     HANDLE dibv5_data = GlobalAlloc(GHND | GMEM_SHARE, dibv5_buffer_size);
@@ -2210,7 +2199,7 @@ HRESULT App::copy_selection()
 
     byte *pixels = dibv5_buffer + sizeof(BITMAPV5HEADER);
 
-    // got the texels, copy into the DIB for the clipboard, swapping R, B channels
+    // copy into the DIB for the clipboard, swapping R, B channels
     byte *row = pixels;
     byte *src = reinterpret_cast<byte *>(mapped_resource.pData);
     for(int y = 0; y < h; ++y) {
@@ -2234,7 +2223,7 @@ HRESULT App::copy_selection()
 
     GlobalUnlock(dibv5_data);
 
-    // 4. Create CF_DIB clipformat
+    // create CF_DIB clipformat
 
     int stride = (((w * 3) + 3) & -4);
     int dib_img_size = stride * h;
@@ -2282,7 +2271,7 @@ HRESULT App::copy_selection()
 
     GlobalUnlock(dib_data);
 
-    // 5. stang them into the clipboard
+    // stang them into the clipboard
 
     CHK_BOOL(OpenClipboard(null));
     DEFER(CloseClipboard());
@@ -2292,7 +2281,15 @@ HRESULT App::copy_selection()
     CHK_BOOL(SetClipboardData(CF_DIBV5, dibv5_data));
     CHK_BOOL(SetClipboardData(CF_DIB, dib_data));
 
-    return copy_pixels_as_png(pixels, w, h);
+    // encode as a png also - required for chrome and many others
+
+    CHK_HR(copy_pixels_as_png(pixels, w, h));
+
+    // done
+
+    set_message(format(L"Copied %dx%d", w, h).c_str(), 3);
+
+    return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////

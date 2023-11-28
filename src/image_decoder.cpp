@@ -219,9 +219,7 @@ HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h)
 
     GlobalUnlock(hData);
 
-    ComPtr<IDataObject> data_object;
-
-    CHK_BOOL(SetClipboardData(RegisterClipboardFormat(TEXT("PNG")), hData));
+    CHK_BOOL(SetClipboardData(RegisterClipboardFormat(L"PNG"), hData));
 
     return S_OK;
 }

@@ -237,66 +237,77 @@ HRESULT log_win32_error(DWORD err, wchar const *message, ...)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT get_accelerator_hotkey_text(ACCEL const &accel, HKL layout, std::wstring &text)
+HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_table, HKL layout, std::wstring &text)
 {
-    wchar key_name[256];
-    switch(accel.key) {
-    case VK_LEFT:
-        wcsncpy_s(key_name, L"Left", 256);
-        break;
-    case VK_RIGHT:
-        wcsncpy_s(key_name, L"Right", 256);
-        break;
-    case VK_UP:
-        wcsncpy_s(key_name, L"Up", 256);
-        break;
-    case VK_DOWN:
-        wcsncpy_s(key_name, L"Down", 256);
-        break;
-    case VK_PRIOR:
-        wcsncpy_s(key_name, L"Page Up", 256);
-        break;
-    case VK_NEXT:
-        wcsncpy_s(key_name, L"Page Down", 256);
-        break;
-    case VK_OEM_COMMA:
-    case L',':
-        wcsncpy_s(key_name, L"Comma", 256);
-        break;
-    case VK_OEM_PERIOD:
-    case L'.':
-        wcsncpy_s(key_name, L"Period", 256);
-        break;
+    wchar const *separator = L"";
 
-    default:
-        uint scan_code = MapVirtualKeyEx(accel.key, MAPVK_VK_TO_VSC, layout);
-        GetKeyNameText((scan_code & 0x7f) << 16, key_name, 256);
-        break;
-    }
+    text.clear();
 
-    // build the label with modifier keys
+    for(auto const &a : accel_table) {
 
-    std::wstring key_label;
+        if(a.cmd == id) {
 
-    auto append = [&](std::wstring &a, wchar const *b) {
-        if(!a.empty()) {
-            a.append(L"-");
+            wchar key_name[256];
+            switch(a.key) {
+            case VK_LEFT:
+                wcsncpy_s(key_name, L"Left", 256);
+                break;
+            case VK_RIGHT:
+                wcsncpy_s(key_name, L"Right", 256);
+                break;
+            case VK_UP:
+                wcsncpy_s(key_name, L"Up", 256);
+                break;
+            case VK_DOWN:
+                wcsncpy_s(key_name, L"Down", 256);
+                break;
+            case VK_PRIOR:
+                wcsncpy_s(key_name, L"Page Up", 256);
+                break;
+            case VK_NEXT:
+                wcsncpy_s(key_name, L"Page Down", 256);
+                break;
+            case VK_OEM_COMMA:
+            case L',':
+                wcsncpy_s(key_name, L"Comma", 256);
+                break;
+            case VK_OEM_PERIOD:
+            case L'.':
+                wcsncpy_s(key_name, L"Period", 256);
+                break;
+
+            default:
+                uint scan_code = MapVirtualKeyEx(a.key, MAPVK_VK_TO_VSC, layout);
+                GetKeyNameText((scan_code & 0x7f) << 16, key_name, 256);
+                break;
+            }
+
+            // build the label with modifier keys
+
+            std::wstring key_label;
+
+            auto append = [&](std::wstring &a, wchar const *b) {
+                if(!a.empty()) {
+                    a.append(L"-");
+                }
+                a.append(b);
+            };
+
+            if(a.fVirt & FCONTROL) {
+                append(key_label, L"Ctrl");
+            }
+            if(a.fVirt & FSHIFT) {
+                append(key_label, L"Shift");
+            }
+            if(a.fVirt & FALT) {
+                append(key_label, L"Alt");
+            }
+            append(key_label, key_name);
+
+            text = format(L"%s%s%s", text.c_str(), separator, key_label.c_str());
+            separator = L", ";
         }
-        a.append(b);
-    };
-
-    if(accel.fVirt & FCONTROL) {
-        append(key_label, L"Ctrl");
     }
-    if(accel.fVirt & FSHIFT) {
-        append(key_label, L"Shift");
-    }
-    if(accel.fVirt & FALT) {
-        append(key_label, L"Alt");
-    }
-    append(key_label, key_name);
-
-    text = key_label;
     return S_OK;
 }
 

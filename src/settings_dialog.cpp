@@ -72,7 +72,8 @@ namespace
         case WM_INITDIALOG: {
             HWND about = GetDlgItem(dlg, IDC_SETTINGS_EDIT_ABOUT);
             SendMessage(about, EM_SETREADONLY, 1, 0);
-            SetWindowText(about, L"ImageView\r\n\r\nVersion x.y.z\r\n\r\nBuilt {at some point in time}");
+            SetWindowText(about,
+                          L"\r\n\r\n\r\n\r\nImageView\r\n\r\nVersion ${version}\r\n\r\nBuilt ${build_timestamp}");
             return 0;
         }
         }
@@ -134,7 +135,7 @@ namespace
                 get_hotkey_description(a, action_text);
 
                 std::wstring key_text;
-                get_accelerator_hotkey_text(a, layout, key_text);
+                get_accelerator_hotkey_text(a.cmd, accelerators, layout, key_text);
 
                 if(!(action_text.empty() || key_text.empty())) {
 
@@ -372,6 +373,11 @@ namespace
 
             main_dialog = dlg;
 
+            if(FAILED(add_tab_pages(dlg))) {
+                // TODO (chs): report windows error
+                return 0;
+            }
+
             // center dialog in main window rect
 
             HWND parent;
@@ -389,11 +395,6 @@ namespace
             int y = parent_rect.top + ((parent_rect.h() - dlg_rect.h()) / 2);
 
             SetWindowPos(dlg, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
-
-            if(FAILED(add_tab_pages(dlg))) {
-                // TODO (chs): report windows error
-                return 0;
-            }
 
             // show the first page because tab 0 is initially selected
             show_settings_page(0);

@@ -38,7 +38,7 @@ std::wstring strip_quotes(wchar const *s);
 
 HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size);
 
-HRESULT get_accelerator_hotkey_text(ACCEL const &accel, HKL layout, std::wstring &text);
+HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_table, HKL layout, std::wstring &text);
 HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
 HRESULT get_hotkey_description(ACCEL const &accel, std::wstring &text);
 
