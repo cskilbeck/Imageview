@@ -73,6 +73,9 @@
     <ClInclude Include="src\image.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\settings_dialog.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -115,6 +118,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\image.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\settings_dialog.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

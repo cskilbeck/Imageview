@@ -1,5 +1,5 @@
 #if !defined(DECL_SETTING)
-#define DECL_SETTING(...) "Please define DECL_SETTING"
+#error Please define DECL_SETTING before including settings.h
 #endif
 
 // don't warn about structure padding in this section
@@ -10,15 +10,15 @@
 // DECL_SETTING(type, name, default)
 
 //////////////////////////////////////////////////////////////////////
-// background colors
+// background colors { r,g,b,a }
 
-// bg color beyond image bounds
+// border color beyond image bounds
 
 DECL_SETTING(vec4, border_color, 0.05f, 0.1f, 0.3f, 1);
 
 // bg color shows through image alpha
 
-DECL_SETTING(vec4, background_color, { 1, 1, 1, 1 });
+DECL_SETTING(vec4, background_color, { 1, 0, 0, 1 });
 
 //////////////////////////////////////////////////////////////////////
 // grid
@@ -107,6 +107,10 @@ DECL_SETTING(bool, fullscreen, false);
 // mode')
 
 DECL_SETTING(bool, reuse_window, true);
+
+// if there's an image in the clipboard at startup, paste it in
+
+DECL_SETTING(bool, auto_paste, true);
 
 // either remember fullscreen mode or always revert to: windowed or fullscreen
 

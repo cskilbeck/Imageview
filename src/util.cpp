@@ -113,9 +113,9 @@ vec4 uint32_to_color(uint32 color)
 //////////////////////////////////////////////////////////////////////
 // get a localized string by id
 
-std::wstring const &str_local(uint id)
+std::wstring const &str_local(uint64 id)
 {
-    static std::unordered_map<uint, std::wstring> localized_strings;
+    static std::unordered_map<uint64, std::wstring> localized_strings;
     static std::wstring const unknown{ L"?" };
 
     auto f = localized_strings.find(id);
@@ -127,7 +127,7 @@ std::wstring const &str_local(uint id)
     // SetThreadUILanguage(MAKELCID(LANG_FRENCH, SUBLANG_NEUTRAL));
 
     wchar *str;
-    int len = LoadString(GetModuleHandle(null), id, reinterpret_cast<wchar *>(&str), 0);
+    int len = LoadString(GetModuleHandle(null), static_cast<uint>(id), reinterpret_cast<wchar *>(&str), 0);
 
     if(len == 0) {
         return unknown;
@@ -138,7 +138,7 @@ std::wstring const &str_local(uint id)
 //////////////////////////////////////////////////////////////////////
 // get a null-terminated wchar pointer to the localized string
 
-wchar const *localize(uint id)
+wchar const *localize(uint64 id)
 {
     return str_local(id).c_str();
 }
@@ -233,4 +233,95 @@ HRESULT log_win32_error(DWORD err, wchar const *message, ...)
     va_list v;
     va_start(v, message);
     return log_win32_error(err, message, v);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT get_accelerator_hotkey_text(ACCEL const &accel, HKL layout, std::wstring &text)
+{
+    wchar key_name[256];
+    switch(accel.key) {
+    case VK_LEFT:
+        wcsncpy_s(key_name, L"Left", 256);
+        break;
+    case VK_RIGHT:
+        wcsncpy_s(key_name, L"Right", 256);
+        break;
+    case VK_UP:
+        wcsncpy_s(key_name, L"Up", 256);
+        break;
+    case VK_DOWN:
+        wcsncpy_s(key_name, L"Down", 256);
+        break;
+    case VK_PRIOR:
+        wcsncpy_s(key_name, L"Page Up", 256);
+        break;
+    case VK_NEXT:
+        wcsncpy_s(key_name, L"Page Down", 256);
+        break;
+    default:
+        uint scan_code = MapVirtualKeyEx(accel.key, MAPVK_VK_TO_VSC, layout);
+        GetKeyNameText((scan_code & 0x7f) << 16, key_name, 256);
+        break;
+    }
+
+    // build the label with modifier keys
+
+    std::wstring key_label;
+
+    auto append = [&](std::wstring &a, wchar const *b) {
+        if(!a.empty()) {
+            a.append(L"-");
+        }
+        a.append(b);
+    };
+
+    if(accel.fVirt & FCONTROL) {
+        append(key_label, L"Ctrl");
+    }
+    if(accel.fVirt & FSHIFT) {
+        append(key_label, L"Shift");
+    }
+    if(accel.fVirt & FALT) {
+        append(key_label, L"Alt");
+    }
+    append(key_label, key_name);
+
+    text = key_label;
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table)
+{
+    if(h == null) {
+        return ERROR_INVALID_DATA;
+    }
+
+    UINT num_accelerators = CopyAcceleratorTable(h, null, 0);
+
+    if(num_accelerators == 0) {
+        return ERROR_NOT_FOUND;
+    }
+
+    table.resize(num_accelerators);
+
+    UINT num_accelerators_got = CopyAcceleratorTable(h, table.data(), num_accelerators);
+
+    if(num_accelerators_got != num_accelerators) {
+        table.clear();
+        return ERROR_NOT_ALL_ASSIGNED;
+    }
+    return S_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+HRESULT get_hotkey_description(ACCEL const &accel, std::wstring &text)
+{
+    wchar buffer[512];
+    LoadString(GetModuleHandle(null), accel.cmd, buffer, _countof(buffer));
+    text = buffer;
+    return S_OK;
 }

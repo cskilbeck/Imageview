@@ -119,6 +119,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
                                     hInstance,
                                     &application));
 
+    rect client_rect;
+    GetClientRect(hwnd, &client_rect);
+    application.on_window_size_changed(client_rect.w(), client_rect.h());
+
     application.setup_initial_windowplacement();
 
     RAWINPUTDEVICE Rid[1];
@@ -194,9 +198,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_NCCALCSIZE: {
         DefWindowProc(hWnd, message, wParam, lParam);
-        NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
-        rect const &new_client_rect = params->rgrc[0];
-        app->on_window_size_changed(new_client_rect.w(), new_client_rect.h());
+        if(IsWindowVisible(hWnd)) {
+            NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
+            rect const &new_client_rect = params->rgrc[0];
+            app->on_window_size_changed(new_client_rect.w(), new_client_rect.h());
+        }
         return 0;
     }
 

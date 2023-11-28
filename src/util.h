@@ -38,11 +38,15 @@ std::wstring strip_quotes(wchar const *s);
 
 HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size);
 
+HRESULT get_accelerator_hotkey_text(ACCEL const &accel, HKL layout, std::wstring &text);
+HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
+HRESULT get_hotkey_description(ACCEL const &accel, std::wstring &text);
+
 //////////////////////////////////////////////////////////////////////
 // localization
 
-wchar const *localize(uint id);
-std::wstring const &str_local(uint id);
+wchar const *localize(uint64 id);
+std::wstring const &str_local(uint64 id);
 
 //////////////////////////////////////////////////////////////////////
 

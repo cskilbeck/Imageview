@@ -1,7 +1,6 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
-// settings dialog
-// customise keyboard shortcuts / help screen
+// settings / keyboard shortcuts dialog
 // localization
 // installation/file associations
 // show message if file load is slow
@@ -1038,7 +1037,7 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
     }
     window_width = r->w();
     window_height = r->h();
-    Log("Startup window is %dx%d", window_width, window_height);
+    Log("Startup window is %dx%d (at %d,%d)", window_width, window_height, r->left, r->top);
     return S_OK;
 }
 
@@ -1054,6 +1053,7 @@ void App::toggle_fullscreen()
 
     if(settings.fullscreen) {
         GetWindowPlacement(window, &settings.window_placement);
+        Log("toggle_fullscreen: %d", settings.window_placement.rcNormalPosition.left);
         style = WS_POPUP;
     }
 
@@ -1172,28 +1172,11 @@ HRESULT App::load_accelerators()
 
 HRESULT App::setup_menu_accelerators(HMENU menu)
 {
-    if(accelerators == null) {
-        return ERROR_INVALID_DATA;
-    }
-
     HKL keyboard_layout = GetKeyboardLayout(GetCurrentThreadId());
-
     CHK_NULL(keyboard_layout);
 
-    UINT num_accelerators = CopyAcceleratorTable(accelerators, null, 0);
-
-    if(num_accelerators == 0) {
-        return ERROR_NOT_FOUND;
-    }
-
     std::vector<ACCEL> accel_table;
-    accel_table.resize(num_accelerators);
-
-    UINT num_accelerators_got = CopyAcceleratorTable(accelerators, accel_table.data(), num_accelerators);
-
-    if(num_accelerators_got != num_accelerators) {
-        return ERROR_NOT_ALL_ASSIGNED;
-    }
+    CHK_HR(copy_accelerator_table(accelerators, accel_table));
 
     byte keys[256];
     memset(keys, 0, sizeof(keys));
@@ -1226,55 +1209,9 @@ HRESULT App::setup_menu_accelerators(HMENU menu)
 
                 text = text.substr(0, text.find(L'\t'));
 
-                // handle some keys differently because GetKeyNameText is not always useful
-
-                wchar key_name[256];
-                switch(a.key) {
-                case VK_LEFT:
-                    wcsncpy_s(key_name, L"Left", 256);
-                    break;
-                case VK_RIGHT:
-                    wcsncpy_s(key_name, L"Right", 256);
-                    break;
-                case VK_UP:
-                    wcsncpy_s(key_name, L"Up", 256);
-                    break;
-                case VK_DOWN:
-                    wcsncpy_s(key_name, L"Down", 256);
-                    break;
-                case VK_PRIOR:
-                    wcsncpy_s(key_name, L"Page Up", 256);
-                    break;
-                case VK_NEXT:
-                    wcsncpy_s(key_name, L"Page Down", 256);
-                    break;
-                default:
-                    uint scan_code = MapVirtualKeyEx(a.key, MAPVK_VK_TO_VSC, keyboard_layout);
-                    GetKeyNameText((scan_code & 0x7f) << 16, key_name, 256);
-                    break;
-                }
-
-                // build the label with modifier keys
-
                 std::wstring key_label;
 
-                auto append = [](std::wstring &a, wchar const *b) {
-                    if(!a.empty()) {
-                        a.append(L"-");
-                    }
-                    a.append(b);
-                };
-
-                if(a.fVirt & FCONTROL) {
-                    append(key_label, L"Ctrl");
-                }
-                if(a.fVirt & FSHIFT) {
-                    append(key_label, L"Shift");
-                }
-                if(a.fVirt & FALT) {
-                    append(key_label, L"Alt");
-                }
-                append(key_label, key_name);
+                CHK_HR(get_accelerator_hotkey_text(a, keyboard_layout, key_label));
 
                 // setup the menu item text
 
@@ -1305,11 +1242,11 @@ HRESULT App::set_window(HWND hwnd)
 
     InitializeDragDropHelper(window);
 
-    // if there was no file load requested on the command line, try to paste an image from the clipboard
-    if(requested_file == null && IsClipboardFormatAvailable(CF_DIBV5)) {
+    // if there was no file load requested on the command line
+    // and auto-paste is on, try to paste an image from the clipboard
+    if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
         return on_paste();
     }
-
     return S_OK;
 }
 
@@ -1762,6 +1699,10 @@ void App::on_command(uint command)
             }
         }
     } break;
+
+    case ID_FILE_SETTINGS:
+        show_settings_dialog(window);
+        break;
 
     case ID_EXIT:
         DestroyWindow(window);
@@ -2847,21 +2788,21 @@ HRESULT App::create_resources()
 
         CHK_HR(dxgiFactory->CreateSwapChainForComposition(d3d_device.Get(), &swapChainDesc, NULL, &swap_chain));
 
-        CHK_HR(DCompositionCreateDevice(NULL, IID_PPV_ARGS(&dcomp)));
-        CHK_HR(dcomp->CreateTargetForHwnd(window, FALSE, &target));
-        CHK_HR(dcomp->CreateVisual(&visual));
-        CHK_HR(target->SetRoot(visual.Get()));
-        CHK_HR(visual->SetContent(swap_chain.Get()));
-        CHK_HR(dcomp->Commit());
+        CHK_HR(DCompositionCreateDevice(NULL, IID_PPV_ARGS(&directcomposition_device)));
+        CHK_HR(directcomposition_device->CreateTargetForHwnd(window, FALSE, &directcomposition_target));
+        CHK_HR(directcomposition_device->CreateVisual(&directcomposition_visual));
+        CHK_HR(directcomposition_target->SetRoot(directcomposition_visual.Get()));
+        CHK_HR(directcomposition_visual->SetContent(swap_chain.Get()));
+        CHK_HR(directcomposition_device->Commit());
     }
 
-    ComPtr<ID3D11Texture2D> backBuffer;
-    CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf())));
-    d3d_name(backBuffer);
+    ComPtr<ID3D11Texture2D> back_buffer;
+    CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
+    d3d_name(back_buffer);
 
     CD3D11_RENDER_TARGET_VIEW_DESC desc(D3D11_RTV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
 
-    CHK_HR(d3d_device->CreateRenderTargetView(backBuffer.Get(), &desc, &rendertarget_view));
+    CHK_HR(d3d_device->CreateRenderTargetView(back_buffer.Get(), &desc, &rendertarget_view));
     d3d_name(rendertarget_view);
 
     D3D11_BLEND_DESC blend_desc{ 0 };
