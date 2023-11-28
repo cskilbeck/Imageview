@@ -337,6 +337,7 @@ private:
     // preload some files either side of the current file
     HRESULT warm_cache();
 
+    // add accelerator text to menu items
     HRESULT setup_menu_accelerators(HMENU menu);
 
     // set this to signal that the application is exiting

@@ -1,5 +1,6 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
+// enable/disable menu items based on...
 // settings / keyboard shortcuts dialog
 // localization
 // installation/file associations
@@ -30,8 +31,12 @@ namespace
 {
     using namespace DirectX;
 
+    //////////////////////////////////////////////////////////////////////
+
     wchar const *small_font_family_name{ L"Noto Sans" };
     wchar const *mono_font_family_name{ L"Roboto Mono" };
+
+    //////////////////////////////////////////////////////////////////////
 
 #if defined(_DEBUG)
     void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
@@ -44,16 +49,22 @@ namespace
     }
 #endif
 
+    //////////////////////////////////////////////////////////////////////
+
     template <typename T> void set_d3d_debug_name(ComPtr<T> &resource, char const *name)
     {
         set_d3d_debug_name(resource.Get(), name);
     }
+
+    //////////////////////////////////////////////////////////////////////
 
     bool is_key_down(uint key)
     {
         return (GetAsyncKeyState(key) & 0x8000) != 0;
     }
 }
+
+//////////////////////////////////////////////////////////////////////
 
 #define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
 
@@ -1195,56 +1206,86 @@ HRESULT App::setup_menu_accelerators(HMENU menu)
     byte keys[256];
     memset(keys, 0, sizeof(keys));
 
-    // for each accelerator
+    // scan the menu, adding hotkey info
 
-    for(auto const &a : accel_table) {
+    std::stack<HMENU> menu_stack;
 
-        MENUITEMINFO mii;
-        mii.cbSize = sizeof(mii);
-        mii.fMask = MIIM_STRING | MIIM_FTYPE | MIIM_ID;
-        mii.dwItemData = 0;
-        mii.dwTypeData = null;
+    menu_stack.push(menu);
 
-        // find the menu item which that accelerator is the hotkey for
+    while(!menu_stack.empty()) {
 
-        if(GetMenuItemInfo(menu, a.cmd, MF_BYCOMMAND, &mii)) {
+        HMENU cur_menu = menu_stack.top();
+        menu_stack.pop();
 
-            // setup the menu item string by appending a tab and then the hotkey text
+        int item_count = GetMenuItemCount(cur_menu);
 
-            if(mii.fType == MFT_STRING) {
+        for(int i = 0; i < item_count; ++i) {
 
-                std::wstring text;
-                text.resize(mii.cbSize + 1);
-                mii.dwTypeData = text.data();
-                mii.cch = static_cast<uint>(text.size());
-                CHK_BOOL(GetMenuItemInfo(menu, a.cmd, MF_BYCOMMAND, &mii));
+            MENUITEMINFO mii;
+            mii.cbSize = sizeof(mii);
+            mii.fMask = MIIM_STRING | MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
+            mii.dwItemData = 0;
+            mii.dwTypeData = null;
 
-                // truncate if there's already a tab
+            // find the menu item which that accelerator is the hotkey for
 
-                text = text.substr(0, text.find(L'\t'));
+            if(GetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii)) {
 
-                std::wstring key_label;
+                // setup the menu item string by appending a tab (or comma) and then the hotkey text
+                if(mii.hSubMenu != null) {
+                    menu_stack.push(mii.hSubMenu);
+                }
 
-                CHK_HR(get_accelerator_hotkey_text(a, keyboard_layout, key_label));
+                else if(mii.fType == MFT_STRING) {
 
-                // setup the menu item text
+                    std::wstring text;
+                    text.resize(mii.cbSize + 1);
+                    mii.fMask = MIIM_STRING;
+                    mii.dwItemData = 0;
+                    mii.dwTypeData = text.data();
+                    mii.cch = static_cast<uint>(text.size());
 
-                text = format(L"%s\t%s", text.c_str(), key_label.c_str());
-                mii.dwTypeData = text.data();
-                mii.cch = static_cast<uint>(text.size());
-                mii.fMask = MIIM_STRING;
+                    CHK_BOOL(GetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii));
 
-                CHK_BOOL(SetMenuItemInfo(menu, a.cmd, MF_BYCOMMAND, &mii));
+                    // truncate if there's already a tab
+                    text = text.substr(0, text.find(L'\t'));
+
+                    // for each accelerator
+
+                    wchar const *separator = L"\t";
+
+                    for(auto const &a : accel_table) {
+
+                        if(a.cmd == mii.wID) {
+
+                            std::wstring key_label;
+
+                            CHK_HR(get_accelerator_hotkey_text(a, keyboard_layout, key_label));
+
+                            text = format(L"%s%s%s", text.c_str(), separator, key_label.c_str());
+                            separator = L", ";
+                        }
+                    }
+
+                    // setup the menu item text
+                    mii.dwTypeData = text.data();
+                    mii.cch = static_cast<uint>(text.size());
+                    mii.fMask = MIIM_STRING;
+
+                    CHK_BOOL(SetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii));
+                }
             }
         }
     }
+
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
 // call this from WM_NCCREATE when window is first created
 
-HRESULT App::set_window(HWND hwnd)
+HRESULT
+App::set_window(HWND hwnd)
 {
     window = hwnd;
 

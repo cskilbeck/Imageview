@@ -259,6 +259,15 @@ HRESULT get_accelerator_hotkey_text(ACCEL const &accel, HKL layout, std::wstring
     case VK_NEXT:
         wcsncpy_s(key_name, L"Page Down", 256);
         break;
+    case VK_OEM_COMMA:
+    case L',':
+        wcsncpy_s(key_name, L"Comma", 256);
+        break;
+    case VK_OEM_PERIOD:
+    case L'.':
+        wcsncpy_s(key_name, L"Period", 256);
+        break;
+
     default:
         uint scan_code = MapVirtualKeyEx(accel.key, MAPVK_VK_TO_VSC, layout);
         GetKeyNameText((scan_code & 0x7f) << 16, key_name, 256);

@@ -60,7 +60,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
         handle_count = 2;
     }
 
-#if defined(SLOW_THINGS_DOWN)    // artifically slow down file loading
+#if SLOW_THINGS_DOWN    // artifically slow down file loading
     DWORD x = WaitForSingleObject(cancel_event, (std::rand() % 2000) + 1000);
     if(x == WAIT_OBJECT_0) {
         CancelIo(file_handle);
@@ -163,7 +163,7 @@ HRESULT scan_folder2(wchar const *path,
 
         while(true) {
 
-#if defined(SLOW_THINGS_DOWN)    // artifically slow down file loading
+#if SLOW_THINGS_DOWN    // artifically slow down file loading
             DWORD x = WaitForSingleObject(cancel_event, (std::rand() % 200) + 200);
             if(x == WAIT_OBJECT_0) {
                 return E_ABORT;

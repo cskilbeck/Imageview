@@ -25,14 +25,17 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////
-// define SLOW_THINGS_DOWN to add some pauses to load_file and scan_folder for testing thread stuff
+// Set SLOW_THINGS_DOWN to 1 to add some pauses to load_file and scan_folder for testing thread stuff
 
-// #define SLOW_THINGS_DOWN
+#define SLOW_THINGS_DOWN 0
 
 //////////////////////////////////////////////////////////////////////
-// Windows 7 or Windows 8 if DirectComposition is used
+// Set USE_DIRECTOMPOSITION to 1 to use DirectComposition
+// This makes Windows 8 the required OS version
 
-#define USE_DIRECTOMPOSITION 0
+#define USE_DIRECTOMPOSITION 1
+
+//////////////////////////////////////////////////////////////////////
 
 #if USE_DIRECTCOMPOSITION
 #define _WIN32_WINNT _WIN32_WINNT_WIN8
@@ -103,6 +106,7 @@ using Microsoft::WRL::ComPtr;
 #include <algorithm>
 #include <map>
 #include <unordered_map>
+#include <stack>
 #include <utility>
 #include <array>
 #include <cstdlib>

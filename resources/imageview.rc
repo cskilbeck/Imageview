@@ -200,6 +200,7 @@ BEGIN
     "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
+    "A",            ID_SELECT_ALL,          VIRTKEY, CONTROL, NOINVERT
 END
 
 
@@ -214,45 +215,45 @@ BEGIN
     BEGIN
         POPUP "File"
         BEGIN
-            MENUITEM "Open\tO",                     ID_FILE_OPEN
-            MENUITEM "Save\tCtrl-S",                ID_FILE_SAVE
-            MENUITEM "Next\tRight",                 ID_FILE_NEXT
-            MENUITEM "Previous\tLeft",              ID_FILE_PREV
+            MENUITEM "Open",                        ID_FILE_OPEN
+            MENUITEM "Save",                        ID_FILE_SAVE
+            MENUITEM "Next",                        ID_FILE_NEXT
+            MENUITEM "Previous",                    ID_FILE_PREV
         END
         MENUITEM SEPARATOR
         POPUP "Zoom"
         BEGIN
-            MENUITEM "1:1\t1",                      ID_ZOOM_1
-            MENUITEM "Fit to window\tF",            ID_ZOOM_FIT
-            MENUITEM "Shrink to fit\tS",            ID_ZOOM_SHRINKTOFIT
-            MENUITEM "Selection\tX",                ID_ZOOM_SELECTION
-            MENUITEM "Center\tC",                   ID_ZOOM_CENTER
-            MENUITEM "Reset\tZ",                    ID_ZOOM_RESET
+            MENUITEM "1:1",                         ID_ZOOM_1
+            MENUITEM "Fit to window",               ID_ZOOM_FIT
+            MENUITEM "Shrink to fit",               ID_ZOOM_SHRINKTOFIT
+            MENUITEM "Selection",                   ID_ZOOM_SELECTION
+            MENUITEM "Center",                      ID_ZOOM_CENTER
+            MENUITEM "Reset",                       ID_ZOOM_RESET
         END
         POPUP "View"
         BEGIN
-            MENUITEM "Fullscreen\tSPACE",           ID_VIEW_FULLSCREEN
-            MENUITEM "Alpha\tA",                    ID_VIEW_ALPHA
-            MENUITEM "Set background color\tB",     ID_VIEW_SETBACKGROUNDCOLOR
-            MENUITEM "Cycle grid size\tG",          ID_VIEW_GRIDSIZE
-            MENUITEM "Fixed grid\tShift-G",         ID_VIEW_FIXEDGRID
+            MENUITEM "Fullscreen",                  ID_VIEW_FULLSCREEN
+            MENUITEM "Alpha",                       ID_VIEW_ALPHA
+            MENUITEM "Set background color",        ID_VIEW_SETBACKGROUNDCOLOR
+            MENUITEM "Cycle grid size",             ID_VIEW_GRIDSIZE
+            MENUITEM "Fixed grid",                  ID_VIEW_FIXEDGRID
         END
         POPUP "Select"
         BEGIN
-            MENUITEM "All\tA",                      ID_SELECT_ALL
-            MENUITEM "None\tN",                     ID_SELECT_NONE
-            MENUITEM "Crop\tCtrl-Shift-C",          ID_SELECT_CROP
+            MENUITEM "All",                         ID_SELECT_ALL
+            MENUITEM "None",                        ID_SELECT_NONE
+            MENUITEM "Crop",                        ID_SELECT_CROP
         END
         MENUITEM SEPARATOR
-        MENUITEM "Copy\tCtrl-C",                ID_COPY
-        MENUITEM "Paste\tCtrl-V",               ID_PASTE
+        MENUITEM "Copy",                        ID_COPY
+        MENUITEM "Paste",                       ID_PASTE
         MENUITEM SEPARATOR
         POPUP "Open recent"
         BEGIN
             MENUITEM "DUMMY",                       ID_RECENT_DUMMY
         END
         MENUITEM "Settings",                    ID_FILE_SETTINGS
-        MENUITEM "Exit\tESC",                   ID_EXIT
+        MENUITEM "Exit",                        ID_EXIT
     END
 END
 
