@@ -30,10 +30,17 @@
 // #define SLOW_THINGS_DOWN
 
 //////////////////////////////////////////////////////////////////////
-// Support Windows 7 and later
+// Windows 7 or Windows 8 if DirectComposition is used
 
+#define USE_DIRECTOMPOSITION 0
+
+#if USE_DIRECTCOMPOSITION
 #define _WIN32_WINNT _WIN32_WINNT_WIN8
 #define NTDDI_VERSION NTDDI_WIN8
+#else
+#define _WIN32_WINNT _WIN32_WINNT_WIN7
+#define NTDDI_VERSION NTDDI_WIN7
+#endif
 
 #include <winsdkver.h>
 

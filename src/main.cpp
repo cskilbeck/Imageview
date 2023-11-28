@@ -119,10 +119,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
                                     hInstance,
                                     &application));
 
-    rect client_rect;
-    GetClientRect(hwnd, &client_rect);
-    application.on_window_size_changed(client_rect.w(), client_rect.h());
-
     application.setup_initial_windowplacement();
 
     RAWINPUTDEVICE Rid[1];

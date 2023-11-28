@@ -55,7 +55,7 @@ namespace
     }
 }
 
-#define d3d_name(x) set_d3d_debug_name(x, #x)
+#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
 
 LPCWSTR App::window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
@@ -392,8 +392,8 @@ HRESULT App::show_image(image_file *f)
         image_texture.Attach(new_texture.Detach());
         image_texture_view.Attach(new_srv.Detach());
 
-        d3d_name(image_texture);
-        d3d_name(image_texture_view);
+        D3D_SET_NAME(image_texture);
+        D3D_SET_NAME(image_texture_view);
 
         D3D11_TEXTURE2D_DESC image_texture_desc;
         image_texture->GetDesc(&image_texture_desc);
@@ -988,7 +988,11 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
         return E_INVALIDARG;
     }
 
+#if USE_DIRECTCOMPOSITION
     *ex_style = WS_EX_NOREDIRECTIONBITMAP;
+#else
+    *ex_style = 0;
+#endif
 
     // if settings.fullscreen, use settings.fullscreen_rect (which will be on a monitor (which may
     // or may not still exist...))
@@ -1003,7 +1007,7 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
         *r = { 0, 0, default_monitor_width * 2 / 3, default_monitor_height * 2 / 3 };
         window_width = r->w();
         window_height = r->h();
-        AdjustWindowRect(r, *style, FALSE);
+        AdjustWindowRectEx(r, *style, FALSE, *ex_style);
         *r = center_rect_on_default_monitor(*r);
         return S_OK;
     }
@@ -1020,9 +1024,18 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
     }
 
     if(!settings.fullscreen) {
+
         *style = WS_OVERLAPPEDWINDOW;
         *r = settings.window_placement.rcNormalPosition;
+
+        // get client size of window rect for WS_OVERLAPPEDWINDOW
+        rect z{ 0, 0, 0, 0 };
+        AdjustWindowRectEx(&z, *style, false, *ex_style);
+        window_width = r->w() - z.w();
+        window_height = r->h() - z.h();
+
     } else {
+
         *style = WS_POPUP;
 
         // check the monitor is still there and the same size
@@ -1034,9 +1047,10 @@ HRESULT App::get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
         } else {
             *r = { 0, 0, default_monitor_width, default_monitor_height };
         }
+        // client size is same as window rect for WS_POPUP (no border/caption etc)
+        window_width = r->w();
+        window_height = r->h();
     }
-    window_width = r->w();
-    window_height = r->h();
     Log("Startup window is %dx%d (at %d,%d)", window_width, window_height, r->left, r->top);
     return S_OK;
 }
@@ -1987,7 +2001,7 @@ HRESULT App::copy_selection()
     ComPtr<ID3D11Texture2D> tex;
 
     CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
-    d3d_name(tex);
+    D3D_SET_NAME(tex);
 
     d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
 
@@ -2659,7 +2673,7 @@ HRESULT App::create_device()
 
     CHK_HR(
         d3d_device->CreateVertexShader(vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
-    d3d_name(vertex_shader);
+    D3D_SET_NAME(vertex_shader);
 
     CHK_HR(d3d_device->CreatePixelShader(ps_drawimage_shaderbin, sizeof(ps_drawimage_shaderbin), null, &pixel_shader));
     CHK_HR(d3d_device->CreatePixelShader(ps_drawrect_shaderbin, sizeof(ps_drawrect_shaderbin), null, &rect_shader));
@@ -2667,10 +2681,10 @@ HRESULT App::create_device()
     CHK_HR(d3d_device->CreatePixelShader(ps_solid_shaderbin, sizeof(ps_solid_shaderbin), null, &solid_shader));
     CHK_HR(d3d_device->CreatePixelShader(ps_spinner_shaderbin, sizeof(ps_spinner_shaderbin), null, &spinner_shader));
 
-    d3d_name(pixel_shader);
-    d3d_name(rect_shader);
-    d3d_name(grid_shader);
-    d3d_name(solid_shader);
+    D3D_SET_NAME(pixel_shader);
+    D3D_SET_NAME(rect_shader);
+    D3D_SET_NAME(grid_shader);
+    D3D_SET_NAME(solid_shader);
 
     D3D11_SAMPLER_DESC sampler_desc{ CD3D11_SAMPLER_DESC(D3D11_DEFAULT) };
 
@@ -2679,7 +2693,7 @@ HRESULT App::create_device()
     sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
 
     CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
-    d3d_name(sampler_state);
+    D3D_SET_NAME(sampler_state);
 
     D3D11_BUFFER_DESC constant_buffer_desc{};
 
@@ -2689,7 +2703,7 @@ HRESULT App::create_device()
     constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
     CHK_HR(d3d_device->CreateBuffer(&constant_buffer_desc, null, &constant_buffer));
-    d3d_name(constant_buffer);
+    D3D_SET_NAME(constant_buffer);
 
     D3D11_RASTERIZER_DESC rasterizer_desc{};
 
@@ -2697,7 +2711,7 @@ HRESULT App::create_device()
     rasterizer_desc.CullMode = D3D11_CULL_NONE;
 
     CHK_HR(d3d_device->CreateRasterizerState(&rasterizer_desc, &rasterizer_state));
-    d3d_name(rasterizer_state);
+    D3D_SET_NAME(rasterizer_state);
 
     // DirectWrite / Direct2D init
 
@@ -2737,17 +2751,24 @@ HRESULT App::create_resources()
     rendertarget_view.Reset();
     d2d_render_target.Reset();
 
-    const UINT backBufferWidth = static_cast<UINT>(window_width);
-    const UINT backBufferHeight = static_cast<UINT>(window_height);
-    const DXGI_FORMAT backBufferFormat = DXGI_FORMAT_B8G8R8A8_UNORM;    // DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    constexpr UINT backBufferCount = 2;
+    const UINT client_width = static_cast<UINT>(window_width);
+    const UINT client_height = static_cast<UINT>(window_height);
+    const DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM;
     const DXGI_SCALING scaling_mode = DXGI_SCALING_STRETCH;
-    const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     const DXGI_SWAP_CHAIN_FLAG swap_flags = (DXGI_SWAP_CHAIN_FLAG)0;
+
+#if USE_DIRECTCOMPOSITION
+    constexpr UINT backBufferCount = 2;
+    const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+#else
+    constexpr UINT backBufferCount = 1;
+    const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_DISCARD;
+#endif
 
     // If the swap chain already exists, resize it, otherwise create one.
     if(swap_chain.Get() != null) {
-        HRESULT hr = swap_chain->ResizeBuffers(backBufferCount, backBufferWidth, backBufferHeight, backBufferFormat, 0);
+
+        HRESULT hr = swap_chain->ResizeBuffers(backBufferCount, client_width, client_height, format, swap_flags);
 
         if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
 
@@ -2756,6 +2777,7 @@ HRESULT App::create_resources()
             // OnDeviceLost will set up the new device.
             return S_OK;
         }
+
     } else {
 
         // First, retrieve the underlying DXGI Device from the D3D Device.
@@ -2772,9 +2794,9 @@ HRESULT App::create_resources()
 
         // Create a descriptor for the swap chain.
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-        swapChainDesc.Width = backBufferWidth;
-        swapChainDesc.Height = backBufferHeight;
-        swapChainDesc.Format = backBufferFormat;
+        swapChainDesc.Width = client_width;
+        swapChainDesc.Height = client_height;
+        swapChainDesc.Format = format;
         swapChainDesc.SampleDesc.Count = 1;
         swapChainDesc.SampleDesc.Quality = 0;
         swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -2786,6 +2808,7 @@ HRESULT App::create_resources()
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
         fsSwapChainDesc.Windowed = TRUE;
 
+#if USE_DIRECTCOMPOSITION
         CHK_HR(dxgiFactory->CreateSwapChainForComposition(d3d_device.Get(), &swapChainDesc, NULL, &swap_chain));
 
         CHK_HR(DCompositionCreateDevice(NULL, IID_PPV_ARGS(&directcomposition_device)));
@@ -2794,16 +2817,19 @@ HRESULT App::create_resources()
         CHK_HR(directcomposition_target->SetRoot(directcomposition_visual.Get()));
         CHK_HR(directcomposition_visual->SetContent(swap_chain.Get()));
         CHK_HR(directcomposition_device->Commit());
+#else
+        CHK_HR(dxgiFactory->CreateSwapChainForHwnd(d3d_device.Get(), window, &swapChainDesc, NULL, NULL, &swap_chain));
+#endif
     }
 
     ComPtr<ID3D11Texture2D> back_buffer;
     CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
-    d3d_name(back_buffer);
+    D3D_SET_NAME(back_buffer);
 
     CD3D11_RENDER_TARGET_VIEW_DESC desc(D3D11_RTV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
 
     CHK_HR(d3d_device->CreateRenderTargetView(back_buffer.Get(), &desc, &rendertarget_view));
-    d3d_name(rendertarget_view);
+    D3D_SET_NAME(rendertarget_view);
 
     D3D11_BLEND_DESC blend_desc{ 0 };
 
@@ -2817,7 +2843,7 @@ HRESULT App::create_resources()
     blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
     CHK_HR(d3d_device->CreateBlendState(&blend_desc, &blend_state));
-    d3d_name(blend_state);
+    D3D_SET_NAME(blend_state);
 
     // Direct 2D init
 

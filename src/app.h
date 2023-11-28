@@ -507,9 +507,11 @@ private:
     ComPtr<IDXGISwapChain1> swap_chain;
     ComPtr<ID3D11RenderTargetView> rendertarget_view;
 
+#if USE_DIRECTCOMPOSITION
     ComPtr<IDCompositionDevice> directcomposition_device;
     ComPtr<IDCompositionTarget> directcomposition_target;
     ComPtr<IDCompositionVisual> directcomposition_visual;
+#endif
 
     ComPtr<ID3D11PixelShader> pixel_shader;
     ComPtr<ID3D11PixelShader> grid_shader;
