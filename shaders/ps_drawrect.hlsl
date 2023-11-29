@@ -5,7 +5,7 @@ SamplerState mysampler : register(s0);
 
 float4 main(vs_out input) : SV_TARGET
 {
-    uint2 p = (int2)input.position.xy;
+    uint2 p = (int2) input.position.xy;
     uint4 a = abs(int4(p - rect_f.xy, p - rect_f.zw));
 
     int left = a.x < select_border_width;

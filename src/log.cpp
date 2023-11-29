@@ -9,7 +9,8 @@ void write_line_to_file(char const *txt, uint32 len)
     static std::mutex mutex;
     std::lock_guard<std::mutex> lockguard(mutex);
 
-    HANDLE h = CreateFile(TEXT("log.txt"), FILE_APPEND_DATA, FILE_SHARE_READ, null, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
+    HANDLE h =
+        CreateFile(TEXT("log.txt"), FILE_APPEND_DATA, FILE_SHARE_READ, null, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
     if(h != INVALID_HANDLE_VALUE) {
         DWORD wrote;
         WriteFile(h, txt, len, &wrote, null);

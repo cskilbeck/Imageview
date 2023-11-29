@@ -59,9 +59,11 @@ ULONG STDMETHODCALLTYPE ResourceFontCollectionLoader::Release()
     return newCount;
 }
 
-HRESULT STDMETHODCALLTYPE ResourceFontCollectionLoader::CreateEnumeratorFromKey(IDWriteFactory *factory,
-                                                                                void const *collectionKey,    // [collectionKeySize] in bytes
-                                                                                UINT32 collectionKeySize, OUT IDWriteFontFileEnumerator **fontFileEnumerator)
+HRESULT STDMETHODCALLTYPE
+ResourceFontCollectionLoader::CreateEnumeratorFromKey(IDWriteFactory *factory,
+                                                      void const *collectionKey,    // [collectionKeySize] in bytes
+                                                      UINT32 collectionKeySize,
+                                                      OUT IDWriteFontFileEnumerator **fontFileEnumerator)
 {
     *fontFileEnumerator = NULL;
 
@@ -135,7 +137,8 @@ HRESULT ResourceFontContext::InitializeInternal()
 }
 
 HRESULT ResourceFontContext::CreateFontCollection(UINT const *fontCollectionKey,    // [keySize] in bytes
-                                                  UINT32 keySize, OUT IDWriteFontCollection **result)
+                                                  UINT32 keySize,
+                                                  OUT IDWriteFontCollection **result)
 {
     *result = NULL;
 
@@ -143,14 +146,16 @@ HRESULT ResourceFontContext::CreateFontCollection(UINT const *fontCollectionKey,
         return E_UNEXPECTED;
     }
 
-    return dwrite_factory->CreateCustomFontCollection(ResourceFontCollectionLoader::GetLoader(), fontCollectionKey, keySize, result);
+    return dwrite_factory->CreateCustomFontCollection(
+        ResourceFontCollectionLoader::GetLoader(), fontCollectionKey, keySize, result);
 }
 
 //////////////////////////////////////////////////////////////////////
 // ResourceFontFileEnumerator
 //////////////////////////////////////////////////////////////////////
 
-ResourceFontFileEnumerator::ResourceFontFileEnumerator(IDWriteFactory *factory) : refCount_(0), factory_(SafeAcquire(factory)), currentFile_(), nextIndex_(0)
+ResourceFontFileEnumerator::ResourceFontFileEnumerator(IDWriteFactory *factory)
+    : refCount_(0), factory_(SafeAcquire(factory)), currentFile_(), nextIndex_(0)
 {
 }
 
@@ -195,7 +200,8 @@ HRESULT STDMETHODCALLTYPE ResourceFontFileEnumerator::MoveNext(OUT BOOL *hasCurr
     SafeRelease(&currentFile_);
 
     if(nextIndex_ < resourceIDs_.size()) {
-        hr = factory_->CreateCustomFontFileReference(&resourceIDs_[nextIndex_], sizeof(UINT), ResourceFontFileLoader::GetLoader(), &currentFile_);
+        hr = factory_->CreateCustomFontFileReference(
+            &resourceIDs_[nextIndex_], sizeof(UINT), ResourceFontFileLoader::GetLoader(), &currentFile_);
 
         if(SUCCEEDED(hr)) {
             *hasCurrentFile = TRUE;
@@ -260,8 +266,10 @@ ULONG STDMETHODCALLTYPE ResourceFontFileLoader::Release()
 //
 //      In this case the key is a UINT which identifies a font resources.
 //
-HRESULT STDMETHODCALLTYPE ResourceFontFileLoader::CreateStreamFromKey(void const *fontFileReferenceKey,    // [fontFileReferenceKeySize] in bytes
-                                                                      UINT32 fontFileReferenceKeySize, OUT IDWriteFontFileStream **fontFileStream)
+HRESULT STDMETHODCALLTYPE
+ResourceFontFileLoader::CreateStreamFromKey(void const *fontFileReferenceKey,    // [fontFileReferenceKeySize] in bytes
+                                            UINT32 fontFileReferenceKeySize,
+                                            OUT IDWriteFontFileStream **fontFileStream)
 {
     *fontFileStream = NULL;
 
@@ -348,8 +356,11 @@ ULONG STDMETHODCALLTYPE ResourceFontFileStream::Release()
 }
 
 // IDWriteFontFileStream methods
-HRESULT STDMETHODCALLTYPE ResourceFontFileStream::ReadFileFragment(void const **fragmentStart,    // [fragmentSize] in bytes
-                                                                   UINT64 fileOffset, UINT64 fragmentSize, OUT void **fragmentContext)
+HRESULT STDMETHODCALLTYPE
+ResourceFontFileStream::ReadFileFragment(void const **fragmentStart,    // [fragmentSize] in bytes
+                                         UINT64 fileOffset,
+                                         UINT64 fragmentSize,
+                                         OUT void **fragmentContext)
 {
     // The loader is responsible for doing a bounds check.
     if(fileOffset <= resourceSize_ && fragmentSize <= resourceSize_ - fileOffset) {
