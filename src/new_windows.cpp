@@ -6,7 +6,7 @@ float GetWindowDPI(HWND w)
 {
     UINT dpi = 0;
 
-    HMODULE h = LoadLibrary(L"user32.dll");
+    HMODULE h = LoadLibraryA("user32.dll");
     if(h != null) {
 
         typedef UINT (*GetDpiForWindowFN)(HWND w);

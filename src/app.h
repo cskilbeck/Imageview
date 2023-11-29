@@ -63,7 +63,7 @@ namespace App
     // reset to blank state before anything happens, load settings
     // maybe return S_FALSE if existing instance was reused
 
-    HRESULT init(wchar *cmd_line);
+    HRESULT init(char *cmd_line);
 
     //////////////////////////////////////////////////////////////////////
     // get some defaults for window creation
@@ -151,11 +151,11 @@ namespace App
     // handle this command line either because it's the command line or another instance
     // of the application was run and it's in single window mode (settings.reuse_window == true)
 
-    HRESULT on_command_line(wchar *cmd_line);
+    HRESULT on_command_line(char *cmd_line);
 
     //////////////////////////////////////////////////////////////////////
 
-    extern LPCWSTR window_class;
+    extern LPCSTR window_class;
     extern bool is_elevated;
 
     static constexpr LRESULT LRESULT_LAUNCH_AS_ADMIN = 0x29034893;

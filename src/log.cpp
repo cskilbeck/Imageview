@@ -23,7 +23,7 @@ void write_line_to_file(char const *txt, uint32 len)
 
 void write_line_to_file(wchar const *txt, uint32 len)
 {
-    std::string s = str_from_wide(txt, len);
+    std::string s = utf8(txt, len);
     write_line_to_file(s.c_str(), static_cast<uint32>(s.length()));
 }
 

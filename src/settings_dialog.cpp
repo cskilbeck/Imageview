@@ -72,8 +72,8 @@ namespace
         case WM_INITDIALOG: {
             HWND about = GetDlgItem(dlg, IDC_SETTINGS_EDIT_ABOUT);
             SendMessage(about, EM_SETREADONLY, 1, 0);
-            SetWindowText(about,
-                          L"\r\n\r\n\r\n\r\nImageView\r\n\r\nVersion ${version}\r\n\r\nBuilt ${build_timestamp}");
+            SetWindowTextA(about,
+                           "\r\n\r\n\r\n\r\nImageView\r\n\r\nVersion ${version}\r\n\r\nBuilt ${build_timestamp}");
             return 0;
         }
         }
@@ -104,15 +104,15 @@ namespace
 
             int width = listview_rect.w() - GetSystemMetrics(SM_CXVSCROLL);
 
-            LVCOLUMN column;
+            LVCOLUMNA column;
             memset(&column, 0, sizeof(column));
             column.mask = LVCF_TEXT | LVCF_WIDTH;
             column.fmt = LVCFMT_LEFT;
             column.cx = width * 70 / 100;
-            column.pszText = const_cast<LPWSTR>(L"Action");
+            column.pszText = const_cast<LPSTR>("Action");
             ListView_InsertColumn(listview, 0, &column);
             column.cx = width * 30 / 100;
-            column.pszText = const_cast<LPWSTR>(L"Hotkey");
+            column.pszText = const_cast<LPSTR>("Hotkey");
             ListView_InsertColumn(listview, 1, &column);
             ListView_SetExtendedListViewStyle(listview, LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT | LVS_EX_FLATSB);
             ListView_SetView(listview, LV_VIEW_DETAILS);
@@ -124,22 +124,22 @@ namespace
 
             HKL layout = GetKeyboardLayout(GetCurrentThreadId());
 
-            LVITEM item;
+            LVITEMA item;
             memset(&item, 0, sizeof(item));
             item.mask = LVIF_TEXT;
 
             int index = 0;
             for(auto const &a : accelerators) {
 
-                std::wstring action_text;
+                std::string action_text;
                 get_hotkey_description(a, action_text);
 
-                std::wstring key_text;
+                std::string key_text;
                 get_accelerator_hotkey_text(a.cmd, accelerators, layout, key_text);
 
                 if(!(action_text.empty() || key_text.empty())) {
 
-                    Log(L"%s: %s", action_text.c_str(), key_text.c_str());
+                    Log("%s: %s", action_text.c_str(), key_text.c_str());
 
                     item.iItem = index++;
                     item.iSubItem = 0;
@@ -204,17 +204,17 @@ namespace
 
     struct settings_tab_t
     {
-        LPWSTR resource_id;
+        LPSTR resource_id;
         DLGPROC handler;
         elevation_t requires_elevation;
     };
 
     settings_tab_t tabs[] = {
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::hide_if_elevated },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::hide_if_elevated },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -233,10 +233,10 @@ namespace
 
         case WM_CTLCOLORBTN:
         case WM_CTLCOLORSTATIC: {
-            wchar_t class_name[100];
-            GetClassName(dlg, class_name, _countof(class_name));
-            WNDCLASS lpcls{};
-            GetClassInfo(GetModuleHandle(null), class_name, &lpcls);
+            char class_name[100];
+            GetClassNameA(dlg, class_name, _countof(class_name));
+            WNDCLASSA lpcls{};
+            GetClassInfoA(GetModuleHandle(null), class_name, &lpcls);
             return (LRESULT)lpcls.hbrBackground;
         }
 
@@ -293,9 +293,9 @@ namespace
             HWND page_dlg;
             CHK_NULL(page_dlg = CreateDialogIndirect(GetModuleHandle(nullptr), dlg_template, tab_ctrl, tab.handler));
 
-            TCITEM tie{};
+            TCITEMA tie{};
             tie.mask = TCIF_TEXT;
-            tie.pszText = const_cast<wchar *>(localize((uint64)tab.resource_id));
+            tie.pszText = const_cast<char *>(localize((uint64)tab.resource_id));
             TabCtrl_InsertItem(tab_ctrl, i, &tie);
 
             SetWindowSubclass(page_dlg, child_proc, 0, 0);
@@ -364,7 +364,7 @@ namespace
     HRESULT show_settings_page(uint tab)
     {
         if(tab >= _countof(tabs)) {
-            Log(L"!? Tab %d is out of range (there are %d tabs)", tab, _countof(tabs));
+            Log("!? Tab %d is out of range (there are %d tabs)", tab, _countof(tabs));
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
         if(current_page != null) {
@@ -463,5 +463,5 @@ LRESULT show_settings_dialog(HWND parent)
 {
     current_page = null;
     pages.clear();
-    return DialogBox(GetModuleHandle(null), MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler);
+    return DialogBoxA(GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler);
 }

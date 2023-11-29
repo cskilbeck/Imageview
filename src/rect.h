@@ -58,11 +58,9 @@ struct rect : RECT
         return { left, top };
     }
 
-    std::basic_string<wchar> as_string()
+    std::string as_string()
     {
-        std::basic_ostringstream<wchar> s;
-        s << L"X:" << x() << L" Y:" << y() << L" W:" << w() << L" H:" << h();
-        return s.str();
+        return std::format("X:{} Y:{} W:{} H:{}", x(), y(), w(), h());
     }
 };
 

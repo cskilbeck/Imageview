@@ -12,7 +12,6 @@
 // TO FIX
 // maximize/minimize/restore bug
 // clean up namespaces
-// switch to format {}
 // logging with levels
 // std::string everywhere
 // utf8 everywhere
@@ -158,11 +157,11 @@ namespace App
     struct image_file
     {
         image_file() = default;
-        image_file(std::wstring const &name) : filename(name)
+        image_file(std::string const &name) : filename(name)
         {
         }
 
-        std::wstring filename;           // file path, use this as key for map
+        std::string filename;            // file path, use this as key for map
         std::vector<byte> bytes;         // file contents, once it has been loaded
         HRESULT hresult{ E_PENDING };    // error code or S_OK from load_file()
         int index{ -1 };                 // position in the list of files
@@ -190,16 +189,16 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // files which have been loaded
 
-    std::unordered_map<std::wstring, image_file *> loaded_files;
+    std::unordered_map<std::string, image_file *> loaded_files;
 
     //////////////////////////////////////////////////////////////////////
     // files which have been requested to load
 
-    std::unordered_map<std::wstring, image_file *> loading_files;
+    std::unordered_map<std::string, image_file *> loading_files;
 
     //////////////////////////////////////////////////////////////////////
 
-    LPCWSTR window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
+    LPCSTR window_class = "ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
     bool is_elevated{ false };
 
@@ -210,7 +209,7 @@ namespace App
     FileDropper file_dropper;
 
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
-    std::wstring current_folder;
+    std::string current_folder;
 
     // most recently scanned folder results
     std::unique_ptr<folder_scan_result> current_folder_scan;
@@ -241,7 +240,7 @@ namespace App
     HANDLE window_created_event{ null };
 
     // admin for showing a message
-    std::wstring current_message;
+    std::string current_message;
     double message_timestamp{ 0 };
     double message_fade_time{ 0 };
 
@@ -361,7 +360,7 @@ namespace App
         src source;
         short id;
 
-        cursor_def(src s, wchar const *i) : source(s), id((short)((intptr_t)i & 0xffff))
+        cursor_def(src s, char const *i) : source(s), id((short)((intptr_t)i & 0xffff))
         {
         }
 
@@ -375,7 +374,7 @@ namespace App
             if(source == src::user) {
                 h = GetModuleHandle(null);
             }
-            return LoadCursor(h, MAKEINTRESOURCE(id));
+            return LoadCursor(h, MAKEINTRESOURCEA(id));
         }
     };
 
@@ -435,7 +434,7 @@ namespace App
         HRESULT load();
 
         // where in the registry to put the settings. this does not need to be localized... right?
-        static wchar constexpr settings_key_name[] = L"Software\\ImageView";
+        static char constexpr settings_key_name[] = "Software\\ImageView";
 
         enum class serialize_action
         {
@@ -443,11 +442,11 @@ namespace App
             load
         };
 
-        HRESULT serialize(serialize_action action, wchar const *save_key_name);
+        HRESULT serialize(serialize_action action, char const *save_key_name);
 
         // write or read a settings field to or from the registry - helper for serialize()
         HRESULT serialize_setting(
-            settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size);
+            settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size);
     };
 
     settings_t settings;
@@ -516,7 +515,7 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
 
-    void set_message(std::wstring const &message, double fade_time)
+    void set_message(std::string const &message, double fade_time)
     {
         current_message = message;
         message_timestamp = m_timer.wall_time();
@@ -525,7 +524,7 @@ namespace App
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_image_file_size(wchar const *filename, uint64 *size)
+    HRESULT get_image_file_size(char const *filename, uint64 *size)
     {
         if(size == null || filename == null || filename[0] == 0) {
             return E_INVALIDARG;
@@ -598,7 +597,7 @@ namespace App
 
                 if(y >= 0 && y < (int)current_folder_scan->files.size()) {
 
-                    std::wstring this_file = current_folder_scan->path + L"\\" + current_folder_scan->files[y].name;
+                    std::string this_file = current_folder_scan->path + "\\" + current_folder_scan->files[y].name;
 
                     if(loading_files.find(this_file) == loading_files.end() &&
                        loaded_files.find(this_file) == loaded_files.end()) {
@@ -624,7 +623,7 @@ namespace App
 
                                     if(loser != null) {
 
-                                        Log(L"Removing %s (%d) from cache (now %d MB in use)",
+                                        Log("Removing %s (%d) from cache (now %d MB in use)",
                                             loser->filename.c_str(),
                                             loser->index,
                                             cache_in_use / 1048576);
@@ -639,7 +638,7 @@ namespace App
 
                             if((cache_in_use + img_size) <= settings.cache_size) {
 
-                                Log(L"Caching %s at %d", this_file.c_str(), y);
+                                Log("Caching %s at %d", this_file.c_str(), y);
                                 image_file *cache_file = new image_file(this_file);
                                 cache_file->is_cache_load = true;
                                 loading_files[this_file] = cache_file;
@@ -657,26 +656,26 @@ namespace App
     // load an image file or get it from the cache (or notice that it's
     // already being loaded and just let it arrive later)
 
-    HRESULT load_image(wchar const *filepath)
+    HRESULT load_image(char const *filepath)
     {
         if(filepath == null || filepath[0] == 0) {
             return E_INVALIDARG;
         }
 
-        std::wstring filename = std::wstring(filepath);
+        std::string filename = std::string(filepath);
 
         // get somewhat canonical filepath and parts thereof
 
-        std::wstring folder;
-        std::wstring name;
-        std::wstring fullpath;
+        std::string folder;
+        std::string name;
+        std::string fullpath;
 
         CHK_HR(file_get_full_path(filename.c_str(), fullpath));
         CHK_HR(file_get_filename(fullpath.c_str(), name));
         CHK_HR(file_get_path(fullpath.c_str(), folder));
 
         if(folder.empty()) {
-            folder = L".";
+            folder = ".";
         } else if(folder.back() == '\\') {
             folder.pop_back();
         }
@@ -685,7 +684,7 @@ namespace App
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
-            Log(L"Already got %s", name.c_str());
+            Log("Already got %s", name.c_str());
             CHK_HR(display_image(found->second));
             CHK_HR(warm_cache());
             return S_OK;
@@ -695,7 +694,7 @@ namespace App
 
         found = loading_files.find(fullpath);
         if(found != loading_files.end()) {
-            Log(L"In progress %s", name.c_str());
+            Log("In progress %s", name.c_str());
             requested_file = found->second;
             return S_OK;
         }
@@ -705,7 +704,7 @@ namespace App
 
         // file_loader object is later transferred from loading_files to loaded_files
 
-        Log(L"Loading %s", name.c_str());
+        Log("Loading %s", name.c_str());
 
         image_file *fl = new image_file();
         fl->filename = fullpath;
@@ -719,7 +718,7 @@ namespace App
 
         // loading a file from a new folder or the current scanned folder?
 
-        if(_wcsicmp(current_folder.c_str(), folder.c_str()) != 0) {
+        if(_stricmp(current_folder.c_str(), folder.c_str()) != 0) {
 
             // tell the scanner thread to scan this new folder
             // when it's done it will notify main thread with a windows message
@@ -740,12 +739,12 @@ namespace App
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT load_image_file(wchar const *filepath)
+    HRESULT load_image_file(char const *filepath)
     {
         if(!file_exists(filepath)) {
-            std::wstring msg(filepath);
-            msg = msg.substr(0, msg.find_first_of(L"\r\n\t"));
-            set_message(std::format(L"Can't load {}", msg), 2.0f);
+            std::string msg(filepath);
+            msg = msg.substr(0, msg.find_first_of("\r\n\t"));
+            set_message(std::format("Can't load {}", msg), 2.0f);
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);
@@ -762,7 +761,7 @@ namespace App
         PWSTR path{};
         CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
         DEFER(CoTaskMemFree(path));
-        return App::load_image_file(path);
+        return App::load_image_file(utf8(path).c_str());
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -772,7 +771,7 @@ namespace App
 
     HRESULT FileDropper::on_drop_string(wchar const *str)
     {
-        std::wstring bare_name = strip_quotes(str);
+        std::string bare_name = strip_quotes(utf8(str).c_str());
         return App::load_image_file(bare_name.c_str());
     }
 
@@ -808,24 +807,24 @@ namespace App
     // save or load a setting
 
     HRESULT settings_t::serialize_setting(
-        settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, DWORD size)
+        settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size)
     {
         switch(action) {
 
         case settings_t::serialize_action::save: {
             HKEY key;
-            CHK_HR(RegCreateKeyEx(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_WRITE, null, &key, null));
+            CHK_HR(RegCreateKeyExA(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_WRITE, null, &key, null));
             DEFER(RegCloseKey(key));
-            CHK_HR(RegSetValueEx(key, name, 0, REG_BINARY, var, size));
+            CHK_HR(RegSetValueExA(key, name, 0, REG_BINARY, var, size));
         } break;
 
         case settings_t::serialize_action::load: {
             HKEY key;
             CHK_HR(
-                RegCreateKeyEx(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_READ | KEY_QUERY_VALUE, null, &key, null));
+                RegCreateKeyExA(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_READ | KEY_QUERY_VALUE, null, &key, null));
             DEFER(RegCloseKey(key));
             DWORD cbsize = 0;
-            if(FAILED(RegQueryValueEx(key, name, null, null, null, &cbsize)) || cbsize != size) {
+            if(FAILED(RegQueryValueExA(key, name, null, null, null, &cbsize)) || cbsize != size) {
                 return S_FALSE;
             }
             CHK_HR(RegGetValue(
@@ -839,7 +838,7 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // save or load all the settings
 
-    HRESULT settings_t::serialize(serialize_action action, wchar const *save_key_name)
+    HRESULT settings_t::serialize(serialize_action action, char const *save_key_name)
     {
         if(save_key_name == null) {
             return E_INVALIDARG;
@@ -847,7 +846,7 @@ namespace App
 
 #undef DECL_SETTING
 #define DECL_SETTING(type, name, ...) \
-    CHK_HR(serialize_setting(action, save_key_name, L#name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
 #include "settings.h"
 
         return S_OK;
@@ -1068,7 +1067,7 @@ namespace App
 
         // done
 
-        set_message(std::format(L"Copied {}x{}", w, h), 3);
+        set_message(std::format("Copied {}x{}", w, h), 3);
 
         return S_OK;
     }
@@ -1085,16 +1084,16 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // if it's already running, send it the command line and return S_FALSE
 
-    HRESULT reuse_window(wchar *cmd_line)
+    HRESULT reuse_window(char *cmd_line)
     {
         if(settings.reuse_window) {
-            HWND existing_window = FindWindow(window_class, null);
+            HWND existing_window = FindWindowA(window_class, null);
             if(existing_window != null) {
                 COPYDATASTRUCT c;
-                c.cbData = static_cast<DWORD>((wcslen(cmd_line) + 1) * sizeof(wchar));
+                c.cbData = static_cast<DWORD>((strlen(cmd_line) + 1) * sizeof(char));
                 c.lpData = reinterpret_cast<void *>(cmd_line);
                 c.dwData = static_cast<DWORD>(copydata_t::commandline);
-                SendMessageW(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
+                SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
 
                 // some confusion about whether this is legit but
                 // BringWindowToFront doesn't work for top level windows
@@ -1108,11 +1107,11 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // process a command line, could be from another instance
 
-    HRESULT on_command_line(wchar *cmd_line)
+    HRESULT on_command_line(char *cmd_line)
     {
         // parse args
         int argc;
-        wchar **argv = CommandLineToArgvW(cmd_line, &argc);
+        wchar **argv = CommandLineToArgvW(unicode(cmd_line).c_str(), &argc);
 
         wchar const *filepath{ null };
 
@@ -1121,7 +1120,7 @@ namespace App
         }
 
         if(filepath != null) {
-            return load_image(filepath);
+            return load_image(utf8(filepath).c_str());
         }
         return S_OK;
     }
@@ -1170,12 +1169,12 @@ namespace App
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT set_window_text(std::wstring const &text)
+    HRESULT set_window_text(std::string const &text)
     {
         if(is_elevated) {
-            SetWindowText(window, std::format(L"** ADMIN! ** {}", text).c_str());
+            SetWindowTextA(window, std::format("** ADMIN! ** {}", text).c_str());
         } else {
-            SetWindowText(window, text.c_str());
+            SetWindowTextA(window, text.c_str());
         }
         return S_OK;
     }
@@ -1187,7 +1186,7 @@ namespace App
     {
         current_file = f;
 
-        std::wstring name;
+        std::string name;
 
         // hresult from load_file
         HRESULT hr = f->hresult;
@@ -1226,23 +1225,23 @@ namespace App
             } else {
                 CHK_HR(file_get_filename(f->filename.c_str(), name));
             }
-            std::wstring msg = std::format(L"{} {}x{}", name, texture_width, texture_height);
+            std::string msg = std::format("{} {}x{}", name, texture_width, texture_height);
             set_window_text(msg);
             set_message(msg, 2.0f);
 
         } else {
 
-            std::wstring err_str;
+            std::string err_str;
 
             // "Component not found" isn't meaningful for unknown file type, override it
             if(hr == WINCODEC_ERR_COMPONENTNOTFOUND) {
-                err_str = L"Unknown file type";
+                err_str = "Unknown file type";
             } else {
                 err_str = windows_error_message(hr);
             }
 
             CHK_HR(file_get_filename(f->filename.c_str(), name));
-            set_message(std::format(L"Can't load {} - {}", name, err_str), 3.0f);
+            set_message(std::format("Can't load {} - {}", name, err_str), 3.0f);
         }
         return hr;
     }
@@ -1259,7 +1258,7 @@ namespace App
 
         // if clipboard contains a PNG or DIB, make it look like a file we just loaded
 
-        UINT cf_png = RegisterClipboardFormat(L"PNG");
+        UINT cf_png = RegisterClipboardFormat("PNG");
         UINT cf_filename = RegisterClipboardFormat(CFSTR_FILENAMEW);
 
         bool got_clipboard = false;
@@ -1294,7 +1293,7 @@ namespace App
 
         if(got_clipboard) {
             select_active = false;
-            f.filename = L"Clipboard";
+            f.filename = "Clipboard";
             f.hresult = S_OK;
             f.index = -1;
             f.is_cache_load = true;
@@ -1337,19 +1336,19 @@ namespace App
             if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
                 // show a messagebox (because they probably ran it just now)
-                std::wstring load_err = windows_error_message(load_hr);
-                std::wstring err_msg = std::format(L"Error loading {}\n\n{}", f->filename, load_err);
-                MessageBoxW(null, err_msg.c_str(), L"ImageView", MB_ICONEXCLAMATION);
+                std::string load_err = windows_error_message(load_hr);
+                std::string err_msg = std::format("Error loading {}\n\n{}", f->filename, load_err);
+                MessageBoxA(null, err_msg.c_str(), "ImageView", MB_ICONEXCLAMATION);
 
                 // don't wait for window creation to complete, window might be null, that's ok
                 PostMessage(window, WM_CLOSE, 0, 0);
             }
 
             // and in any case, set window message to error text
-            std::wstring err_str = windows_error_message(load_hr);
-            std::wstring name;
+            std::string err_str = windows_error_message(load_hr);
+            std::string name;
             CHK_HR(file_get_filename(f->filename.c_str(), name));
-            set_message(std::format(L"Can't load {} - {}", name, err_str), 3);
+            set_message(std::format("Can't load {} - {}", name, err_str), 3);
             return load_hr;
         }
         files_loaded += 1;
@@ -1361,17 +1360,17 @@ namespace App
     // scan a folder - this runs in the folder_scanner_thread
     // results are sent to the main thread with SendMessage
 
-    HRESULT do_folder_scan(wchar const *folder_path)
+    HRESULT do_folder_scan(char const *folder_path)
     {
-        std::wstring path;
+        std::string path;
 
         CHK_HR(file_get_path(folder_path, path));
 
         delete[] folder_path;
 
-        Log(L"Scan folder %s", path.c_str());
+        Log("Scan folder %s", path.c_str());
 
-        std::vector<wchar const *> extensions;
+        std::vector<char const *> extensions;
 
         for(auto const &f : image_file_formats) {
             extensions.push_back(f.first.c_str());
@@ -1409,7 +1408,7 @@ namespace App
                 }
             }
         }
-        Log(L"File loader thread exit");
+        Log("File loader thread exit");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1431,14 +1430,14 @@ namespace App
                 if(GetMessage(&msg, null, 0, 0) != 0) {
                     switch(msg.message) {
                     case WM_SCAN_FOLDER:
-                        do_folder_scan(reinterpret_cast<wchar const *>(msg.lParam));
+                        do_folder_scan(reinterpret_cast<char const *>(msg.lParam));
                         break;
                     }
                     break;
                 }
             }
         }
-        Log(L"Scanner thread exit");
+        Log("Scanner thread exit");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1449,20 +1448,20 @@ namespace App
         if(current_folder_scan == null || f == null) {
             return E_INVALIDARG;
         }
-        std::wstring folder;
+        std::string folder;
         CHK_HR(file_get_path(f->filename.c_str(), folder));
 
-        if(_wcsicmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
+        if(_stricmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
             return E_CHANGED_STATE;
         }
 
-        std::wstring name;
+        std::string name;
         CHK_HR(file_get_filename(f->filename.c_str(), name));
         int id = 0;
         for(auto &ff : current_folder_scan->files) {
-            if(_wcsicmp(ff.name.c_str(), name.c_str()) == 0) {
+            if(_stricmp(ff.name.c_str(), name.c_str()) == 0) {
                 f->index = id;
-                Log(L"%s is at index %d", name.c_str(), id);
+                Log("%s is at index %d", name.c_str(), id);
                 if(current_file_cursor == -1) {
                     current_file_cursor = f->index;
                 }
@@ -1478,7 +1477,7 @@ namespace App
 
     void on_folder_scanned(folder_scan_result *scan_result)
     {
-        Log(L"%zu images found in %s", scan_result->files.size(), scan_result->path.c_str());
+        Log("%zu images found in %s", scan_result->files.size(), scan_result->path.c_str());
 
         current_folder_scan.reset(scan_result);
 
@@ -1504,8 +1503,8 @@ namespace App
 
         if(new_file_cursor != current_file_cursor) {
             current_file_cursor = new_file_cursor;
-            std::wstring const &name = current_folder_scan->files[current_file_cursor].name;
-            load_image(std::format(L"{}\\{}", current_folder_scan->path, name).c_str());
+            std::string const &name = current_folder_scan->files[current_file_cursor].name;
+            load_image(std::format("{}\\{}", current_folder_scan->path, name).c_str());
         }
     }
 
@@ -1665,11 +1664,11 @@ namespace App
     //   S_FALSE creates some events sets up default mouse cursor starts some threads loads settings checks command line
     //   and maybe initiates loading an image file
 
-    HRESULT init(wchar *cmd_line)
+    HRESULT init(char *cmd_line)
     {
         if(!XMVerifyCPUSupport()) {
-            std::wstring message = std::vformat(localize(IDS_OldCpu), std::make_wformat_args(localize(IDS_AppName)));
-            MessageBox(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
+            std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
+            MessageBoxA(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
             return S_FALSE;
         }
 
@@ -1685,7 +1684,7 @@ namespace App
 
         CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
 
-        Log(L"System has %lluGB of memory", system_memory_size_kb / 1048576);
+        Log("System has %lluGB of memory", system_memory_size_kb / 1048576);
 
         window_created_event = CreateEvent(null, true, false, null);
 
@@ -1977,11 +1976,11 @@ namespace App
 
             for(int i = 0; i < item_count; ++i) {
 
-                MENUITEMINFO mii;
+                MENUITEMINFOA mii;
                 mii.cbSize = sizeof(mii);
                 mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
 
-                if(GetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii)) {
+                if(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii)) {
 
                     // if it's a sub menu, just push it
                     if(mii.hSubMenu != null) {
@@ -1991,14 +1990,14 @@ namespace App
                     // else setup the menu item string
                     else if(mii.fType == MFT_STRING) {
 
-                        std::wstring text;
+                        std::string text;
                         text.resize(static_cast<size_t>(mii.cbSize) + 1);
                         mii.fMask = MIIM_STRING | MIIM_STATE;
                         mii.dwItemData = 0;
                         mii.dwTypeData = text.data();
                         mii.cch = static_cast<uint>(text.size());
 
-                        CHK_BOOL(GetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii));
+                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
 
                         mii.fState = 0;
 
@@ -2012,17 +2011,17 @@ namespace App
 
                         // get string for hotkeys
 
-                        std::wstring key_label;
+                        std::string key_label;
 
                         CHK_HR(get_accelerator_hotkey_text(mii.wID, accel_table, keyboard_layout, key_label));
 
-                        text = std::format(L"{}\t{}", text, key_label);
+                        text = std::format("{}\t{}", text, key_label);
 
                         // set the menu item text and state
                         mii.dwTypeData = text.data();
                         mii.cch = static_cast<uint>(text.size());
 
-                        CHK_BOOL(SetMenuItemInfo(cur_menu, i, MF_BYPOSITION, &mii));
+                        CHK_BOOL(SetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
                     }
                 }
             }
@@ -2033,11 +2032,11 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // get dimensions of a string including padding
 
-    HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size)
+    HRESULT measure_string(std::string const &text, IDWriteTextFormat *format, float padding, vec2 &size)
     {
         ComPtr<IDWriteTextLayout> text_layout;
 
-        CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(),
+        CHK_HR(dwrite_factory->CreateTextLayout(unicode(text).c_str(),
                                                 (UINT32)text.size(),
                                                 format,
                                                 (float)window_width * 2,
@@ -2197,7 +2196,7 @@ namespace App
 
         CHK_HR(create_text_formats());
 
-        CHK_HR(measure_string(L"X 9999 Y 9999", small_text_format.Get(), small_label_padding, small_label_size));
+        CHK_HR(measure_string("X 9999 Y 9999", small_text_format.Get(), small_label_padding, small_label_size));
 
         return S_OK;
     }
@@ -2468,7 +2467,7 @@ namespace App
                     setup_menu_accelerators(popup_menu);
 
                     popup_menu_active = true;
-                    set_message(L"", 0);    // TODO (chs): clear_message()
+                    set_message("", 0);    // TODO (chs): clear_message()
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
                     m_timer.reset();
                     popup_menu_active = false;
@@ -2714,7 +2713,7 @@ namespace App
         f.is_clipboard = true;
         f.bytes.clear();
         f.pixels.clear();
-        f.filename = L"Cropped";
+        f.filename = "Cropped";
         f.hresult = S_OK;
         f.index = -1;
         f.is_cache_load = true;
@@ -2804,14 +2803,14 @@ namespace App
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
             uint32 bg_color = color_to_uint32(settings.background_color);
-            if(SUCCEEDED(select_color_dialog(window, bg_color, L"Choose background color"))) {
+            if(SUCCEEDED(select_color_dialog(window, bg_color, "Choose background color"))) {
                 settings.background_color = uint32_to_color(bg_color);
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
             uint32 border_color = color_to_uint32(settings.border_color);
-            if(SUCCEEDED(select_color_dialog(window, border_color, L"Choose border color"))) {
+            if(SUCCEEDED(select_color_dialog(window, border_color, "Choose border color"))) {
                 settings.border_color = uint32_to_color(border_color);
             }
         } break;
@@ -2844,7 +2843,7 @@ namespace App
             break;
 
         case ID_FILE_OPEN: {
-            std::wstring selected_filename;
+            std::string selected_filename;
             if(SUCCEEDED(select_file_dialog(window, selected_filename))) {
                 load_image(selected_filename.c_str());
             }
@@ -2852,15 +2851,15 @@ namespace App
 
         case ID_FILE_SAVE: {
 
-            std::wstring filename;
+            std::string filename;
             if(SUCCEEDED(save_file_dialog(window, filename))) {
 
                 image const &img = current_file->img;
                 HRESULT hr = save_image_file(filename.c_str(), img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
-                    MessageBox(window, windows_error_message(hr).c_str(), L"Can't save file", MB_ICONEXCLAMATION);
+                    MessageBoxA(window, windows_error_message(hr).c_str(), "Can't save file", MB_ICONEXCLAMATION);
                 } else {
-                    set_message(std::format(L"Saved {}", filename), 5);
+                    set_message(std::format("Saved {}", filename), 5);
                 }
             }
         } break;
@@ -2883,7 +2882,7 @@ namespace App
 
     void reset_settings()
     {
-        if(MessageBox(window, L"Reset settings to factory defaults!?", localize(IDS_AppName), MB_YESNO) == IDYES) {
+        if(MessageBoxA(window, "Reset settings to factory defaults!?", localize(IDS_AppName), MB_YESNO) == IDYES) {
 
             bool old_fullscreen = settings.fullscreen;
             WINDOWPLACEMENT old_windowplacement = settings.window_placement;
@@ -2950,7 +2949,7 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // draw some text with a box round it
 
-    HRESULT draw_string(std::wstring const &text,
+    HRESULT draw_string(std::string const &text,
                         IDWriteTextFormat *format,
                         vec2 pos,
                         vec2 pivot,
@@ -2967,7 +2966,7 @@ namespace App
 
         // This sucks that you have to create and destroy a com object to draw a text string
 
-        CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(),
+        CHK_HR(dwrite_factory->CreateTextLayout(unicode(text).c_str(),
                                                 (UINT32)text.size(),
                                                 format,
                                                 (float)window_width * 2,
@@ -3253,7 +3252,7 @@ namespace App
 
             if(crosshairs_active) {
                 vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-                std::wstring text{ std::format(L"X {} Y {}", (int)p.x, (int)p.y) };
+                std::string text{ std::format("X {} Y {}", (int)p.x, (int)p.y) };
                 vec2 screen_pos = texture_to_screen_pos(p);
                 screen_pos.x -= dpi_scale(12);
                 screen_pos.y += dpi_scale(8);
@@ -3276,7 +3275,7 @@ namespace App
                 s_br.x += dpi_scale(12);
                 s_br.y += dpi_scale(8);
                 POINT s_dim{ (int)(floorf(br.x) - floorf(tl.x)) + 1, (int)(floorf(br.y) - floorf(tl.y)) + 1 };
-                draw_string(std::format(L"X {} Y {}", (int)tl.x, (int)tl.y),
+                draw_string(std::format("X {} Y {}", (int)tl.x, (int)tl.y),
                             small_text_format.Get(),
                             s_tl,
                             { 1, 1 },
@@ -3284,7 +3283,7 @@ namespace App
                             2,
                             2);
                 draw_string(
-                    std::format(L"W {} H {}", s_dim.x, s_dim.y), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+                    std::format("W {} H {}", s_dim.x, s_dim.y), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
             }
 
             if(!current_message.empty()) {
@@ -3295,7 +3294,7 @@ namespace App
                 if(message_alpha <= 1) {
                     message_alpha = 1 - powf(message_alpha, 16);
                     vec2 pos{ window_width / 2.0f, window_height - 12.0f };
-                    draw_string(std::format(L"{}", current_message),
+                    draw_string(std::format("{}", current_message),
                                 large_text_format.Get(),
                                 pos,
                                 { 0.5f, 1.0f },
@@ -3599,10 +3598,10 @@ namespace App
 
         if(relaunch_as_admin) {
 
-            wchar exe_path[MAX_PATH * 2];
-            uint32 got = GetModuleFileName(NULL, exe_path, _countof(exe_path));
+            char exe_path[MAX_PATH * 2];
+            uint32 got = GetModuleFileNameA(NULL, exe_path, _countof(exe_path));
             if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
-                ShellExecute(null, L"runas", exe_path, 0, 0, SW_SHOWNORMAL);
+                ShellExecuteA(null, "runas", exe_path, 0, 0, SW_SHOWNORMAL);
             }
         }
     }

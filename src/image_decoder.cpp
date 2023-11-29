@@ -8,15 +8,15 @@
 
 //////////////////////////////////////////////////////////////////////
 
-std::map<std::wstring, output_image_format> image_file_formats{
+std::map<std::string, output_image_format> image_file_formats{
 
-    { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
-    { L"JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
-    { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-    { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-    { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
-    { L"HEIF", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | use_name } } },
-    { L"HEIC", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
+    { "PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
+    { "JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
+    { "JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+    { "BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+    { "TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
+    { "HEIF", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | use_name } } },
+    { "HEIC", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
 };
 
 namespace
@@ -112,7 +112,7 @@ namespace
 //////////////////////////////////////////////////////////////////////
 // get width, height in pixels and size of output in bytes for an image file
 
-HRESULT get_image_size(wchar const *filename, uint32 &width, uint32 &height, uint64 &total_size)
+HRESULT get_image_size(char const *filename, uint32 &width, uint32 &height, uint64 &total_size)
 {
     auto wic = get_wic();
 
@@ -124,7 +124,8 @@ HRESULT get_image_size(wchar const *filename, uint32 &width, uint32 &height, uin
     // conditions but that's ok, this is all happening in a thread
 
     ComPtr<IWICBitmapDecoder> decoder;
-    CHK_HR(wic->CreateDecoderFromFilename(filename, null, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder));
+    CHK_HR(wic->CreateDecoderFromFilename(
+        unicode(filename).c_str(), null, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder));
 
     // assumption here is that GetFrame() does _NOT_ actually decode the pixels...
     // that's what the docs seem to say, but... well, here's hoping
@@ -184,7 +185,7 @@ HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h)
     CHK_HR(frame->SetPixelFormat(&format));
 
     if(format != requested_format) {
-        Log(L"Can't encode as PNG, format not supported");
+        Log("Can't encode as PNG, format not supported");
         return E_FAIL;
     }
 
@@ -219,7 +220,7 @@ HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h)
 
     GlobalUnlock(hData);
 
-    CHK_BOOL(SetClipboardData(RegisterClipboardFormat(L"PNG"), hData));
+    CHK_BOOL(SetClipboardData(RegisterClipboardFormatA("PNG"), hData));
 
     return S_OK;
 }
@@ -424,9 +425,9 @@ HRESULT decode_image(byte const *bytes,
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT save_image_file(wchar_t const *filename, byte const *bytes, uint width, uint height, uint pitch)
+HRESULT save_image_file(char const *filename, byte const *bytes, uint width, uint height, uint pitch)
 {
-    std::wstring extension;
+    std::string extension;
     CHK_HR(file_get_extension(filename, extension));
 
     if(extension[0] == L'.') {
@@ -451,7 +452,7 @@ HRESULT save_image_file(wchar_t const *filename, byte const *bytes, uint width, 
 
     ComPtr<IWICStream> file_stream;
     CHK_HR(wic->CreateStream(&file_stream));
-    CHK_HR(file_stream->InitializeFromFilename(filename, GENERIC_WRITE));
+    CHK_HR(file_stream->InitializeFromFilename(unicode(filename).c_str(), GENERIC_WRITE));
 
     ComPtr<IWICBitmapEncoder> encoder;
     CHK_HR(wic->CreateEncoder(format.file_format, NULL, &encoder));

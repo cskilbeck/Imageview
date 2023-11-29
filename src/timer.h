@@ -58,9 +58,9 @@ struct timer_t
 
 struct stopwatch : timer_t
 {
-    wchar const *name;
+    char const *name;
 
-    explicit stopwatch(wchar const *name) : timer_t(), name(name)
+    explicit stopwatch(char const *name) : timer_t(), name(name)
     {
         reset();
     }
@@ -69,7 +69,7 @@ struct stopwatch : timer_t
     {
         double t = elapsed();
         (void)t;
-        Log(L"Stopwatch %s : %f", name, t);
+        Log("Stopwatch %s : %f", name, t);
     }
 
     double elapsed()

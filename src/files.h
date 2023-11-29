@@ -2,14 +2,14 @@
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cancel_event = null);
+HRESULT load_file(std::string const &filename, std::vector<byte> &buffer, HANDLE cancel_event = null);
 
-HRESULT file_get_full_path(wchar const *filename, std::wstring &fullpath);
-HRESULT file_get_path(wchar const *filename, std::wstring &path);
-HRESULT file_get_filename(wchar const *filename, std::wstring &name);
-HRESULT file_get_extension(wchar const *filename, std::wstring &extension);
-HRESULT file_get_size(wchar const *filename, uint64_t &size);
-BOOL file_exists(wchar const *name);
+HRESULT file_get_full_path(char const *filename, std::string &fullpath);
+HRESULT file_get_path(char const *filename, std::string &path);
+HRESULT file_get_filename(char const *filename, std::string &name);
+HRESULT file_get_extension(char const *filename, std::string &extension);
+HRESULT file_get_size(char const *filename, uint64_t &size);
+BOOL file_exists(char const *name);
 
 //////////////////////////////////////////////////////////////////////
 
@@ -27,22 +27,22 @@ enum class scan_folder_sort_order
 
 struct file_info
 {
-    file_info(std::wstring const &n, uint64 d) throw() : name(n), date(d)
+    file_info(std::string const &n, uint64 d) throw() : name(n), date(d)
     {
     }
 
-    std::wstring name;
+    std::string name;
     uint64 date;
 };
 
 struct folder_scan_result
 {
-    std::wstring path;
+    std::string path;
     std::vector<file_info> files;
 };
 
-HRESULT scan_folder2(wchar const *path,
-                     std::vector<wchar const *> extensions,
+HRESULT scan_folder2(char const *path,
+                     std::vector<char const *> extensions,
                      scan_folder_sort_field sort_field,
                      scan_folder_sort_order order,
                      folder_scan_result **result,

@@ -2,9 +2,9 @@
 
 #define TRACE_ID(iD) \
     case iD:         \
-        return L#iD;
+        return #iD;
 
-wchar const *get_wm_name(uint32 uMsg)
+char const *get_wm_name(uint32 uMsg)
 {
     switch(uMsg) {
         TRACE_ID(WM_NULL);
@@ -242,6 +242,6 @@ wchar const *get_wm_name(uint32 uMsg)
 #endif /* WINVER >= 0x0600 */
 
     default:
-        return L"WM_UNKNOWN???";
+        return "WM_UNKNOWN???";
     }
 }

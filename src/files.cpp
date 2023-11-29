@@ -6,7 +6,7 @@
 // set cancel_event to cancel the load, it will return E_ABORT in that case
 // cancel_event can be null, in which case the load can't be cancelled
 
-HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cancel_event)
+HRESULT load_file(std::string const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
 {
     // if we error out for any reason, free the buffer
     auto cleanup_buffer = deferred([&] { buffer.clear(); });
@@ -18,7 +18,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
 
     // create an async file handle
     HANDLE file_handle =
-        CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
+        CreateFileA(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
     if(file_handle == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -105,8 +105,8 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT scan_folder2(wchar const *path,
-                     std::vector<wchar const *> extensions,
+HRESULT scan_folder2(char const *path,
+                     std::vector<char const *> extensions,
                      scan_folder_sort_field sort_field,
                      scan_folder_sort_order order,
                      folder_scan_result **result,
@@ -117,7 +117,7 @@ HRESULT scan_folder2(wchar const *path,
     }
 
     HANDLE dir_handle =
-        CreateFile(path, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
+        CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
 
     if(dir_handle == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -177,31 +177,29 @@ HRESULT scan_folder2(wchar const *path,
             // if it's a file
             uint32 ignore = FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_VIRTUAL;
             if((f->FileAttributes & ignore) == 0) {
-                // find the extension
-                size_t namelen = f->FileNameLength / sizeof(wchar);
-                for(wchar const *i = f->FileName + namelen; i > f->FileName; --i) {
-                    if(*i == '.') {
-                        i += 1;
-                        size_t ext_len = namelen - (i - f->FileName);
 
-                        // check if extension is in the list
-                        for(wchar const *ext : extensions) {
+                std::string filename = utf8(f->FileName, f->FileNameLength / sizeof(wchar));
 
-                            // extensions can be specified with or without a leading dot
-                            wchar const *find_ext = ext;
-                            if(*find_ext == '.') {
-                                find_ext += 1;
-                            }
+                size_t dot = filename.find_last_of('.');
 
-                            if(_wcsnicmp(i, find_ext, ext_len) == 0) {
+                if(dot != std::string::npos && dot < filename.size()) {
 
-                                // it's in the list, add it to the vector of files
-                                files.emplace_back(std::wstring(f->FileName, f->FileName + namelen),
-                                                   f->LastWriteTime.QuadPart);
-                                break;
-                            }
+                    // check if extension is in the list
+                    for(char const *ext : extensions) {
+
+                        char const *find_ext = ext;
+                        if(*find_ext == '.') {
+                            find_ext += 1;
                         }
-                        break;
+
+                        size_t max_len = std::min(filename.size() - dot, strlen(ext));
+
+                        if(_strnicmp(&filename[dot] + 1, find_ext, max_len) == 0) {
+
+                            // it's in the list, add it to the vector of files
+                            files.emplace_back(filename, f->LastWriteTime.QuadPart);
+                            break;
+                        }
                     }
                 }
             }
@@ -243,7 +241,7 @@ HRESULT scan_folder2(wchar const *path,
 
         // if date the same (or name ordering), compare names
         if(diff == 0) {
-            diff = StrCmpLogicalW(pa->name.c_str(), pb->name.c_str());
+            diff = StrCmpLogicalW(unicode(pa->name).c_str(), unicode(pb->name).c_str());
         }
         return diff <= 0;
     });
@@ -255,9 +253,9 @@ HRESULT scan_folder2(wchar const *path,
 
 //////////////////////////////////////////////////////////////////////
 
-BOOL file_exists(wchar const *name)
+BOOL file_exists(char const *name)
 {
-    DWORD x = GetFileAttributes(name);
+    DWORD x = GetFileAttributesA(name);
     DWORD const not_file = FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_OFFLINE;
     return x != INVALID_FILE_ATTRIBUTES && ((x & not_file) == 0);
 }
@@ -268,14 +266,14 @@ namespace
 {
     struct path_parts
     {
-        wchar drive[MAX_PATH];
-        wchar dir[MAX_PATH];
-        wchar fname[MAX_PATH];
-        wchar ext[MAX_PATH];
+        char drive[MAX_PATH];
+        char dir[MAX_PATH];
+        char fname[MAX_PATH];
+        char ext[MAX_PATH];
 
-        HRESULT get(wchar const *filename)
+        HRESULT get(char const *filename)
         {
-            if(_wsplitpath_s(filename, drive, dir, fname, ext) != 0) {
+            if(_splitpath_s(filename, drive, dir, fname, ext) != 0) {
                 return HRESULT_FROM_WIN32(GetLastError());
             }
             return S_OK;
@@ -283,13 +281,13 @@ namespace
     };
 }
 
-HRESULT file_get_path(wchar const *filename, std::wstring &path)
+HRESULT file_get_path(char const *filename, std::string &path)
 {
     path_parts p;
     CHK_HR(p.get(filename));
-    path = std::wstring(p.drive) + p.dir;
+    path = std::string(p.drive) + p.dir;
     if(path.empty()) {
-        path = L".";
+        path = ".";
     } else if(path.back() == L'\\') {
         path.pop_back();
     }
@@ -298,35 +296,35 @@ HRESULT file_get_path(wchar const *filename, std::wstring &path)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_filename(wchar const *filename, std::wstring &name)
+HRESULT file_get_filename(char const *filename, std::string &name)
 {
     path_parts p;
     CHK_HR(p.get(filename));
-    name = std::wstring(p.fname) + p.ext;
+    name = std::string(p.fname) + p.ext;
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_extension(wchar const *filename, std::wstring &extension)
+HRESULT file_get_extension(char const *filename, std::string &extension)
 {
     path_parts p;
     CHK_HR(p.get(filename));
-    extension = std::wstring(p.ext);
+    extension = std::string(p.ext);
     return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_full_path(wchar const *filename, std::wstring &fullpath)
+HRESULT file_get_full_path(char const *filename, std::string &fullpath)
 {
-    wchar dummy;
-    uint size = GetFullPathName(filename, 1, &dummy, null);
+    char dummy;
+    uint size = GetFullPathNameA(filename, 1, &dummy, null);
     if(size == 0) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
     fullpath.resize(size);
-    size = GetFullPathName(filename, size, &fullpath[0], null);
+    size = GetFullPathNameA(filename, size, &fullpath[0], null);
     if(size == 0) {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -336,9 +334,9 @@ HRESULT file_get_full_path(wchar const *filename, std::wstring &fullpath)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT file_get_size(wchar const *filename, uint64_t &size)
+HRESULT file_get_size(char const *filename, uint64_t &size)
 {
-    HANDLE f = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
+    HANDLE f = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
     if(f == INVALID_HANDLE_VALUE) {
         return HRESULT_FROM_WIN32(GetLastError());
     }

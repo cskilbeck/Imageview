@@ -68,7 +68,7 @@ HRESULT check_heif_support(bool &heif_is_supported)
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
-    wchar *cmd_line = GetCommandLineW();
+    char *cmd_line = GetCommandLineA();
 
     HRESULT hr = App::init(cmd_line);
 
@@ -79,14 +79,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     }
 
     if(FAILED(hr)) {
-        display_error(std::format(L"Command line {}", cmd_line).c_str(), hr);
+        display_error(std::format("Command line {}", cmd_line).c_str(), hr);
         return 0;
     }
 
     HICON icon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
     HCURSOR cursor = LoadCursor(null, IDC_ARROW);
 
-    WNDCLASSEXW wcex = {};
+    WNDCLASSEXA wcex = {};
     wcex.cbSize = sizeof(WNDCLASSEXW);
     wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc = WndProc;
@@ -96,7 +96,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     wcex.lpszClassName = App::window_class;
     wcex.hIconSm = icon;
 
-    CHK_BOOL(RegisterClassExW(&wcex));
+    CHK_BOOL(RegisterClassExA(&wcex));
 
     DWORD window_style;
     DWORD window_ex_style;
@@ -104,7 +104,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     CHECK(App::get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
     HWND hwnd;
-    CHK_NULL(hwnd = CreateWindowExW(window_ex_style,
+    CHK_NULL(hwnd = CreateWindowExA(window_ex_style,
                                     App::window_class,
                                     localize(IDS_AppName),
                                     window_style,
@@ -156,7 +156,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     static bool s_in_suspend = false;
     static bool s_minimized = false;
 
-    // Log(L"(%04x) %s %08x %08x, app = %p", message, get_wm_name(message), wParam, lParam, app);
+    // Log("(%04x) %s %08x %08x, app = %p", message, get_wm_name(message), wParam, lParam, app);
 
     switch(message) {
 
@@ -229,7 +229,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 SetForegroundWindow(hWnd);
                 SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                App::on_command_line(reinterpret_cast<wchar *>(c->lpData));
+                App::on_command_line(utf8(reinterpret_cast<wchar *>(c->lpData)).data());
                 break;
             default:
                 break;

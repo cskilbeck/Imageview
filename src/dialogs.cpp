@@ -39,7 +39,7 @@ namespace
 
             for(auto const &fmt : image_file_formats) {
 
-                std::wstring const &extension = fmt.first;
+                std::wstring extension = unicode(fmt.first);
                 output_image_format const &image_format = fmt.second;
 
                 auto found = slots.find(image_format.file_format);
@@ -86,7 +86,7 @@ namespace
         if(uiMsg == WM_INITDIALOG) {
             CHOOSECOLOR *cc = reinterpret_cast<CHOOSECOLOR *>(lParam);
             if(cc != null && cc->lCustData != 0) {
-                SetWindowText(hdlg, reinterpret_cast<wchar *>(cc->lCustData));
+                SetWindowTextA(hdlg, reinterpret_cast<char const *>(cc->lCustData));
             }
         }
         return 0;
@@ -95,7 +95,7 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT select_file_dialog(HWND window, std::wstring &path)
+HRESULT select_file_dialog(HWND window, std::string &path)
 {
     CHK_HR(get_filter_specs());
 
@@ -104,18 +104,20 @@ HRESULT select_file_dialog(HWND window, std::wstring &path)
     ComPtr<IShellItem> psiResult;
     PWSTR pszFilePath{ null };
 
+    std::string title = std::format("{}{}{}", localize(IDS_AppName), " : ", localize(IDS_SelectFile));
+
     CHK_HR(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
     CHK_HR(pfd->GetOptions(&dwFlags));
     CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
     CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
     CHK_HR(pfd->SetFileTypeIndex(default_filter_spec));
     CHK_HR(pfd->SetOkButtonLabel(L"View"));
-    CHK_HR(pfd->SetTitle(std::format(L"{}{}{}", localize(IDS_AppName), L" : ", localize(IDS_SelectFile)).c_str()));
+    CHK_HR(pfd->SetTitle(unicode(title).c_str()));
     CHK_HR(pfd->Show(window));
     CHK_HR(pfd->GetResult(&psiResult));
     CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
 
-    path = pszFilePath;
+    path = utf8(pszFilePath);
     CoTaskMemFree(pszFilePath);
 
     return S_OK;
@@ -123,7 +125,7 @@ HRESULT select_file_dialog(HWND window, std::wstring &path)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT save_file_dialog(HWND window, std::wstring &path)
+HRESULT save_file_dialog(HWND window, std::string &path)
 {
     CHK_HR(get_filter_specs());
 
@@ -135,17 +137,19 @@ HRESULT save_file_dialog(HWND window, std::wstring &path)
     auto options = FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION | FOS_OVERWRITEPROMPT |
                    FOS_STRICTFILETYPES;
 
+    std::string title = std::format("{}{}{}", localize(IDS_AppName), " : ", localize(IDS_SelectFile));
+
     CHK_HR(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
     CHK_HR(pfd->GetOptions(&dwFlags));
     CHK_HR(pfd->SetOptions(dwFlags | options));
     CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
     CHK_HR(pfd->SetFileTypeIndex(default_filter_spec));
-    CHK_HR(pfd->SetTitle(std::format(L"{}{}{}", localize(IDS_AppName), L" : ", localize(IDS_SelectFile)).c_str()));
+    CHK_HR(pfd->SetTitle(unicode(title).c_str()));
     CHK_HR(pfd->Show(window));
     CHK_HR(pfd->GetResult(&psiResult));
     CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
 
-    path = pszFilePath;
+    path = utf8(pszFilePath);
     CoTaskMemFree(pszFilePath);
 
     return S_OK;
@@ -153,11 +157,11 @@ HRESULT save_file_dialog(HWND window, std::wstring &path)
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT select_color_dialog(HWND window, uint32 &color, wchar const *title)
+HRESULT select_color_dialog(HWND window, uint32 &color, char const *title)
 {
     static COLORREF custom_colors[16];
 
-    CHOOSECOLOR cc{ 0 };
+    CHOOSECOLORA cc{ 0 };
     cc.lStructSize = sizeof(cc);
     cc.hwndOwner = window;
     cc.lpCustColors = (LPDWORD)custom_colors;
@@ -165,7 +169,7 @@ HRESULT select_color_dialog(HWND window, uint32 &color, wchar const *title)
     cc.rgbResult = color;
     cc.Flags = CC_FULLOPEN | CC_RGBINIT | CC_ANYCOLOR | CC_ENABLEHOOK;
     cc.lpfnHook = select_color_dialog_hook_proc;
-    if(!ChooseColor(&cc)) {
+    if(!ChooseColorA(&cc)) {
         return E_ABORT;
     }
     color = cc.rgbResult;
