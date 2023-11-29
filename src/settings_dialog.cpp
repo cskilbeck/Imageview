@@ -2,6 +2,8 @@
 
 #include "pch.h"
 
+LOG_CONTEXT("settings_dialog");
+
 //////////////////////////////////////////////////////////////////////
 
 namespace
@@ -139,7 +141,7 @@ namespace
 
                 if(!(action_text.empty() || key_text.empty())) {
 
-                    Log("%s: %s", action_text.c_str(), key_text.c_str());
+                    LOG_DEBUG("{}: {}", action_text, key_text);
 
                     item.iItem = index++;
                     item.iSubItem = 0;
@@ -364,7 +366,7 @@ namespace
     HRESULT show_settings_page(uint tab)
     {
         if(tab >= _countof(tabs)) {
-            Log("!? Tab %d is out of range (there are %d tabs)", tab, _countof(tabs));
+            LOG_ERROR("!? Tab {} is out of range (there are {} tabs)", tab, _countof(tabs));
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
         if(current_page != null) {

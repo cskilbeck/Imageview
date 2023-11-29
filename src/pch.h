@@ -122,10 +122,11 @@ using Microsoft::WRL::ComPtr;
 
 #include "types.h"
 #include "util.h"
+#include "ansi.h"
 #include "log.h"
 #include "defer.h"
 #include "rect.h"
-#include "files.h"
+#include "file.h"
 #include "dialogs.h"
 #include "drag_drop.h"
 #include "font_loader.h"

@@ -4,63 +4,51 @@
 
 //////////////////////////////////////////////////////////////////////
 
-void write_line_to_file(char const *txt, uint32 len)
-{
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> lockguard(mutex);
+#if !defined(DISABLE_LOGGING)
 
-    HANDLE h =
-        CreateFile(TEXT("log.txt"), FILE_APPEND_DATA, FILE_SHARE_READ, null, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
-    if(h != INVALID_HANDLE_VALUE) {
-        DWORD wrote;
-        WriteFile(h, txt, len, &wrote, null);
-        WriteFile(h, "\r\n", 2, &wrote, null);
-        CloseHandle(h);
+namespace logger
+{
+    level log_level = level::debug;
+    bool log_to_stdout{ false };
+    std::mutex log_console_mutex;
+
+    //////////////////////////////////////////////////////////////////////
+
+    void set_level(level const level)
+    {
+        log_level = std::clamp(level, level::min, level::max);
     }
-}
 
-//////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////
 
-void write_line_to_file(wchar const *txt, uint32 len)
-{
-    std::string s = utf8(txt, len);
-    write_line_to_file(s.c_str(), static_cast<uint32>(s.length()));
-}
+    namespace
+    {
+        INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
 
-//////////////////////////////////////////////////////////////////////
+        BOOL init_console(PINIT_ONCE, PVOID, PVOID *)
+        {
+            AllocConsole();
+            FILE *fpstdin = stdin;
+            FILE *fpstdout = stdout;
+            FILE *fpstderr = stderr;
+            (void)freopen_s(&fpstdin, "CONIN$", "r", stdin);
+            (void)freopen_s(&fpstdout, "CONOUT$", "w", stdout);
+            (void)freopen_s(&fpstderr, "CONOUT$", "w", stderr);
+            // util::console_set_ansi_enabled(true);
+            return true;
+        }
 
-#if LOG_ENABLED
-void Log(char const *fmt, ...)
-{
-    char buffer[4096];
-    va_list v;
-    va_start(v, fmt);
-    time_t t;
-    time(&t);
-    struct tm tm;
-    localtime_s(&tm, &t);
-    uint32 len = static_cast<uint32>(strftime(buffer, _countof(buffer), "%d/%m/%Y,%H:%M:%S ", &tm));
-    len += _vsnprintf_s(buffer + len, _countof(buffer) - len - 1, _TRUNCATE, fmt, v);
-    write_line_to_file(buffer, len);
-    OutputDebugStringA(buffer);
-    OutputDebugStringA("\n");
-}
+    }    // namespace
 
-//////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////
 
-void Log(wchar const *fmt, ...)
-{
-    wchar buffer[4096];
-    va_list v;
-    va_start(v, fmt);
-    time_t t;
-    time(&t);
-    struct tm tm;
-    localtime_s(&tm, &t);
-    uint32 len = uint32(wcsftime(buffer, _countof(buffer), L"%d/%m/%Y,%H:%M:%S ", &tm));
-    len += _vsnwprintf_s(buffer + len, _countof(buffer) - len, _countof(buffer) - len, fmt, v);
-    write_line_to_file(buffer, len);
-    OutputDebugStringW(buffer);
-    OutputDebugStringW(L"\n");
-}
+    void ensure_console_exists()
+    {
+        InitOnceExecuteOnce(&init_once, init_console, nullptr, nullptr);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+}    // namespace logview::logger
+
 #endif

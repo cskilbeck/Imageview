@@ -169,11 +169,13 @@ std::string windows_error_message(uint32 err)
 
 static HRESULT log_win32_error_v(DWORD err, char const *message, va_list v)
 {
+    LOG_CONTEXT("win32");
+
     char buffer[4096];
     _vsnprintf_s(buffer, _countof(buffer), message, v);
     HRESULT r = HRESULT_FROM_WIN32(err);
     std::string err_str = windows_error_message(r);
-    Log("ERROR %08x (%s) %s", err, buffer, err_str.c_str());
+    LOG_ERROR("ERROR {:08x} ({}) {}", err, buffer, err_str);
     return r;
 }
 

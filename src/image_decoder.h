@@ -38,6 +38,8 @@ extern std::map<std::string, output_image_format> image_file_formats;
 
 //////////////////////////////////////////////////////////////////////
 
+HRESULT check_heif_support();
+
 HRESULT get_image_size(char const *filename, uint32 &width, uint32 &height, uint64 &total_size);
 
 HRESULT decode_image(byte const *bytes,

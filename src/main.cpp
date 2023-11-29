@@ -2,6 +2,8 @@
 
 #include "pch.h"
 
+LOG_CONTEXT("main");
+
 //////////////////////////////////////////////////////////////////////
 
 namespace
@@ -37,32 +39,6 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 //__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 //__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 //}
-
-//////////////////////////////////////////////////////////////////////
-
-HRESULT check_heif_support(bool &heif_is_supported)
-{
-    CHK_HR(MFStartup(MF_VERSION));
-    DEFER(MFShutdown());
-
-    IMFActivate **activate{};
-    uint32 count{};
-
-    MFT_REGISTER_TYPE_INFO input;
-    input.guidMajorType = MFMediaType_Video;
-    input.guidSubtype = MFVideoFormat_HEVC;
-
-    CHK_HR(MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SYNCMFT, &input, null, &activate, &count));
-    DEFER(CoTaskMemFree(activate));
-
-    for(uint32 i = 0; i < count; i++) {
-        activate[i]->Release();
-    }
-
-    heif_is_supported = count > 0;
-
-    return S_OK;
-}
 
 //////////////////////////////////////////////////////////////////////
 
@@ -156,7 +132,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     static bool s_in_suspend = false;
     static bool s_minimized = false;
 
-    // Log("(%04x) %s %08x %08x, app = %p", message, get_wm_name(message), wParam, lParam, app);
+    // LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
 
     switch(message) {
 
@@ -180,7 +156,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     } break;
 
         //////////////////////////////////////////////////////////////////////
-        // app pointer is valid for all other windows messages
 
     case WM_CLOSE:
         DestroyWindow(hWnd);
@@ -190,12 +165,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         // resize backbuffer before window size actually changes to avoid
         // flickering at the borders when resizing
 
+        // BUT minimize/maximize...
+
     case WM_NCCALCSIZE: {
         DefWindowProc(hWnd, message, wParam, lParam);
         if(IsWindowVisible(hWnd)) {
             NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
             rect const &new_client_rect = params->rgrc[0];
-            App::on_window_size_changed(new_client_rect.w(), new_client_rect.h());
+            App::on_window_size_changing(new_client_rect.w(), new_client_rect.h());
         }
         return 0;
     }
@@ -261,6 +238,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         //////////////////////////////////////////////////////////////////////
 
+    case WM_MOVE:
+        break;
+
     case WM_SIZE:
         if(wParam == SIZE_MINIMIZED) {
             if(!s_minimized) {
@@ -278,6 +258,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 s_in_suspend = false;
             }
+            rect rc;
+            GetClientRect(hWnd, &rc);
+            App::on_window_size_changed(rc.w(), rc.h());
         }
         break;
 
@@ -377,9 +360,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_EXITSIZEMOVE:
         s_in_sizemove = false;
-        rect rc;
-        GetClientRect(hWnd, &rc);
-        App::on_window_size_changed(rc.w(), rc.h());
         break;
 
         //////////////////////////////////////////////////////////////////////
@@ -456,7 +436,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case App::WM_FOLDER_SCAN_COMPLETE:
-        App::on_folder_scanned(reinterpret_cast<folder_scan_result *>(lParam));
+        App::on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////

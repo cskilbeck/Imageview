@@ -232,11 +232,12 @@
   <ItemGroup>
     <ClInclude Include="resources\resource.h" />
     <ClInclude Include="shaders\hlsl.h" />
+    <ClInclude Include="src\ansi.h" />
     <ClInclude Include="src\app.h" />
     <ClInclude Include="src\defer.h" />
     <ClInclude Include="src\dialogs.h" />
     <ClInclude Include="src\drag_drop.h" />
-    <ClInclude Include="src\files.h" />
+    <ClInclude Include="src\file.h" />
     <ClInclude Include="src\font_loader.h" />
     <ClInclude Include="src\image.h" />
     <ClInclude Include="src\image_decoder.h" />
@@ -256,7 +257,7 @@
     <ClCompile Include="src\app.cpp" />
     <ClCompile Include="src\dialogs.cpp" />
     <ClCompile Include="src\drag_drop.cpp" />
-    <ClCompile Include="src\files.cpp" />
+    <ClCompile Include="src\file.cpp" />
     <ClCompile Include="src\font_loader.cpp" />
     <ClCompile Include="src\image.cpp" />
     <ClCompile Include="src\image_decoder.cpp" />

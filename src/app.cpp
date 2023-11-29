@@ -10,11 +10,7 @@
 // flip/rotate? losslessly?
 //////////////////////////////////////////////////////////////////////
 // TO FIX
-// maximize/minimize/restore bug
 // clean up namespaces
-// logging with levels
-// std::string everywhere
-// utf8 everywhere
 // the cache
 // all the leaks
 
@@ -27,6 +23,8 @@
 #include "shader_inc/ps_solid.h"
 #include "shader_inc/ps_spinner.h"
 #include "shader_inc/ps_drawgrid.h"
+
+LOG_CONTEXT("app");
 
 //////////////////////////////////////////////////////////////////////
 
@@ -212,7 +210,7 @@ namespace App
     std::string current_folder;
 
     // most recently scanned folder results
-    std::unique_ptr<folder_scan_result> current_folder_scan;
+    std::unique_ptr<file::folder_scan_result> current_folder_scan;
 
     // index in folder scan of currently viewed file
     int current_file_cursor{ -1 };
@@ -532,7 +530,7 @@ namespace App
 
         uint64 file_size;
 
-        CHK_HR(file_get_size(filename, file_size));
+        CHK_HR(file::get_size(filename, file_size));
 
         uint32 w, h;
         uint64 image_size;
@@ -553,7 +551,7 @@ namespace App
             [](image_file *fl) {
 
                 // load the file synchronously to this thread
-                fl->hresult = load_file(fl->filename.c_str(), fl->bytes, quit_event);
+                fl->hresult = file::load(fl->filename.c_str(), fl->bytes, quit_event);
 
                 if(SUCCEEDED(fl->hresult)) {
 
@@ -623,10 +621,10 @@ namespace App
 
                                     if(loser != null) {
 
-                                        Log("Removing %s (%d) from cache (now %d MB in use)",
-                                            loser->filename.c_str(),
-                                            loser->index,
-                                            cache_in_use / 1048576);
+                                        LOG_DEBUG("Removing {} ({}) from cache (now {} MB in use)",
+                                                  loser->filename.c_str(),
+                                                  loser->index,
+                                                  cache_in_use / 1048576);
 
                                         cache_in_use -= loser->total_size();
                                         loaded_files.erase(loser->filename);
@@ -638,7 +636,7 @@ namespace App
 
                             if((cache_in_use + img_size) <= settings.cache_size) {
 
-                                Log("Caching %s at %d", this_file.c_str(), y);
+                                LOG_DEBUG("Caching {} at {}", this_file.c_str(), y);
                                 image_file *cache_file = new image_file(this_file);
                                 cache_file->is_cache_load = true;
                                 loading_files[this_file] = cache_file;
@@ -670,9 +668,9 @@ namespace App
         std::string name;
         std::string fullpath;
 
-        CHK_HR(file_get_full_path(filename.c_str(), fullpath));
-        CHK_HR(file_get_filename(fullpath.c_str(), name));
-        CHK_HR(file_get_path(fullpath.c_str(), folder));
+        CHK_HR(file::get_full_path(filename.c_str(), fullpath));
+        CHK_HR(file::get_filename(fullpath.c_str(), name));
+        CHK_HR(file::get_path(fullpath.c_str(), folder));
 
         if(folder.empty()) {
             folder = ".";
@@ -684,7 +682,7 @@ namespace App
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
-            Log("Already got %s", name.c_str());
+            LOG_DEBUG("Already got {}", name.c_str());
             CHK_HR(display_image(found->second));
             CHK_HR(warm_cache());
             return S_OK;
@@ -694,7 +692,7 @@ namespace App
 
         found = loading_files.find(fullpath);
         if(found != loading_files.end()) {
-            Log("In progress %s", name.c_str());
+            LOG_DEBUG("In progress {}", name.c_str());
             requested_file = found->second;
             return S_OK;
         }
@@ -704,7 +702,7 @@ namespace App
 
         // file_loader object is later transferred from loading_files to loaded_files
 
-        Log("Loading %s", name.c_str());
+        LOG_INFO("Loading {}", name.c_str());
 
         image_file *fl = new image_file();
         fl->filename = fullpath;
@@ -741,7 +739,7 @@ namespace App
 
     HRESULT load_image_file(char const *filepath)
     {
-        if(!file_exists(filepath)) {
+        if(!file::exists(filepath)) {
             std::string msg(filepath);
             msg = msg.substr(0, msg.find_first_of("\r\n\t"));
             set_message(std::format("Can't load {}", msg), 2.0f);
@@ -798,7 +796,6 @@ namespace App
     {
         if(!settings.first_run && !settings.fullscreen) {
             WINDOWPLACEMENT w{ settings.window_placement };
-            w.showCmd = 0;
             SetWindowPlacement(window, &w);
         }
     }
@@ -1077,7 +1074,7 @@ namespace App
 
     HRESULT on_copy()
     {
-        copy_timestamp = m_timer.current_time;
+        copy_timestamp = m_timer.current();
         return copy_selection();
     }
 
@@ -1223,7 +1220,7 @@ namespace App
             if(settings.show_full_filename_in_titlebar) {
                 name = f->filename;
             } else {
-                CHK_HR(file_get_filename(f->filename.c_str(), name));
+                CHK_HR(file::get_filename(f->filename.c_str(), name));
             }
             std::string msg = std::format("{} {}x{}", name, texture_width, texture_height);
             set_window_text(msg);
@@ -1240,7 +1237,7 @@ namespace App
                 err_str = windows_error_message(hr);
             }
 
-            CHK_HR(file_get_filename(f->filename.c_str(), name));
+            CHK_HR(file::get_filename(f->filename.c_str(), name));
             set_message(std::format("Can't load {} - {}", name, err_str), 3.0f);
         }
         return hr;
@@ -1347,7 +1344,7 @@ namespace App
             // and in any case, set window message to error text
             std::string err_str = windows_error_message(load_hr);
             std::string name;
-            CHK_HR(file_get_filename(f->filename.c_str(), name));
+            CHK_HR(file::get_filename(f->filename.c_str(), name));
             set_message(std::format("Can't load {} - {}", name, err_str), 3);
             return load_hr;
         }
@@ -1364,11 +1361,11 @@ namespace App
     {
         std::string path;
 
-        CHK_HR(file_get_path(folder_path, path));
+        CHK_HR(file::get_path(folder_path, path));
 
         delete[] folder_path;
 
-        Log("Scan folder %s", path.c_str());
+        LOG_INFO("Scan folder {}", path.c_str());
 
         std::vector<char const *> extensions;
 
@@ -1376,10 +1373,10 @@ namespace App
             extensions.push_back(f.first.c_str());
         }
 
-        scan_folder_sort_field sort_field = scan_folder_sort_field::name;
-        scan_folder_sort_order order = scan_folder_sort_order::ascending;
+        file::scan_folder_sort_field sort_field = file::scan_folder_sort_field::name;
+        file::scan_folder_sort_order order = file::scan_folder_sort_order::ascending;
 
-        folder_scan_result *results;
+        file::folder_scan_result *results;
 
         CHK_HR(scan_folder2(path.c_str(), extensions, sort_field, order, &results, quit_event));
 
@@ -1408,7 +1405,7 @@ namespace App
                 }
             }
         }
-        Log("File loader thread exit");
+        LOG_INFO("File loader thread exit");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1437,7 +1434,7 @@ namespace App
                 }
             }
         }
-        Log("Scanner thread exit");
+        LOG_INFO("Scanner thread exit");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1449,19 +1446,19 @@ namespace App
             return E_INVALIDARG;
         }
         std::string folder;
-        CHK_HR(file_get_path(f->filename.c_str(), folder));
+        CHK_HR(file::get_path(f->filename.c_str(), folder));
 
         if(_stricmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
             return E_CHANGED_STATE;
         }
 
         std::string name;
-        CHK_HR(file_get_filename(f->filename.c_str(), name));
+        CHK_HR(file::get_filename(f->filename.c_str(), name));
         int id = 0;
         for(auto &ff : current_folder_scan->files) {
             if(_stricmp(ff.name.c_str(), name.c_str()) == 0) {
                 f->index = id;
-                Log("%s is at index %d", name.c_str(), id);
+                LOG_DEBUG("{} is at index {}", name.c_str(), id);
                 if(current_file_cursor == -1) {
                     current_file_cursor = f->index;
                 }
@@ -1475,9 +1472,9 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // folder scan complete
 
-    void on_folder_scanned(folder_scan_result *scan_result)
+    void on_folder_scanned(file::folder_scan_result *scan_result)
     {
-        Log("%zu images found in %s", scan_result->files.size(), scan_result->path.c_str());
+        LOG_INFO("{} images found in {}", scan_result->files.size(), scan_result->path);
 
         current_folder_scan.reset(scan_result);
 
@@ -1672,6 +1669,8 @@ namespace App
             return S_FALSE;
         }
 
+        CHK_HR(check_heif_support());
+
         HRESULT hr = reuse_window(cmd_line);
 
         if(hr == S_FALSE) {
@@ -1684,7 +1683,7 @@ namespace App
 
         CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
 
-        Log("System has %lluGB of memory", system_memory_size_kb / 1048576);
+        LOG_INFO("System has {}GB of memory", system_memory_size_kb / 1048576);
 
         window_created_event = CreateEvent(null, true, false, null);
 
@@ -1785,7 +1784,7 @@ namespace App
             window_width = r->w();
             window_height = r->h();
         }
-        Log("Startup window is %dx%d (at %d,%d)", window_width, window_height, r->left, r->top);
+        LOG_INFO("Startup window is {}x{} (at {},{})", window_width, window_height, r->left, r->top);
         return S_OK;
     }
 
@@ -1801,7 +1800,7 @@ namespace App
 
         if(settings.fullscreen) {
             GetWindowPlacement(window, &settings.window_placement);
-            Log("toggle_fullscreen: %d", settings.window_placement.rcNormalPosition.left);
+            LOG_INFO("toggle_fullscreen: {}", settings.window_placement.rcNormalPosition.left);
             style = WS_POPUP;
         }
 
@@ -2063,6 +2062,8 @@ namespace App
         auto weight = DWRITE_FONT_WEIGHT_REGULAR;
         auto style = DWRITE_FONT_STYLE_NORMAL;
         auto stretch = DWRITE_FONT_STRETCH_NORMAL;
+
+        // TODO (chs): localization
 
         CHK_HR(dwrite_factory->CreateTextFormat(small_font_family_name,
                                                 font_collection.Get(),
@@ -3522,21 +3523,47 @@ namespace App
     HRESULT on_window_pos_changing(WINDOWPOS *new_pos)
     {
         UNREFERENCED_PARAMETER(new_pos);
+
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(wp);
+        GetWindowPlacement(window, &wp);
+        settings.window_placement = wp;
         return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_EXITSIZEMOVE
+    // WM_SIZE
 
     HRESULT on_window_size_changed(int width, int height)
     {
-        window_width = std::max(width, 1);
-        window_height = std::max(height, 1);
+        UNREFERENCED_PARAMETER(width);
+        UNREFERENCED_PARAMETER(height);
+        return S_OK;
+    }
 
-        CHK_HR(create_resources());
+    //////////////////////////////////////////////////////////////////////
+    // WM_NCCALCSIZE happens before any visual update to the window so resize
+    // backbuffer before any drawing to avoid flicker
+
+    HRESULT on_window_size_changing(int width, int height)
+    {
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(wp);
+        GetWindowPlacement(window, &wp);
+
+        if(wp.showCmd == SW_SHOWMINIMIZED || wp.showCmd == SW_MINIMIZE) {
+            return S_OK;
+        }
+
+        if(window_width != width || window_height != height) {
+
+            window_width = std::max(width, 1);
+            window_height = std::max(height, 1);
+            CHK_HR(create_resources());
+        }
 
         if(!settings.fullscreen) {
-            GetWindowPlacement(window, &settings.window_placement);
+
             settings.first_run = false;
         }
 

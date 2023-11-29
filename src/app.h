@@ -103,13 +103,17 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // send WM_FOLDER_SCAN_COMPLETE to call this
 
-    void on_folder_scanned(folder_scan_result *scan_result);
+    void on_folder_scanned(file::folder_scan_result *scan_result);
 
     //////////////////////////////////////////////////////////////////////
     // window handlers
 
+    HRESULT on_window_size_changing(int width, int height);
     HRESULT on_window_size_changed(int width, int height);
+
+    HRESULT on_window_pos_changed(WINDOWPOS *new_pos);
     HRESULT on_window_pos_changing(WINDOWPOS *new_pos);
+
     HRESULT on_dpi_changed(UINT new_dpi, rect *new_rect);
 
     void on_activated();

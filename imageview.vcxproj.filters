@@ -58,7 +58,7 @@
     <ClInclude Include="src\types.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\files.h">
+    <ClInclude Include="src\file.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\image_decoder.h">
@@ -74,6 +74,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\settings_dialog.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ansi.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
@@ -102,7 +105,7 @@
     <ClCompile Include="src\wm_names.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\files.cpp">
+    <ClCompile Include="src\file.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\drag_drop.cpp">

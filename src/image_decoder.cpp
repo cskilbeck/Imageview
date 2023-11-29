@@ -6,6 +6,8 @@
 
 #include "pch.h"
 
+LOG_CONTEXT("image_decoder");
+
 //////////////////////////////////////////////////////////////////////
 
 std::map<std::string, output_image_format> image_file_formats{
@@ -15,8 +17,6 @@ std::map<std::string, output_image_format> image_file_formats{
     { "JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
     { "BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
     { "TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
-    { "HEIF", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | use_name } } },
-    { "HEIC", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
 };
 
 namespace
@@ -110,6 +110,46 @@ namespace
 }
 
 //////////////////////////////////////////////////////////////////////
+// add heif file support if it's installed
+
+HRESULT check_heif_support()
+{
+    CHK_HR(MFStartup(MF_VERSION));
+    DEFER(MFShutdown());
+
+    IMFActivate **activate{};
+    uint32 count{};
+
+    MFT_REGISTER_TYPE_INFO input;
+    input.guidMajorType = MFMediaType_Video;
+    input.guidSubtype = MFVideoFormat_HEVC;
+
+    CHK_HR(MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SYNCMFT, &input, null, &activate, &count));
+    DEFER(CoTaskMemFree(activate));
+
+    for(uint32 i = 0; i < count; i++) {
+        activate[i]->Release();
+    }
+
+    if(count > 0) {
+
+        LOG_INFO("HEIF support is enabled");
+
+        image_file_formats["HEIF"] = { GUID_ContainerFormatHeif,
+                                       GUID_WICPixelFormat32bppBGRA,
+                                       format_flags{ with_alpha | use_name } };
+
+        image_file_formats["HEIC"] = { GUID_ContainerFormatHeif,
+                                       GUID_WICPixelFormat32bppBGRA,
+                                       format_flags{ with_alpha | use_name } };
+    }
+
+    return S_OK;
+}
+
+
+
+//////////////////////////////////////////////////////////////////////
 // get width, height in pixels and size of output in bytes for an image file
 
 HRESULT get_image_size(char const *filename, uint32 &width, uint32 &height, uint64 &total_size)
@@ -185,7 +225,7 @@ HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h)
     CHK_HR(frame->SetPixelFormat(&format));
 
     if(format != requested_format) {
-        Log("Can't encode as PNG, format not supported");
+        LOG_ERROR("Can't encode as PNG, format not supported");
         return E_FAIL;
     }
 
@@ -404,7 +444,7 @@ HRESULT decode_image(byte const *bytes,
 
     // if CopyPixels fails, free the buffer on exit
 
-    auto release_pixels = deferred([&]() { pixels.clear(); });
+    auto release_pixels = defer::deferred([&]() { pixels.clear(); });
 
     // actually get the pixels
 
@@ -428,7 +468,7 @@ HRESULT decode_image(byte const *bytes,
 HRESULT save_image_file(char const *filename, byte const *bytes, uint width, uint height, uint pitch)
 {
     std::string extension;
-    CHK_HR(file_get_extension(filename, extension));
+    CHK_HR(file::get_extension(filename, extension));
 
     if(extension[0] == L'.') {
         extension = extension.substr(1);
