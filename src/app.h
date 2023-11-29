@@ -76,14 +76,9 @@ namespace App
     HRESULT load_accelerators();
 
     //////////////////////////////////////////////////////////////////////
-    // call at start of WM_NCCREATE
-
-    HRESULT set_window(HWND window);
-
-    //////////////////////////////////////////////////////////////////////
     // Call at end of WM_NCCREATE (after DefWindowProc)
 
-    HRESULT on_post_create();
+    HRESULT on_post_create(HWND hwnd);
 
     //////////////////////////////////////////////////////////////////////
     // call this after CreateWindow

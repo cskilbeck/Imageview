@@ -6,12 +6,12 @@ namespace file
 {
     HRESULT load(std::string const &filename, std::vector<byte> &buffer, HANDLE cancel_event = null);
 
-    HRESULT get_full_path(char const *filename, std::string &fullpath);
-    HRESULT get_path(char const *filename, std::string &path);
-    HRESULT get_filename(char const *filename, std::string &name);
-    HRESULT get_extension(char const *filename, std::string &extension);
-    HRESULT get_size(char const *filename, uint64_t &size);
-    BOOL exists(char const *name);
+    HRESULT get_full_path(std::string const &filename, std::string &fullpath);
+    HRESULT get_path(std::string const &filename, std::string &path);
+    HRESULT get_filename(std::string const &filename, std::string &name);
+    HRESULT get_extension(std::string const &filename, std::string &extension);
+    HRESULT get_size(std::string const &filename, uint64_t &size);
+    BOOL exists(std::string const &name);
 
     //////////////////////////////////////////////////////////////////////
 
@@ -43,8 +43,8 @@ namespace file
         std::vector<info> files;
     };
 
-    HRESULT scan_folder2(char const *path,
-                         std::vector<char const *> extensions,
+    HRESULT scan_folder2(std::string const &path,
+                         std::vector<std::string> const &extensions,
                          scan_folder_sort_field sort_field,
                          scan_folder_sort_order order,
                          folder_scan_result **result,

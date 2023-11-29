@@ -297,7 +297,7 @@ namespace
 
             TCITEMA tie{};
             tie.mask = TCIF_TEXT;
-            tie.pszText = const_cast<char *>(localize((uint64)tab.resource_id));
+            tie.pszText = const_cast<char *>(localize((uint64)tab.resource_id).c_str());
             TabCtrl_InsertItem(tab_ctrl, i, &tie);
 
             SetWindowSubclass(page_dlg, child_proc, 0, 0);

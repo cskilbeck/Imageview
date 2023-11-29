@@ -152,7 +152,7 @@ HRESULT check_heif_support()
 //////////////////////////////////////////////////////////////////////
 // get width, height in pixels and size of output in bytes for an image file
 
-HRESULT get_image_size(char const *filename, uint32 &width, uint32 &height, uint64 &total_size)
+HRESULT get_image_size(std::string const &filename, uint32 &width, uint32 &height, uint64 &total_size)
 {
     auto wic = get_wic();
 
@@ -465,7 +465,7 @@ HRESULT decode_image(byte const *bytes,
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT save_image_file(char const *filename, byte const *bytes, uint width, uint height, uint pitch)
+HRESULT save_image_file(std::string const &filename, byte const *bytes, uint width, uint height, uint pitch)
 {
     std::string extension;
     CHK_HR(file::get_extension(filename, extension));

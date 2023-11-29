@@ -40,7 +40,7 @@ extern std::map<std::string, output_image_format> image_file_formats;
 
 HRESULT check_heif_support();
 
-HRESULT get_image_size(char const *filename, uint32 &width, uint32 &height, uint64 &total_size);
+HRESULT get_image_size(std::string const &filename, uint32 &width, uint32 &height, uint64 &total_size);
 
 HRESULT decode_image(byte const *bytes,
                      size_t file_size,
@@ -51,4 +51,4 @@ HRESULT decode_image(byte const *bytes,
 
 HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 
-HRESULT save_image_file(char const *filename, byte const *bytes, uint width, uint height, uint pitch);
+HRESULT save_image_file(std::string const &filename, byte const *bytes, uint width, uint height, uint pitch);

@@ -17,9 +17,9 @@ namespace
         char fname[MAX_PATH];
         char ext[MAX_PATH];
 
-        HRESULT get(char const *filename)
+        HRESULT get(std::string const &filename)
         {
-            if(_splitpath_s(filename, drive, dir, fname, ext) != 0) {
+            if(_splitpath_s(filename.c_str(), drive, dir, fname, ext) != 0) {
                 return HRESULT_FROM_WIN32(GetLastError());
             }
             return S_OK;
@@ -128,8 +128,8 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT scan_folder2(char const *path,
-                         std::vector<char const *> extensions,
+    HRESULT scan_folder2(std::string const &path,
+                         std::vector<std::string> const &extensions,
                          scan_folder_sort_field sort_field,
                          scan_folder_sort_order order,
                          folder_scan_result **result,
@@ -139,8 +139,8 @@ namespace file
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
 
-        HANDLE dir_handle =
-            CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
+        HANDLE dir_handle = CreateFileA(
+            path.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
 
         if(dir_handle == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -208,14 +208,17 @@ namespace file
                     if(dot != std::string::npos && dot < filename.size()) {
 
                         // check if extension is in the list
-                        for(char const *ext : extensions) {
+                        for(auto const &ext : extensions) {
 
-                            char const *find_ext = ext;
-                            if(*find_ext == '.') {
+                            size_t ext_len = ext.size();
+                            char const *find_ext = ext.c_str();
+                            size_t ext_dot = ext.find('.');
+                            if(ext_dot != std::string::npos) {
                                 find_ext += 1;
+                                ext_len -= 1;
                             }
 
-                            size_t max_len = std::min(filename.size() - dot, strlen(ext));
+                            size_t max_len = std::min(filename.size() - dot, ext_len);
 
                             if(_strnicmp(&filename[dot] + 1, find_ext, max_len) == 0) {
 
@@ -276,16 +279,16 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    BOOL exists(char const *name)
+    BOOL exists(std::string const &name)
     {
-        DWORD x = GetFileAttributesA(name);
+        DWORD x = GetFileAttributesA(name.c_str());
         DWORD const not_file = FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_OFFLINE;
         return x != INVALID_FILE_ATTRIBUTES && ((x & not_file) == 0);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_path(char const *filename, std::string &path)
+    HRESULT get_path(std::string const &filename, std::string &path)
     {
         path_parts p;
         CHK_HR(p.get(filename));
@@ -300,7 +303,7 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_filename(char const *filename, std::string &name)
+    HRESULT get_filename(std::string const &filename, std::string &name)
     {
         path_parts p;
         CHK_HR(p.get(filename));
@@ -310,7 +313,7 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_extension(char const *filename, std::string &extension)
+    HRESULT get_extension(std::string const &filename, std::string &extension)
     {
         path_parts p;
         CHK_HR(p.get(filename));
@@ -320,15 +323,15 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_full_path(char const *filename, std::string &fullpath)
+    HRESULT get_full_path(std::string const &filename, std::string &fullpath)
     {
         char dummy;
-        uint size = GetFullPathNameA(filename, 1, &dummy, null);
+        uint size = GetFullPathNameA(filename.c_str(), 1, &dummy, null);
         if(size == 0) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
         fullpath.resize(size);
-        size = GetFullPathNameA(filename, size, &fullpath[0], null);
+        size = GetFullPathNameA(filename.c_str(), size, &fullpath[0], null);
         if(size == 0) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -338,9 +341,9 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_size(char const *filename, uint64_t &size)
+    HRESULT get_size(std::string const &filename, uint64_t &size)
     {
-        HANDLE f = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
+        HANDLE f = CreateFileA(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
         if(f == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
         }

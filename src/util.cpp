@@ -113,7 +113,7 @@ vec4 uint32_to_color(uint32 color)
 //////////////////////////////////////////////////////////////////////
 // get a localized string by id
 
-std::string const &str_local(uint64 id)
+std::string const &localize(uint64 id)
 {
     static std::unordered_map<uint64, std::string> localized_strings;
     static std::string const unknown{ "?" };
@@ -136,23 +136,13 @@ std::string const &str_local(uint64 id)
 }
 
 //////////////////////////////////////////////////////////////////////
-// get a null-terminated char pointer to the localized string
 
-char const *localize(uint64 id)
+std::string strip_quotes(std::string const &s)
 {
-    return str_local(id).c_str();
-}
-
-//////////////////////////////////////////////////////////////////////
-
-std::string strip_quotes(char const *s)
-{
-    size_t len = strlen(s);
-    if(s[0] == '"' && s[len - 1] == '"') {
-        len -= 2;
-        s += 1;
+    if(s.front() != '"' || s.back() != '"') {
+        return s;
     }
-    return std::string(s, len);
+    return s.substr(1, s.size() - 2);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -209,38 +199,40 @@ HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_tab
 
         if(a.cmd == id) {
 
-            char key_name[256];
+            char key_name_buffer[256];
+            char const *key_name;
             switch(a.key) {
             case VK_LEFT:
-                strncpy_s(key_name, "Left", 256);
+                key_name = "Left";
                 break;
             case VK_RIGHT:
-                strncpy_s(key_name, "Right", 256);
+                key_name = "Right";
                 break;
             case VK_UP:
-                strncpy_s(key_name, "Up", 256);
+                key_name = "Up";
                 break;
             case VK_DOWN:
-                strncpy_s(key_name, "Down", 256);
+                key_name = "Down";
                 break;
             case VK_PRIOR:
-                strncpy_s(key_name, "Page Up", 256);
+                key_name = "Page Up";
                 break;
             case VK_NEXT:
-                strncpy_s(key_name, "Page Down", 256);
+                key_name = "Page Down";
                 break;
             case VK_OEM_COMMA:
             case ',':
-                strncpy_s(key_name, "Comma", 256);
+                key_name = "Comma";
                 break;
             case VK_OEM_PERIOD:
             case '.':
-                strncpy_s(key_name, "Period", 256);
+                key_name = "Period";
                 break;
 
             default:
                 uint scan_code = MapVirtualKeyEx(a.key, MAPVK_VK_TO_VSC, layout);
-                GetKeyNameTextA((scan_code & 0x7f) << 16, key_name, 256);
+                GetKeyNameTextA((scan_code & 0x7f) << 16, key_name_buffer, _countof(key_name_buffer));
+                key_name = key_name_buffer;
                 break;
             }
 

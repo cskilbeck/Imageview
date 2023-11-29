@@ -76,7 +76,7 @@ public:
         _dropImageType = dropImageType;
         _pszDropTipTemplate = pszDropTipTemplate;
         if(FAILED(RegisterDragDrop(hwnd, this))) {
-            log_win32_error("?");
+            log_win32_error("RegisterDragDrop failed");
         } else {
             _hwndRegistered = hwnd;
         }

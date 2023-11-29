@@ -58,9 +58,9 @@ struct rect : RECT
         return { left, top };
     }
 
-    std::string as_string()
+    std::string to_string() const
     {
-        return std::format("X:{} Y:{} W:{} H:{}", x(), y(), w(), h());
+        return std::format("{},{} ({}x{})", x(), y(), w(), h());
     }
 };
 

@@ -522,9 +522,9 @@ namespace App
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_image_file_size(char const *filename, uint64 *size)
+    HRESULT get_image_file_size(std::string const &filename, uint64 *size)
     {
-        if(size == null || filename == null || filename[0] == 0) {
+        if(size == null || filename.empty()) {
             return E_INVALIDARG;
         }
 
@@ -551,7 +551,7 @@ namespace App
             [](image_file *fl) {
 
                 // load the file synchronously to this thread
-                fl->hresult = file::load(fl->filename.c_str(), fl->bytes, quit_event);
+                fl->hresult = file::load(fl->filename, fl->bytes, quit_event);
 
                 if(SUCCEEDED(fl->hresult)) {
 
@@ -603,7 +603,7 @@ namespace App
                         // remove things from cache until it's <= cache_size + required size
 
                         uint64 img_size;
-                        if(SUCCEEDED(get_image_file_size(this_file.c_str(), &img_size))) {
+                        if(SUCCEEDED(get_image_file_size(this_file, &img_size))) {
 
                             if(img_size < settings.cache_size) {
 
@@ -622,7 +622,7 @@ namespace App
                                     if(loser != null) {
 
                                         LOG_DEBUG("Removing {} ({}) from cache (now {} MB in use)",
-                                                  loser->filename.c_str(),
+                                                  loser->filename,
                                                   loser->index,
                                                   cache_in_use / 1048576);
 
@@ -636,7 +636,7 @@ namespace App
 
                             if((cache_in_use + img_size) <= settings.cache_size) {
 
-                                LOG_DEBUG("Caching {} at {}", this_file.c_str(), y);
+                                LOG_DEBUG("Caching {} at {}", this_file, y);
                                 image_file *cache_file = new image_file(this_file);
                                 cache_file->is_cache_load = true;
                                 loading_files[this_file] = cache_file;
@@ -654,13 +654,11 @@ namespace App
     // load an image file or get it from the cache (or notice that it's
     // already being loaded and just let it arrive later)
 
-    HRESULT load_image(char const *filepath)
+    HRESULT load_image(std::string const &filename)
     {
-        if(filepath == null || filepath[0] == 0) {
+        if(filename.empty()) {
             return E_INVALIDARG;
         }
-
-        std::string filename = std::string(filepath);
 
         // get somewhat canonical filepath and parts thereof
 
@@ -668,9 +666,9 @@ namespace App
         std::string name;
         std::string fullpath;
 
-        CHK_HR(file::get_full_path(filename.c_str(), fullpath));
-        CHK_HR(file::get_filename(fullpath.c_str(), name));
-        CHK_HR(file::get_path(fullpath.c_str(), folder));
+        CHK_HR(file::get_full_path(filename, fullpath));
+        CHK_HR(file::get_filename(fullpath, name));
+        CHK_HR(file::get_path(fullpath, folder));
 
         if(folder.empty()) {
             folder = ".";
@@ -682,7 +680,7 @@ namespace App
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
-            LOG_DEBUG("Already got {}", name.c_str());
+            LOG_DEBUG("Already got {}", name);
             CHK_HR(display_image(found->second));
             CHK_HR(warm_cache());
             return S_OK;
@@ -692,7 +690,7 @@ namespace App
 
         found = loading_files.find(fullpath);
         if(found != loading_files.end()) {
-            LOG_DEBUG("In progress {}", name.c_str());
+            LOG_DEBUG("In progress {}", name);
             requested_file = found->second;
             return S_OK;
         }
@@ -702,7 +700,7 @@ namespace App
 
         // file_loader object is later transferred from loading_files to loaded_files
 
-        LOG_INFO("Loading {}", name.c_str());
+        LOG_INFO("Loading {}", name);
 
         image_file *fl = new image_file();
         fl->filename = fullpath;
@@ -727,8 +725,8 @@ namespace App
 
             // sigh, manually marshall the filename for the message, the receiver is responsible for
             // freeing it
-            wchar *fullpath_buffer = new wchar[fullpath.size() + 1];
-            memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar));
+            char *fullpath_buffer = new char[fullpath.size() + 1];
+            memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(char));
 
             PostThreadMessage(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
         }
@@ -737,7 +735,7 @@ namespace App
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT load_image_file(char const *filepath)
+    HRESULT load_image_file(std::string const &filepath)
     {
         if(!file::exists(filepath)) {
             std::string msg(filepath);
@@ -759,7 +757,7 @@ namespace App
         PWSTR path{};
         CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
         DEFER(CoTaskMemFree(path));
-        return App::load_image_file(utf8(path).c_str());
+        return App::load_image_file(utf8(path));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -769,8 +767,8 @@ namespace App
 
     HRESULT FileDropper::on_drop_string(wchar const *str)
     {
-        std::string bare_name = strip_quotes(utf8(str).c_str());
-        return App::load_image_file(bare_name.c_str());
+        std::string bare_name = strip_quotes(utf8(str));
+        return App::load_image_file(bare_name);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -795,8 +793,10 @@ namespace App
     void setup_initial_windowplacement()
     {
         if(!settings.first_run && !settings.fullscreen) {
-            WINDOWPLACEMENT w{ settings.window_placement };
-            SetWindowPlacement(window, &w);
+            rect const &rc = settings.window_placement.rcNormalPosition;
+            LOG_DEBUG("INITIALLY: {}", rc.to_string());
+            settings.window_placement.flags = 0;
+            SetWindowPlacement(window, &settings.window_placement);
         }
     }
 
@@ -1117,7 +1117,7 @@ namespace App
         }
 
         if(filepath != null) {
-            return load_image(utf8(filepath).c_str());
+            return load_image(utf8(filepath));
         }
         return S_OK;
     }
@@ -1168,11 +1168,11 @@ namespace App
 
     HRESULT set_window_text(std::string const &text)
     {
+        std::string admin;
         if(is_elevated) {
-            SetWindowTextA(window, std::format("** ADMIN! ** {}", text).c_str());
-        } else {
-            SetWindowTextA(window, text.c_str());
+            admin = "** ADMIN! ** ";
         }
+        SetWindowTextA(window, std::format("{}{}", admin, text).c_str());
         return S_OK;
     }
 
@@ -1220,7 +1220,7 @@ namespace App
             if(settings.show_full_filename_in_titlebar) {
                 name = f->filename;
             } else {
-                CHK_HR(file::get_filename(f->filename.c_str(), name));
+                CHK_HR(file::get_filename(f->filename, name));
             }
             std::string msg = std::format("{} {}x{}", name, texture_width, texture_height);
             set_window_text(msg);
@@ -1237,7 +1237,7 @@ namespace App
                 err_str = windows_error_message(hr);
             }
 
-            CHK_HR(file::get_filename(f->filename.c_str(), name));
+            CHK_HR(file::get_filename(f->filename, name));
             set_message(std::format("Can't load {} - {}", name, err_str), 3.0f);
         }
         return hr;
@@ -1344,7 +1344,7 @@ namespace App
             // and in any case, set window message to error text
             std::string err_str = windows_error_message(load_hr);
             std::string name;
-            CHK_HR(file::get_filename(f->filename.c_str(), name));
+            CHK_HR(file::get_filename(f->filename, name));
             set_message(std::format("Can't load {} - {}", name, err_str), 3);
             return load_hr;
         }
@@ -1365,12 +1365,12 @@ namespace App
 
         delete[] folder_path;
 
-        LOG_INFO("Scan folder {}", path.c_str());
+        LOG_INFO("Scan folder {}", path);
 
-        std::vector<char const *> extensions;
+        std::vector<std::string> extensions;
 
         for(auto const &f : image_file_formats) {
-            extensions.push_back(f.first.c_str());
+            extensions.push_back(f.first);
         }
 
         file::scan_folder_sort_field sort_field = file::scan_folder_sort_field::name;
@@ -1378,7 +1378,7 @@ namespace App
 
         file::folder_scan_result *results;
 
-        CHK_HR(scan_folder2(path.c_str(), extensions, sort_field, order, &results, quit_event));
+        CHK_HR(scan_folder2(path, extensions, sort_field, order, &results, quit_event));
 
         // send the results to the window, it will forward them to the app
         WaitForSingleObject(window_created_event, INFINITE);
@@ -1446,19 +1446,19 @@ namespace App
             return E_INVALIDARG;
         }
         std::string folder;
-        CHK_HR(file::get_path(f->filename.c_str(), folder));
+        CHK_HR(file::get_path(f->filename, folder));
 
         if(_stricmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
             return E_CHANGED_STATE;
         }
 
         std::string name;
-        CHK_HR(file::get_filename(f->filename.c_str(), name));
+        CHK_HR(file::get_filename(f->filename, name));
         int id = 0;
         for(auto &ff : current_folder_scan->files) {
             if(_stricmp(ff.name.c_str(), name.c_str()) == 0) {
                 f->index = id;
-                LOG_DEBUG("{} is at index {}", name.c_str(), id);
+                LOG_DEBUG("{} is at index {}", name, id);
                 if(current_file_cursor == -1) {
                     current_file_cursor = f->index;
                 }
@@ -1501,7 +1501,7 @@ namespace App
         if(new_file_cursor != current_file_cursor) {
             current_file_cursor = new_file_cursor;
             std::string const &name = current_folder_scan->files[current_file_cursor].name;
-            load_image(std::format("{}\\{}", current_folder_scan->path, name).c_str());
+            load_image(std::format("{}\\{}", current_folder_scan->path, name));
         }
     }
 
@@ -1663,9 +1663,11 @@ namespace App
 
     HRESULT init(char *cmd_line)
     {
+        CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
+
         if(!XMVerifyCPUSupport()) {
             std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
-            MessageBoxA(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
+            MessageBoxA(null, message.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
             return S_FALSE;
         }
 
@@ -1800,7 +1802,8 @@ namespace App
 
         if(settings.fullscreen) {
             GetWindowPlacement(window, &settings.window_placement);
-            LOG_INFO("toggle_fullscreen: {}", settings.window_placement.rcNormalPosition.left);
+            LOG_INFO("toggle_fullscreen: {}",
+                     ((rect const *)(&settings.window_placement.rcNormalPosition))->to_string());
             style = WS_POPUP;
         }
 
@@ -2354,11 +2357,20 @@ namespace App
     }
 
     //////////////////////////////////////////////////////////////////////
-    // call this from WM_NCCREATE when window is first created
+    // call this just after NCCREATE DefWindowProc
 
-    HRESULT set_window(HWND hwnd)
+    HRESULT on_post_create(HWND hwnd)
     {
         window = hwnd;
+
+        RAWINPUTDEVICE Rid[1];
+        Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+        Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
+        Rid[0].dwFlags = RIDEV_INPUTSINK;
+        Rid[0].hwndTarget = hwnd;
+        RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+
+        setup_initial_windowplacement();
 
         get_is_process_elevated(is_elevated);
 
@@ -2375,14 +2387,6 @@ namespace App
         if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
             return on_paste();
         }
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // call this just after NCCREATE DefWindowProc
-
-    HRESULT on_post_create()
-    {
         return set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
     }
 
@@ -2846,7 +2850,7 @@ namespace App
         case ID_FILE_OPEN: {
             std::string selected_filename;
             if(SUCCEEDED(select_file_dialog(window, selected_filename))) {
-                load_image(selected_filename.c_str());
+                load_image(selected_filename);
             }
         } break;
 
@@ -2856,7 +2860,7 @@ namespace App
             if(SUCCEEDED(save_file_dialog(window, filename))) {
 
                 image const &img = current_file->img;
-                HRESULT hr = save_image_file(filename.c_str(), img.pixels, img.width, img.height, img.row_pitch);
+                HRESULT hr = save_image_file(filename, img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
                     MessageBoxA(window, windows_error_message(hr).c_str(), "Can't save file", MB_ICONEXCLAMATION);
                 } else {
@@ -2883,7 +2887,7 @@ namespace App
 
     void reset_settings()
     {
-        if(MessageBoxA(window, "Reset settings to factory defaults!?", localize(IDS_AppName), MB_YESNO) == IDYES) {
+        if(MessageBoxA(window, "Reset settings to defaults!?", localize(IDS_AppName).c_str(), MB_YESNO) == IDYES) {
 
             bool old_fullscreen = settings.fullscreen;
             WINDOWPLACEMENT old_windowplacement = settings.window_placement;
@@ -3483,6 +3487,13 @@ namespace App
 
     HRESULT on_closing()
     {
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(wp);
+        GetWindowPlacement(window, &wp);
+        rect const &rc = wp.rcNormalPosition;
+        LOG_DEBUG("ON_CLOSING: {} {}", rc.to_string(), wp.showCmd == SW_SHOWMAXIMIZED ? "max" : "normal");
+        settings.window_placement = wp;
+        CoUninitialize();
         return S_OK;
     }
 
@@ -3522,12 +3533,9 @@ namespace App
 
     HRESULT on_window_pos_changing(WINDOWPOS *new_pos)
     {
+        LOG_DEBUG(
+            "NEW POS: {},{} ({}x{}) Flags 0x{:04x}", new_pos->x, new_pos->y, new_pos->cx, new_pos->cy, new_pos->flags);
         UNREFERENCED_PARAMETER(new_pos);
-
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(wp);
-        GetWindowPlacement(window, &wp);
-        settings.window_placement = wp;
         return S_OK;
     }
 

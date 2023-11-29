@@ -6,29 +6,6 @@ LOG_CONTEXT("main");
 
 //////////////////////////////////////////////////////////////////////
 
-namespace
-{
-    // com_initializer goes _before_ the App declaration so CoInitialize is called before App ctor
-
-    struct com_initializer
-    {
-        com_initializer()
-        {
-            if(FAILED(CoInitializeEx(null, COINIT_APARTMENTTHREADED))) {
-                ExitProcess(1);
-            }
-        }
-
-        ~com_initializer()
-        {
-            CoUninitialize();
-        }
-    } initializer;
-
-}    // namespace
-
-//////////////////////////////////////////////////////////////////////
-
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 ////////////////////////////////////////////////////////////////////////
@@ -42,20 +19,14 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 //////////////////////////////////////////////////////////////////////
 
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
     char *cmd_line = GetCommandLineA();
 
     HRESULT hr = App::init(cmd_line);
 
-    // quit if OpenFileDialog was shown and cancelled by the user
-    // or existing instance was reused or cpu not supported
-    if(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == S_FALSE) {
-        return 0;
-    }
-
     if(FAILED(hr)) {
-        display_error(std::format("Command line {}", cmd_line).c_str(), hr);
+        display_error(std::format("Command line {}", cmd_line), hr);
         return 0;
     }
 
@@ -82,7 +53,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     HWND hwnd;
     CHK_NULL(hwnd = CreateWindowExA(window_ex_style,
                                     App::window_class,
-                                    localize(IDS_AppName),
+                                    localize(IDS_AppName).c_str(),
                                     window_style,
                                     rc.x(),
                                     rc.y(),
@@ -93,18 +64,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
                                     hInstance,
                                     null));
 
-    App::setup_initial_windowplacement();
-
-    RAWINPUTDEVICE Rid[1];
-    Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-    Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
-    Rid[0].dwFlags = RIDEV_INPUTSINK;
-    Rid[0].hwndTarget = hwnd;
-    RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
-
     CHK_HR(App::load_accelerators());
 
-    MSG msg;
+    MSG msg{ 0 };
 
     do {
         if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
@@ -132,7 +94,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     static bool s_in_suspend = false;
     static bool s_minimized = false;
 
-    // LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
+    switch(message) {
+    case WM_INPUT:
+    case WM_SETCURSOR:
+    case WM_NCMOUSEMOVE:
+    case WM_MOUSEMOVE:
+    case WM_NCHITTEST:
+        break;
+    default:
+        LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
+        break;
+    }
 
     switch(message) {
 
@@ -149,9 +121,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         // 2nd message is always WM_NCCREATE
 
     case WM_NCCREATE: {
-        App::set_window(hWnd);
         LRESULT r = DefWindowProc(hWnd, message, wParam, lParam);
-        App::on_post_create();
+        App::on_post_create(hWnd);
         return r;
     } break;
 
@@ -237,9 +208,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
 
         //////////////////////////////////////////////////////////////////////
-
-    case WM_MOVE:
-        break;
 
     case WM_SIZE:
         if(wParam == SIZE_MINIMIZED) {

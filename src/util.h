@@ -24,9 +24,9 @@ RECT center_rect_on_default_monitor(RECT const &r);
 uint32 color_to_uint32(vec4 color);
 vec4 uint32_to_color(uint32 color);
 
-std::string strip_quotes(char const *s);
+std::string strip_quotes(std::string const &s);
 
-HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size);
+HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
 
 HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_table, HKL layout, std::string &text);
 HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
@@ -37,8 +37,7 @@ HRESULT get_is_process_elevated(bool &is_elevated);
 //////////////////////////////////////////////////////////////////////
 // localization
 
-char const *localize(uint64 id);
-std::string const &str_local(uint64 id);
+std::string const &localize(uint64 id);
 
 //////////////////////////////////////////////////////////////////////
 
@@ -164,10 +163,10 @@ inline std::string ascii(wchar const *s)
 
 //////////////////////////////////////////////////////////////////////
 
-inline void display_error(char const *message, HRESULT hr)
+inline void display_error(std::string const &message, HRESULT hr)
 {
     std::string err = std::format("Error:\n\n{}\n\n{}", message, windows_error_message(hr));
-    MessageBoxA(null, err.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
+    MessageBoxA(null, err.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
     log_win32_error(hr, err.c_str());
 }
 
