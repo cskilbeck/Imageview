@@ -240,7 +240,6 @@
     <ClInclude Include="src\file.h" />
     <ClInclude Include="src\font_loader.h" />
     <ClInclude Include="src\image.h" />
-    <ClInclude Include="src\image_decoder.h" />
     <ClInclude Include="src\log.h" />
     <ClInclude Include="src\new_windows.h" />
     <ClInclude Include="src\pch.h" />
@@ -260,7 +259,6 @@
     <ClCompile Include="src\file.cpp" />
     <ClCompile Include="src\font_loader.cpp" />
     <ClCompile Include="src\image.cpp" />
-    <ClCompile Include="src\image_decoder.cpp" />
     <ClCompile Include="src\log.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\new_windows.cpp" />

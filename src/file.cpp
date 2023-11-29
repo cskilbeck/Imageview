@@ -295,7 +295,7 @@ namespace file
         path = std::string(p.drive) + p.dir;
         if(path.empty()) {
             path = ".";
-        } else if(path.back() == L'\\') {
+        } else if(path.back() == '\\') {
             path.pop_back();
         }
         return S_OK;

@@ -61,16 +61,13 @@
     <ClInclude Include="src\file.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\image_decoder.h">
+    <ClInclude Include="src\image.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\dialogs.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\thread_pool.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\image.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\settings_dialog.h">
@@ -111,16 +108,13 @@
     <ClCompile Include="src\drag_drop.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\image_decoder.cpp">
+    <ClCompile Include="src\image.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\dialogs.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\thread_pool.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\image.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\settings_dialog.cpp">

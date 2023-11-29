@@ -133,7 +133,6 @@ using Microsoft::WRL::ComPtr;
 #include "new_windows.h"
 #include "timer.h"
 #include "thread_pool.h"
-#include "image_decoder.h"
 #include "image.h"
 #include "settings_dialog.h"
 #include "app.h"

@@ -10,9 +10,43 @@ namespace
 {
     //////////////////////////////////////////////////////////////////////
 
+    HWND main_dialog = null;
+
+    std::vector<HWND> tab_pages;
+
     HWND current_page = null;
 
-    HWND main_dialog = null;
+    //////////////////////////////////////////////////////////////////////
+
+    enum elevation_t
+    {
+        dont_care = 0,
+        hide_if_elevated = 1,
+        hide_if_not_elevated = 2
+    };
+
+    struct settings_tab_t
+    {
+        LPSTR resource_id;
+        DLGPROC handler;
+        elevation_t requires_elevation;
+    };
+
+    INT_PTR settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR about_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+
+    //////////////////////////////////////////////////////////////////////
+
+    settings_tab_t tabs[] = {
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::hide_if_elevated },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
+    };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -37,7 +71,7 @@ namespace
         case WM_COMMAND: {
             switch(LOWORD(wparam)) {
             case IDC_BUTTON_SETTINGS_RELAUNCH: {
-                EndDialog(main_dialog, App::LRESULT_LAUNCH_AS_ADMIN);
+                EndDialog(main_dialog, app::LRESULT_LAUNCH_AS_ADMIN);
             } break;
             }
         } break;
@@ -87,8 +121,6 @@ namespace
     // Get the list of hotkeys
     // Populate listview rows
     // Allow user to edit them somehow
-
-    int selected_hotkey_index = -1;
 
     INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
     {
@@ -158,12 +190,12 @@ namespace
 
         // if being hidden, deselect listview item and hide change button
         case WM_SHOWWINDOW: {
-            if(wparam == false && selected_hotkey_index != -1) {
-                ListView_SetItemState(listview, selected_hotkey_index, 0, LVIS_SELECTED | LVIS_FOCUSED);
-                selected_hotkey_index = -1;
+            if(wparam == false) {
+                int selected_item_index = ListView_GetSelectionMark(listview);
+                int clear_state = 0;
+                ListView_SetItemState(listview, selected_item_index, clear_state, LVIS_SELECTED | LVIS_FOCUSED);
             }
-            // hide the change button regardless
-            ShowWindow(GetDlgItem(dlg, IDC_SETTINGS_BUTTON_EDIT_HOTKEY), SW_HIDE);
+            EnableWindow(GetDlgItem(dlg, IDC_SETTINGS_BUTTON_EDIT_HOTKEY), false);
         } break;
 
         case WM_NOTIFY: {
@@ -180,8 +212,7 @@ namespace
 
                     LPNMLISTVIEW const nm = reinterpret_cast<LPNMLISTVIEW const>(lparam);
                     if((nm->uNewState & LVIS_FOCUSED) != 0) {
-                        selected_hotkey_index = nm->iItem;
-                        ShowWindow(GetDlgItem(dlg, IDC_SETTINGS_BUTTON_EDIT_HOTKEY), SW_SHOW);
+                        EnableWindow(GetDlgItem(dlg, IDC_SETTINGS_BUTTON_EDIT_HOTKEY), true);
                     }
                     break;
                 } break;
@@ -194,34 +225,6 @@ namespace
 
         return 0;
     }
-
-    //////////////////////////////////////////////////////////////////////
-
-    enum elevation_t
-    {
-        dont_care = 0,
-        hide_if_elevated = 1,
-        hide_if_not_elevated = 2
-    };
-
-    struct settings_tab_t
-    {
-        LPSTR resource_id;
-        DLGPROC handler;
-        elevation_t requires_elevation;
-    };
-
-    settings_tab_t tabs[] = {
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::hide_if_elevated },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
-    };
-
-    //////////////////////////////////////////////////////////////////////
-
-    std::vector<HWND> pages;
 
     //////////////////////////////////////////////////////////////////////
     // for subclassed tab page dialogs
@@ -262,20 +265,11 @@ namespace
 
             auto &tab = tabs[i];
 
-            switch(tab.requires_elevation) {
-            case hide_if_elevated:
-                if(!App::is_elevated) {
-                    continue;
-                }
-            default:
-                break;
-            }
-
-            if(tab.requires_elevation == elevation_t::hide_if_not_elevated && !App::is_elevated) {
+            if(tab.requires_elevation == hide_if_not_elevated && !app::is_elevated) {
                 continue;
             }
 
-            if(tab.requires_elevation == hide_if_elevated && App::is_elevated) {
+            if(tab.requires_elevation == hide_if_elevated && app::is_elevated) {
                 continue;
             }
 
@@ -295,19 +289,19 @@ namespace
             HWND page_dlg;
             CHK_NULL(page_dlg = CreateDialogIndirect(GetModuleHandle(nullptr), dlg_template, tab_ctrl, tab.handler));
 
-            TCITEMA tie{};
-            tie.mask = TCIF_TEXT;
-            tie.pszText = const_cast<char *>(localize((uint64)tab.resource_id).c_str());
-            TabCtrl_InsertItem(tab_ctrl, i, &tie);
+            TCITEMA tci;
+            tci.mask = TCIF_TEXT;
+            tci.pszText = const_cast<char *>(localize((uint64)tab.resource_id).c_str());
+            TabCtrl_InsertItem(tab_ctrl, i, &tci);
 
             SetWindowSubclass(page_dlg, child_proc, 0, 0);
 
             rect tab_rect;
             GetWindowRect(page_dlg, &tab_rect);
-            biggest_tab_dialog.right = std::max(biggest_tab_dialog.right, static_cast<LONG>(tab_rect.w()));
-            biggest_tab_dialog.bottom = std::max(biggest_tab_dialog.bottom, static_cast<LONG>(tab_rect.h()));
+            biggest_tab_dialog.right = std::max(biggest_tab_dialog.right, tab_rect.w());
+            biggest_tab_dialog.bottom = std::max(biggest_tab_dialog.bottom, tab_rect.h());
 
-            pages.push_back(page_dlg);
+            tab_pages.push_back(page_dlg);
         }
 
         // resize the dialog to contain the largest tab page
@@ -355,7 +349,7 @@ namespace
         GetClientRect(tab_ctrl, &tab_rect);
         TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
 
-        for(auto const page : pages) {
+        for(auto const page : tab_pages) {
             SetWindowPos(page, null, tab_rect.x(), tab_rect.y(), tab_rect.w(), tab_rect.h(), SWP_NOZORDER);
         }
         return S_OK;
@@ -372,7 +366,7 @@ namespace
         if(current_page != null) {
             ShowWindow(current_page, SW_HIDE);
         }
-        current_page = pages[tab];
+        current_page = tab_pages[tab];
         ShowWindow(current_page, SW_SHOW);
         return S_OK;
     }
@@ -441,8 +435,8 @@ namespace
 
             switch(LOWORD(wparam)) {
 
-            case App::LRESULT_LAUNCH_AS_ADMIN:
-                EndDialog(dlg, App::LRESULT_LAUNCH_AS_ADMIN);
+            case app::LRESULT_LAUNCH_AS_ADMIN:
+                EndDialog(dlg, app::LRESULT_LAUNCH_AS_ADMIN);
                 break;
 
             case IDOK:
@@ -464,6 +458,6 @@ namespace
 LRESULT show_settings_dialog(HWND parent)
 {
     current_page = null;
-    pages.clear();
+    tab_pages.clear();
     return DialogBoxA(GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler);
 }

@@ -126,6 +126,8 @@ std::string const &localize(uint64 id)
 
     // SetThreadUILanguage(MAKELCID(LANG_FRENCH, SUBLANG_NEUTRAL));
 
+    // For some reason LoadStringA doesn't work...?
+
     wchar *str;
     int len = LoadStringW(GetModuleHandle(null), static_cast<uint>(id), reinterpret_cast<wchar *>(&str), 0);
 

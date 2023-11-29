@@ -10,7 +10,7 @@
 // flip/rotate? losslessly?
 //////////////////////////////////////////////////////////////////////
 // TO FIX
-// clean up namespaces
+// get all the d3d crap into another file
 // the cache
 // all the leaks
 
@@ -26,6 +26,18 @@
 
 LOG_CONTEXT("app");
 
+// To register your application as a handler for the 'public' file extensions it supports:
+
+// Create these registry keys
+
+// HKEY_CLASSES_ROOT\ImageView.files
+// HKEY_CLASSES_ROOT\ImageView.files\DefaultIcon (Default REG_SZ exe_path,1)
+// HKEY_CLASSES_ROOT\ImageView.files\shell\open\command (Default REG_SZ "exe_path" "%1")
+
+// For each supported file extension
+// HKEY_CLASSES_ROOT\{.ext}\OpenWithProgids\ImageView.files (empty REG_SZ)
+
+
 //////////////////////////////////////////////////////////////////////
 
 namespace
@@ -34,8 +46,8 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    wchar const *small_font_family_name{ L"Noto Sans" };
-    wchar const *mono_font_family_name{ L"Roboto Mono" };
+    char const *small_font_family_name{ "Noto Sans" };
+    char const *mono_font_family_name{ "Roboto Mono" };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -69,7 +81,7 @@ namespace
 
 #define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
 
-namespace App
+namespace app
 {
     // where on selection is mouse hovering
     enum selection_hover_t : uint
@@ -168,7 +180,7 @@ namespace App
         std::vector<byte> pixels;        // decoded pixels from the file, format is always BGRA32
         bool is_clipboard{ false };      // is it the dummy clipboard image_file?
 
-        image img;
+        image::image_t img;
 
         bool is_decoded() const
         {
@@ -458,22 +470,22 @@ namespace App
     // see selection_hover_t
 
     cursor_def sel_hover_cursors[16] = {
-        { App::cursor_def::src::user, IDC_CURSOR_HAND },    //  0 - inside
-        { App::cursor_def::src::system, IDC_SIZEWE },       //  1 - left
-        { App::cursor_def::src::system, IDC_SIZEWE },       //  2 - right
-        { App::cursor_def::src::system, IDC_ARROW },        //  3 - xx left and right shouldn't be possible
-        { App::cursor_def::src::system, IDC_SIZENS },       //  4 - top
-        { App::cursor_def::src::system, IDC_SIZENWSE },     //  5 - left and top
-        { App::cursor_def::src::system, IDC_SIZENESW },     //  6 - right and top
-        { App::cursor_def::src::system, IDC_ARROW },        //  7 - xx top left and right
-        { App::cursor_def::src::system, IDC_SIZENS },       //  8 - bottom
-        { App::cursor_def::src::system, IDC_SIZENESW },     //  9 - bottom left
-        { App::cursor_def::src::system, IDC_SIZENWSE },     // 10 - bottom right
-        { App::cursor_def::src::system, IDC_ARROW },        // 11 - xx bottom left and right
-        { App::cursor_def::src::system, IDC_ARROW },        // 12 - xx bottom and top
-        { App::cursor_def::src::system, IDC_ARROW },        // 13 - xx bottom top and left
-        { App::cursor_def::src::system, IDC_ARROW },        // 14 - xx bottom top and right
-        { App::cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
+        { app::cursor_def::src::user, IDC_CURSOR_HAND },    //  0 - inside
+        { app::cursor_def::src::system, IDC_SIZEWE },       //  1 - left
+        { app::cursor_def::src::system, IDC_SIZEWE },       //  2 - right
+        { app::cursor_def::src::system, IDC_ARROW },        //  3 - xx left and right shouldn't be possible
+        { app::cursor_def::src::system, IDC_SIZENS },       //  4 - top
+        { app::cursor_def::src::system, IDC_SIZENWSE },     //  5 - left and top
+        { app::cursor_def::src::system, IDC_SIZENESW },     //  6 - right and top
+        { app::cursor_def::src::system, IDC_ARROW },        //  7 - xx top left and right
+        { app::cursor_def::src::system, IDC_SIZENS },       //  8 - bottom
+        { app::cursor_def::src::system, IDC_SIZENESW },     //  9 - bottom left
+        { app::cursor_def::src::system, IDC_SIZENWSE },     // 10 - bottom right
+        { app::cursor_def::src::system, IDC_ARROW },        // 11 - xx bottom left and right
+        { app::cursor_def::src::system, IDC_ARROW },        // 12 - xx bottom and top
+        { app::cursor_def::src::system, IDC_ARROW },        // 13 - xx bottom top and left
+        { app::cursor_def::src::system, IDC_ARROW },        // 14 - xx bottom top and right
+        { app::cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
     };
 
     HRESULT display_image(image_file *f);
@@ -535,7 +547,7 @@ namespace App
         uint32 w, h;
         uint64 image_size;
 
-        CHK_HR(get_image_size(filename, w, h, image_size));
+        CHK_HR(image::get_size(filename, w, h, image_size));
 
         *size = (size_t)image_size + file_size;
 
@@ -559,12 +571,12 @@ namespace App
                     CoInitializeEx(null, COINIT_APARTMENTTHREADED);
 
                     // decode the image
-                    fl->hresult = decode_image(fl->bytes.data(),
-                                               fl->bytes.size(),
-                                               fl->pixels,
-                                               fl->img.width,
-                                               fl->img.height,
-                                               fl->img.row_pitch);
+                    fl->hresult = image::decode(fl->bytes.data(),
+                                                fl->bytes.size(),
+                                                fl->pixels,
+                                                fl->img.width,
+                                                fl->img.height,
+                                                fl->img.row_pitch);
 
                     fl->img.pixels = fl->pixels.data();
 
@@ -757,7 +769,7 @@ namespace App
         PWSTR path{};
         CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
         DEFER(CoTaskMemFree(path));
-        return App::load_image_file(utf8(path));
+        return app::load_image_file(utf8(path));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -768,7 +780,7 @@ namespace App
     HRESULT FileDropper::on_drop_string(wchar const *str)
     {
         std::string bare_name = strip_quotes(utf8(str));
-        return App::load_image_file(bare_name);
+        return app::load_image_file(bare_name);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -796,6 +808,7 @@ namespace App
             rect const &rc = settings.window_placement.rcNormalPosition;
             LOG_DEBUG("INITIALLY: {}", rc.to_string());
             settings.window_placement.flags = 0;
+            settings.window_placement.showCmd = SW_HIDE;
             SetWindowPlacement(window, &settings.window_placement);
         }
     }
@@ -1060,7 +1073,7 @@ namespace App
 
         // encode as a png also - required for chrome and many others
 
-        CHK_HR(copy_pixels_as_png(pixels, w, h));
+        CHK_HR(image::copy_pixels_as_png(pixels, w, h));
 
         // done
 
@@ -1081,14 +1094,14 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // if it's already running, send it the command line and return S_FALSE
 
-    HRESULT reuse_window(char *cmd_line)
+    HRESULT reuse_window(std::string const &cmd_line)
     {
         if(settings.reuse_window) {
             HWND existing_window = FindWindowA(window_class, null);
             if(existing_window != null) {
                 COPYDATASTRUCT c;
-                c.cbData = static_cast<DWORD>((strlen(cmd_line) + 1) * sizeof(char));
-                c.lpData = reinterpret_cast<void *>(cmd_line);
+                c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
+                c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
                 c.dwData = static_cast<DWORD>(copydata_t::commandline);
                 SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
 
@@ -1104,7 +1117,7 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // process a command line, could be from another instance
 
-    HRESULT on_command_line(char *cmd_line)
+    HRESULT on_command_line(std::string const &cmd_line)
     {
         // parse args
         int argc;
@@ -1295,8 +1308,8 @@ namespace App
             f.index = -1;
             f.is_cache_load = true;
             f.view_count = 0;
-            image &img = f.img;
-            CHK_HR(decode_image(f.bytes.data(), f.bytes.size(), f.pixels, img.width, img.height, img.row_pitch));
+            image::image_t &img = f.img;
+            CHK_HR(image::decode(f.bytes.data(), f.bytes.size(), f.pixels, img.width, img.height, img.row_pitch));
             f.img.pixels = f.pixels.data();
             return show_image(&f);
         }
@@ -1369,7 +1382,7 @@ namespace App
 
         std::vector<std::string> extensions;
 
-        for(auto const &f : image_file_formats) {
+        for(auto const &f : image::file_formats) {
             extensions.push_back(f.first);
         }
 
@@ -1661,7 +1674,7 @@ namespace App
     //   S_FALSE creates some events sets up default mouse cursor starts some threads loads settings checks command line
     //   and maybe initiates loading an image file
 
-    HRESULT init(char *cmd_line)
+    HRESULT init(std::string const &cmd_line)
     {
         CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
 
@@ -1670,8 +1683,6 @@ namespace App
             MessageBoxA(null, message.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
             return S_FALSE;
         }
-
-        CHK_HR(check_heif_support());
 
         HRESULT hr = reuse_window(cmd_line);
 
@@ -1707,6 +1718,8 @@ namespace App
         CHK_HR(thread_pool.create_thread_with_message_pump(&scanner_thread_id, []() { scanner_function(); }));
 
         CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, []() { file_loader_function(); }));
+
+        CHK_HR(image::check_heif_support());
 
         CHK_HR(on_command_line(cmd_line));
 
@@ -1765,8 +1778,8 @@ namespace App
             // get client size of window rect for WS_OVERLAPPEDWINDOW
             rect z{ 0, 0, 0, 0 };
             AdjustWindowRectEx(&z, *style, false, *ex_style);
-            window_width = std::max(100, r->w() - z.w());
-            window_height = std::max(100, r->h() - z.h());
+            window_width = std::max(100l, r->w() - z.w());
+            window_height = std::max(100l, r->h() - z.h());
 
         } else {
 
@@ -2009,7 +2022,7 @@ namespace App
                         }
 
                         // truncate if there's already a tab
-                        text = text.substr(0, text.find(L'\t'));
+                        text = text.substr(0, text.find('\t'));
 
                         // get string for hotkeys
 
@@ -2068,7 +2081,7 @@ namespace App
 
         // TODO (chs): localization
 
-        CHK_HR(dwrite_factory->CreateTextFormat(small_font_family_name,
+        CHK_HR(dwrite_factory->CreateTextFormat(unicode(small_font_family_name).c_str(),
                                                 font_collection.Get(),
                                                 weight,
                                                 style,
@@ -2076,7 +2089,7 @@ namespace App
                                                 large_font_size,
                                                 L"en-us",
                                                 &large_text_format));
-        CHK_HR(dwrite_factory->CreateTextFormat(mono_font_family_name,
+        CHK_HR(dwrite_factory->CreateTextFormat(unicode(mono_font_family_name).c_str(),
                                                 font_collection.Get(),
                                                 weight,
                                                 style,
@@ -2859,8 +2872,8 @@ namespace App
             std::string filename;
             if(SUCCEEDED(save_file_dialog(window, filename))) {
 
-                image const &img = current_file->img;
-                HRESULT hr = save_image_file(filename, img.pixels, img.width, img.height, img.row_pitch);
+                image::image_t const &img = current_file->img;
+                HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
                     MessageBoxA(window, windows_error_message(hr).c_str(), "Can't save file", MB_ICONEXCLAMATION);
                 } else {

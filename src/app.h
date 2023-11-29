@@ -4,7 +4,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-namespace App
+namespace app
 {
     //////////////////////////////////////////////////////////////////////
     // mouse buttons
@@ -63,7 +63,7 @@ namespace App
     // reset to blank state before anything happens, load settings
     // maybe return S_FALSE if existing instance was reused
 
-    HRESULT init(char *cmd_line);
+    HRESULT init(std::string const &cmd_line);
 
     //////////////////////////////////////////////////////////////////////
     // get some defaults for window creation
@@ -150,7 +150,7 @@ namespace App
     // handle this command line either because it's the command line or another instance
     // of the application was run and it's in single window mode (settings.reuse_window == true)
 
-    HRESULT on_command_line(char *cmd_line);
+    HRESULT on_command_line(std::string const &cmd_line);
 
     //////////////////////////////////////////////////////////////////////
 

@@ -14,7 +14,7 @@ struct rect : RECT
     {
     }
 
-    rect(int l, int t, int r, int b) : RECT{ l, t, r, b }
+    rect(long l, long t, long r, long b) : RECT{ l, t, r, b }
     {
     }
 
@@ -23,32 +23,32 @@ struct rect : RECT
         return (rect &)r;
     }
 
-    int w() const
+    long w() const
     {
         return right - left;
     }
 
-    int h() const
+    long h() const
     {
         return bottom - top;
     }
 
-    int x() const
+    long x() const
     {
         return left;
     }
 
-    int y() const
+    long y() const
     {
         return top;
     }
 
-    int r() const
+    long r() const
     {
         return right;
     }
 
-    int b() const
+    long b() const
     {
         return bottom;
     }

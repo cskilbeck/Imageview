@@ -21,9 +21,9 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
-    char *cmd_line = GetCommandLineA();
+    std::string cmd_line{ GetCommandLineA() };
 
-    HRESULT hr = App::init(cmd_line);
+    HRESULT hr = app::init(cmd_line);
 
     if(FAILED(hr)) {
         display_error(std::format("Command line {}", cmd_line), hr);
@@ -40,7 +40,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     wcex.hInstance = hInstance;
     wcex.hIcon = icon;
     wcex.hCursor = cursor;
-    wcex.lpszClassName = App::window_class;
+    wcex.lpszClassName = app::window_class;
     wcex.hIconSm = icon;
 
     CHK_BOOL(RegisterClassExA(&wcex));
@@ -48,11 +48,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     DWORD window_style;
     DWORD window_ex_style;
     rect rc;
-    CHECK(App::get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
+    CHECK(app::get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
     HWND hwnd;
     CHK_NULL(hwnd = CreateWindowExA(window_ex_style,
-                                    App::window_class,
+                                    app::window_class,
                                     localize(IDS_AppName).c_str(),
                                     window_style,
                                     rc.x(),
@@ -64,22 +64,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
                                     hInstance,
                                     null));
 
-    CHK_HR(App::load_accelerators());
+    CHK_HR(app::load_accelerators());
 
     MSG msg{ 0 };
 
     do {
         if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
-            if(!TranslateAccelerator(hwnd, App::accelerators, &msg)) {
+            if(!TranslateAccelerator(hwnd, app::accelerators, &msg)) {
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }
         } else {
-            App::update();
+            app::update();
         }
     } while(msg.message != WM_QUIT);
 
-    App::on_process_exit();
+    app::on_process_exit();
 
     CoUninitialize();
 
@@ -94,17 +94,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     static bool s_in_suspend = false;
     static bool s_minimized = false;
 
+#if defined(_DEBUG)
     switch(message) {
     case WM_INPUT:
     case WM_SETCURSOR:
     case WM_NCMOUSEMOVE:
     case WM_MOUSEMOVE:
     case WM_NCHITTEST:
+    case WM_ENTERIDLE:
         break;
     default:
         LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
         break;
     }
+#endif
 
     switch(message) {
 
@@ -122,7 +125,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_NCCREATE: {
         LRESULT r = DefWindowProc(hWnd, message, wParam, lParam);
-        App::on_post_create(hWnd);
+        app::on_post_create(hWnd);
         return r;
     } break;
 
@@ -143,7 +146,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if(IsWindowVisible(hWnd)) {
             NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
             rect const &new_client_rect = params->rgrc[0];
-            App::on_window_size_changing(new_client_rect.w(), new_client_rect.h());
+            app::on_window_size_changing(new_client_rect.w(), new_client_rect.h());
         }
         return 0;
     }
@@ -160,7 +163,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         (void)BeginPaint(hWnd, &ps);
         EndPaint(hWnd, &ps);
         if(s_in_sizemove) {
-            App::update();
+            app::update();
         }
         break;
 
@@ -170,14 +173,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COPYDATA: {
         COPYDATASTRUCT *c = reinterpret_cast<COPYDATASTRUCT *>(lParam);
         if(c != null) {
-            switch((App::copydata_t)c->dwData) {
-            case App::copydata_t::commandline:
+            switch((app::copydata_t)c->dwData) {
+            case app::copydata_t::commandline:
                 if(s_minimized) {
                     ShowWindow(hWnd, SW_RESTORE);
                 }
                 SetForegroundWindow(hWnd);
                 SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                App::on_command_line(utf8(reinterpret_cast<wchar *>(c->lpData)).data());
+                app::on_command_line(reinterpret_cast<char const *>(c->lpData));
                 break;
             default:
                 break;
@@ -196,7 +199,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_SETCURSOR:
-        if(LOWORD(lParam) != HTCLIENT || !App::on_setcursor()) {
+        if(LOWORD(lParam) != HTCLIENT || !app::on_setcursor()) {
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
         break;
@@ -204,7 +207,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_DPICHANGED:
-        App::on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<rect *>(lParam));
+        app::on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<rect *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
@@ -214,7 +217,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if(!s_minimized) {
                 s_minimized = true;
                 if(!s_in_suspend) {
-                    App::on_suspending();
+                    app::on_suspending();
                 }
                 s_in_suspend = true;
             }
@@ -222,62 +225,62 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if(s_minimized) {
                 s_minimized = false;
                 if(s_in_suspend) {
-                    App::on_resuming();
+                    app::on_resuming();
                 }
                 s_in_suspend = false;
             }
             rect rc;
             GetClientRect(hWnd, &rc);
-            App::on_window_size_changed(rc.w(), rc.h());
+            app::on_window_size_changed(rc.w(), rc.h());
         }
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_WINDOWPOSCHANGING:
-        App::on_window_pos_changing(reinterpret_cast<WINDOWPOS *>(lParam));
+        app::on_window_pos_changing(reinterpret_cast<WINDOWPOS *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_LBUTTONDOWN:
-        App::on_mouse_button_down(MAKEPOINTS(lParam), App::btn_left);
+        app::on_mouse_button_down(MAKEPOINTS(lParam), app::btn_left);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_RBUTTONDOWN:
-        App::on_mouse_button_down(MAKEPOINTS(lParam), App::btn_right);
+        app::on_mouse_button_down(MAKEPOINTS(lParam), app::btn_right);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MBUTTONDOWN:
-        App::on_mouse_button_down(MAKEPOINTS(lParam), App::btn_middle);
+        app::on_mouse_button_down(MAKEPOINTS(lParam), app::btn_middle);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_LBUTTONUP:
-        App::on_mouse_button_up(MAKEPOINTS(lParam), App::btn_left);
+        app::on_mouse_button_up(MAKEPOINTS(lParam), app::btn_left);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_RBUTTONUP:
-        App::on_mouse_button_up(MAKEPOINTS(lParam), App::btn_right);
+        app::on_mouse_button_up(MAKEPOINTS(lParam), app::btn_right);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MBUTTONUP:
-        App::on_mouse_button_up(MAKEPOINTS(lParam), App::btn_middle);
+        app::on_mouse_button_up(MAKEPOINTS(lParam), app::btn_middle);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MOUSEMOVE:
-        App::on_mouse_move(MAKEPOINTS(lParam));
+        app::on_mouse_move(MAKEPOINTS(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
@@ -285,7 +288,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_MOUSEWHEEL: {
         POINT pos{ get_x(lParam), get_y(lParam) };
         ScreenToClient(hWnd, &pos);
-        App::on_mouse_wheel(pos, get_y(wParam) / WHEEL_DELTA);
+        app::on_mouse_wheel(pos, get_y(wParam) / WHEEL_DELTA);
     } break;
 
         //////////////////////////////////////////////////////////////////////
@@ -296,26 +299,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
         RAWINPUT *raw = (RAWINPUT *)lpb;
         if(raw->header.dwType == RIM_TYPEMOUSE) {
-            App::on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
+            app::on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
         }
     } break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_COMMAND:
-        App::on_command(LOWORD(wParam));
+        app::on_command(LOWORD(wParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_KEYDOWN:
-        App::on_key_down((int)wParam, lParam);
+        app::on_key_down((int)wParam, lParam);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_KEYUP:
-        App::on_key_up((int)wParam);
+        app::on_key_up((int)wParam);
         break;
 
         //////////////////////////////////////////////////////////////////////
@@ -334,9 +337,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_ACTIVATEAPP:
         if(wParam) {
-            App::on_activated();
+            app::on_activated();
         } else {
-            App::on_deactivated();
+            app::on_deactivated();
         }
         break;
 
@@ -348,7 +351,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         case PBT_APMQUERYSUSPEND:
             if(!s_in_suspend) {
-                App::on_suspending();
+                app::on_suspending();
             }
             s_in_suspend = true;
             return TRUE;
@@ -356,7 +359,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case PBT_APMRESUMESUSPEND:
             if(!s_minimized) {
                 if(s_in_suspend) {
-                    App::on_resuming();
+                    app::on_resuming();
                 }
                 s_in_suspend = false;
             }
@@ -367,7 +370,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_DESTROY:
-        App::on_closing();
+        app::on_closing();
         PostQuitMessage(0);
         break;
 
@@ -382,7 +385,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if(!key_up && !repeat && alt_down) {
             switch(wParam) {
             case VK_RETURN:
-                App::toggle_fullscreen();
+                app::toggle_fullscreen();
                 break;
             case VK_F4:
                 DestroyWindow(hWnd);
@@ -397,14 +400,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         //////////////////////////////////////////////////////////////////////
 
-    case App::WM_FILE_LOAD_COMPLETE:
-        App::on_file_load_complete(lParam);
+    case app::WM_FILE_LOAD_COMPLETE:
+        app::on_file_load_complete(lParam);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
-    case App::WM_FOLDER_SCAN_COMPLETE:
-        App::on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
+    case app::WM_FOLDER_SCAN_COMPLETE:
+        app::on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////

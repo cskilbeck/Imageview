@@ -37,10 +37,10 @@ namespace
 
             // file type guid can be referenced by more than one extension (eg jpg, jpeg both point at same guid)
 
-            for(auto const &fmt : image_file_formats) {
+            for(auto const &fmt : image::file_formats) {
 
                 std::wstring extension = unicode(fmt.first);
-                output_image_format const &image_format = fmt.second;
+                image::output_image_format const &image_format = fmt.second;
 
                 auto found = slots.find(image_format.file_format);
 
