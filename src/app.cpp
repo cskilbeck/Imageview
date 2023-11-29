@@ -84,17 +84,6 @@ namespace App
         sel_hover_outside = 0x80000000
     };
 
-    //////////////////////////////////////////////////////////////////////
-    //
-    // ENUMS which need localized names
-    //
-    // Each enum needs a header name (the name of the enum)
-    // and a localized string for each one
-    // They must be contiguous, ascending, zero-based
-    //
-    // But... how to know the enum from the settings field? not clear...
-    //////////////////////////////////////////////////////////////////////
-
     // what should reset_zoom do
     enum class reset_zoom_mode : uint
     {
@@ -1099,9 +1088,9 @@ namespace App
             HWND existing_window = FindWindow(window_class, null);
             if(existing_window != null) {
                 COPYDATASTRUCT c;
-                c.cbData = (DWORD)(wcslen(cmd_line) + 1) * sizeof(wchar);
+                c.cbData = static_cast<DWORD>((wcslen(cmd_line) + 1) * sizeof(wchar));
                 c.lpData = reinterpret_cast<void *>(cmd_line);
-                c.dwData = (DWORD)App::copydata_t::commandline;
+                c.dwData = static_cast<DWORD>(copydata_t::commandline);
                 SendMessageW(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
 
                 // some confusion about whether this is legit but
@@ -1953,8 +1942,8 @@ namespace App
         // clang-format off
     std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
         { ID_COPY, got_selection },
-        { ID_SELECT_ALL, got_selection },
-        { ID_SELECT_NONE, got_selection },
+        { ID_SELECT_ALL, got_image },
+        { ID_SELECT_NONE, got_image },
         { ID_SELECT_CROP, got_selection },
         { ID_FILE_SAVE, got_image },
         { ID_FILE_NEXT, got_image },
@@ -2003,7 +1992,7 @@ namespace App
                     else if(mii.fType == MFT_STRING) {
 
                         std::wstring text;
-                        text.resize(mii.cbSize + 1);
+                        text.resize(static_cast<size_t>(mii.cbSize) + 1);
                         mii.fMask = MIIM_STRING | MIIM_STATE;
                         mii.dwItemData = 0;
                         mii.dwTypeData = text.data();
@@ -2476,6 +2465,7 @@ namespace App
                         setup_menu_accelerators(popup_menu);
 
                         popup_menu_active = true;
+                        set_message(L"", 0);
                         TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
                         m_timer.reset();
                         popup_menu_active = false;
@@ -2733,7 +2723,7 @@ namespace App
         CHK_HR(d3d_context->Map(tex.Get(), 0, D3D11_MAP_READ, 0, &mapped_resource));
         DEFER(d3d_context->Unmap(tex.Get(), 0));
 
-        f.pixels.resize(mapped_resource.RowPitch * height);
+        f.pixels.resize(static_cast<size_t>(mapped_resource.RowPitch) * height);
 
         memcpy(f.pixels.data(), mapped_resource.pData, f.pixels.size());
 
