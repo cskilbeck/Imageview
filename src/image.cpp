@@ -9,7 +9,7 @@ HRESULT image::create_texture(ID3D11Device *d3d_device,
                               ID3D11DeviceContext *d3d_context,
                               ID3D11Texture2D **texture,
                               ID3D11ShaderResourceView **srv)
-{   // usage
+{
     if(d3d_device == null || d3d_context == null || texture == null || srv == null) {
         return E_INVALIDARG;
     }

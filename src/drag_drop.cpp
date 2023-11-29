@@ -25,7 +25,11 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
     FORMATETC fmte = { get_clipboard_format(&g_cfURL, CFSTR_SHELLURL), NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
     STGMEDIUM medium;
     CHK_HR(pdo->GetData(&fmte, &medium));
-    SCOPED([&]() { ReleaseStgMedium(&medium); });
+
+    auto cleanup = SCOPED[&]()
+    {
+        ReleaseStgMedium(&medium);
+    };
 
     PCSTR pszURL = (PCSTR)GlobalLock(medium.hGlobal);
     if(pszURL == null) {
@@ -57,27 +61,28 @@ CLIPFORMAT get_clipboard_format(CLIPFORMAT *pcf, PCWSTR pszForamt)
 
 HRESULT set_blob(IDataObject *pdtobj, CLIPFORMAT cf, const void *pvBlob, UINT cbBlob)
 {
-    void *pv = GlobalAlloc(GPTR, cbBlob);
-    HRESULT hr = pv ? S_OK : E_OUTOFMEMORY;
-    if(SUCCEEDED(hr)) {
-        CopyMemory(pv, pvBlob, cbBlob);
+    void *pv;
 
-        FORMATETC fmte = { cf, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+    CHK_NULL(pv = GlobalAlloc(GPTR, cbBlob));
 
-        // The STGMEDIUM structure is used to define how to handle a global memory transfer.
-        // This structure includes a flag, tymed, which indicates the medium
-        // to be used, and a union comprising pointers and a handle for getting whichever
-        // medium is specified in tymed.
-        STGMEDIUM medium = {};
-        medium.tymed = TYMED_HGLOBAL;
-        medium.hGlobal = pv;
+    auto cleanup = SCOPED[=]()
+    {
+        GlobalFree(pv);
+    };
 
-        hr = pdtobj->SetData(&fmte, &medium, TRUE);
-        if(FAILED(hr)) {
-            GlobalFree(pv);
-        }
-    }
-    return hr;
+    CopyMemory(pv, pvBlob, cbBlob);
+
+    FORMATETC fmte = { cf, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+
+    STGMEDIUM medium = {};
+    medium.tymed = TYMED_HGLOBAL;
+    medium.hGlobal = pv;
+
+    CHK_HR(pdtobj->SetData(&fmte, &medium, TRUE));
+
+    cleanup.cancel();
+
+    return S_OK;
 }
 
 //////////////////////////////////////////////////////////////////////

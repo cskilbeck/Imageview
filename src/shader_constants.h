@@ -13,4 +13,4 @@
     uint dash_length;
     uint half_dash_length;
     uint select_border_width;
-};
+}

@@ -1,6 +1,5 @@
 //////////////////////////////////////////////////////////////////////
 // Always decodes to 32 bit BGRA
-// Always ignores SRGB
 // Handles exif rotate transforms
 // Doesn't create D3D texture, just gets the pixels (create texture in main thread)
 // Using D3D Feature Level 11 allows non-square, non-power-of-2 texture sizes up to 16384
@@ -8,8 +7,6 @@
 #include "pch.h"
 
 //////////////////////////////////////////////////////////////////////
-
-// TODO (chs): use this table to set up the save dialog file types filter
 
 std::map<std::wstring, output_image_format> save_formats{
     { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, with_alpha } },

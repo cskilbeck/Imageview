@@ -198,7 +198,8 @@ namespace
     enum elevation_t
     {
         dont_care = 0,
-        hide_if_not_elevated = 1
+        hide_if_elevated = 1,
+        hide_if_not_elevated = 2
     };
 
     struct settings_tab_t
@@ -212,7 +213,7 @@ namespace
         { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
         { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
         { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
-        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::hide_if_elevated },
         { MAKEINTRESOURCE(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
     };
 
@@ -259,7 +260,20 @@ namespace
 
             auto &tab = tabs[i];
 
+            switch(tab.requires_elevation) {
+            case hide_if_elevated:
+                if(!App::is_elevated) {
+                    continue;
+                }
+            default:
+                break;
+            }
+
             if(tab.requires_elevation == elevation_t::hide_if_not_elevated && !App::is_elevated) {
+                continue;
+            }
+
+            if(tab.requires_elevation == hide_if_elevated && App::is_elevated) {
                 continue;
             }
 
