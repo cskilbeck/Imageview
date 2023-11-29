@@ -365,7 +365,7 @@ namespace
     {
         if(tab >= _countof(tabs)) {
             Log(L"!? Tab %d is out of range (there are %d tabs)", tab, _countof(tabs));
-            return ERROR_BAD_ARGUMENTS;
+            return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
         if(current_page != null) {
             ShowWindow(current_page, SW_HIDE);

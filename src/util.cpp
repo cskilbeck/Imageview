@@ -7,7 +7,7 @@
 HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size)
 {
     if(buffer == null || size == null || type == null || id == 0) {
-        return ERROR_BAD_ARGUMENTS;
+        return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
     }
 
     HINSTANCE instance = GetModuleHandle(null);
@@ -167,46 +167,6 @@ std::wstring windows_error_message(uint32 err)
 
 //////////////////////////////////////////////////////////////////////
 
-std::wstring format_v(wchar const *fmt, va_list v)
-{
-    size_t len = _vscwprintf(fmt, v);
-    std::wstring s;
-    s.resize(len + 1);
-    _vsnwprintf_s(&s[0], len + 1, _TRUNCATE, fmt, v);
-    return s;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-std::string format_v(char const *fmt, va_list v)
-{
-    size_t len = _vscprintf(fmt, v);
-    std::string s;
-    s.resize(len + 1);
-    vsnprintf_s(&s[0], len + 1, _TRUNCATE, fmt, v);
-    return s;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-std::string format(char const *fmt, ...)
-{
-    va_list v;
-    va_start(v, fmt);
-    return format_v(fmt, v);
-}
-
-//////////////////////////////////////////////////////////////////////
-
-std::wstring format(wchar const *fmt, ...)
-{
-    va_list v;
-    va_start(v, fmt);
-    return format_v(fmt, v);
-}
-
-//////////////////////////////////////////////////////////////////////
-
 HRESULT log_win32_error(DWORD err, wchar const *message, va_list v)
 {
     wchar buffer[4096];
@@ -304,7 +264,7 @@ HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_tab
             }
             append(key_label, key_name);
 
-            text = format(L"%s%s%s", text.c_str(), separator, key_label.c_str());
+            text = std::format(L"{}{}{}", text, separator, key_label);
             separator = L", ";
         }
     }
@@ -316,13 +276,13 @@ HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_tab
 HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table)
 {
     if(h == null) {
-        return ERROR_INVALID_DATA;
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     UINT num_accelerators = CopyAcceleratorTable(h, null, 0);
 
     if(num_accelerators == 0) {
-        return ERROR_NOT_FOUND;
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
     table.resize(num_accelerators);
@@ -331,7 +291,7 @@ HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table)
 
     if(num_accelerators_got != num_accelerators) {
         table.clear();
-        return ERROR_NOT_ALL_ASSIGNED;
+        return HRESULT_FROM_WIN32(ERROR_NOT_ALL_ASSIGNED);
     }
     return S_OK;
 }

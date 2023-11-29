@@ -7,6 +7,7 @@
 // show message if file load is slow
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
 // handle SRGB / premultiplied alpha correctly in image decoder
+// flip/rotate? losslessly?
 //////////////////////////////////////////////////////////////////////
 // TO FIX
 // maximize/minimize/restore bug
@@ -73,7 +74,7 @@ namespace
 
 namespace App
 {
-    // public so DEFINE_ENUM_OPERATORS can see it
+    // where on selection is mouse hovering
     enum selection_hover_t : uint
     {
         sel_hover_inside = 0,
@@ -85,7 +86,7 @@ namespace App
     };
 
     // what should reset_zoom do
-    enum class reset_zoom_mode : uint
+    enum class zoom_mode_t : uint
     {
         one_to_one,
         fit_to_window,
@@ -396,7 +397,7 @@ namespace App
 
     // sticky zoom mode on window resize
     bool has_been_zoomed_or_dragged{ false };
-    reset_zoom_mode last_zoom_mode{ reset_zoom_mode::shrink_to_fit };
+    zoom_mode_t last_zoom_mode{ zoom_mode_t::shrink_to_fit };
 
     // texture drawn in this rectangle which is in pixels
     rect_f current_rect;
@@ -421,7 +422,7 @@ namespace App
     // which frame rendering
     int frame_count{ 0 };
 
-    DEFINE_ENUM_FLAG_OPERATORS(App::selection_hover_t);
+    DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
 
     // settings get serialized/deserialized to/from the registry
     struct settings_t
@@ -515,9 +516,9 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
 
-    void set_message(wchar const *message, double fade_time)
+    void set_message(std::wstring const &message, double fade_time)
     {
-        current_message = std::wstring(message);
+        current_message = message;
         message_timestamp = m_timer.wall_time();
         message_fade_time = fade_time;
     }
@@ -742,7 +743,9 @@ namespace App
     HRESULT load_image_file(wchar const *filepath)
     {
         if(!file_exists(filepath)) {
-            set_message(format(L"Can't load %s", filepath).c_str(), 2.0f);
+            std::wstring msg(filepath);
+            msg = msg.substr(0, msg.find_first_of(L"\r\n\t"));
+            set_message(std::format(L"Can't load {}", msg), 2.0f);
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);
@@ -1065,7 +1068,7 @@ namespace App
 
         // done
 
-        set_message(format(L"Copied %dx%d", w, h).c_str(), 3);
+        set_message(std::format(L"Copied {}x{}", w, h), 3);
 
         return S_OK;
     }
@@ -1134,13 +1137,13 @@ namespace App
     //////////////////////////////////////////////////////////////////////
     // reset the zoom mode to one of `reset_zoom_mode`
 
-    void reset_zoom(reset_zoom_mode mode)
+    void reset_zoom(zoom_mode_t mode)
     {
         float width_factor = (float)window_width / texture_width;
         float height_factor = (float)window_height / texture_height;
         float scale_factor{ 1.0f };
 
-        using m = reset_zoom_mode;
+        using m = zoom_mode_t;
 
         switch(mode) {
 
@@ -1170,7 +1173,7 @@ namespace App
     HRESULT set_window_text(std::wstring const &text)
     {
         if(is_elevated) {
-            SetWindowText(window, format(L"** ADMIN! ** %s", text.c_str()).c_str());
+            SetWindowText(window, std::format(L"** ADMIN! ** {}", text).c_str());
         } else {
             SetWindowText(window, text.c_str());
         }
@@ -1223,9 +1226,9 @@ namespace App
             } else {
                 CHK_HR(file_get_filename(f->filename.c_str(), name));
             }
-            std::wstring msg = format(L"%s %dx%d", name.c_str(), texture_width, texture_height);
+            std::wstring msg = std::format(L"{} {}x{}", name, texture_width, texture_height);
             set_window_text(msg);
-            set_message(msg.c_str(), 2.0f);
+            set_message(msg, 2.0f);
 
         } else {
 
@@ -1239,8 +1242,7 @@ namespace App
             }
 
             CHK_HR(file_get_filename(f->filename.c_str(), name));
-            std::wstring msg = format(L"Can't load %s - %s", name.c_str(), err_str.c_str());
-            set_message(msg.c_str(), 3.0f);
+            set_message(std::format(L"Can't load {} - {}", name, err_str), 3.0f);
         }
         return hr;
     }
@@ -1336,7 +1338,7 @@ namespace App
 
                 // show a messagebox (because they probably ran it just now)
                 std::wstring load_err = windows_error_message(load_hr);
-                std::wstring err_msg = format(L"Error loading %s\n\n%s", f->filename.c_str(), load_err.c_str());
+                std::wstring err_msg = std::format(L"Error loading {}\n\n{}", f->filename, load_err);
                 MessageBoxW(null, err_msg.c_str(), L"ImageView", MB_ICONEXCLAMATION);
 
                 // don't wait for window creation to complete, window might be null, that's ok
@@ -1347,7 +1349,7 @@ namespace App
             std::wstring err_str = windows_error_message(load_hr);
             std::wstring name;
             CHK_HR(file_get_filename(f->filename.c_str(), name));
-            set_message(format(L"Can't load %s - %s", name.c_str(), err_str.c_str()).c_str(), 3);
+            set_message(std::format(L"Can't load {} - {}", name, err_str), 3);
             return load_hr;
         }
         files_loaded += 1;
@@ -1371,7 +1373,7 @@ namespace App
 
         std::vector<wchar const *> extensions;
 
-        for(auto const &f : save_formats) {
+        for(auto const &f : image_file_formats) {
             extensions.push_back(f.first.c_str());
         }
 
@@ -1502,10 +1504,8 @@ namespace App
 
         if(new_file_cursor != current_file_cursor) {
             current_file_cursor = new_file_cursor;
-            std::wstring pic_filename = format(L"%s\\%s",
-                                               current_folder_scan->path.c_str(),
-                                               current_folder_scan->files[current_file_cursor].name.c_str());
-            load_image(pic_filename.c_str());
+            std::wstring const &name = current_folder_scan->files[current_file_cursor].name;
+            load_image(std::format(L"{}\\{}", current_folder_scan->path, name).c_str());
         }
     }
 
@@ -1668,7 +1668,7 @@ namespace App
     HRESULT init(wchar *cmd_line)
     {
         if(!XMVerifyCPUSupport()) {
-            std::wstring message = format(localize(IDS_OldCpu), localize(IDS_AppName));
+            std::wstring message = std::vformat(localize(IDS_OldCpu), std::make_wformat_args(localize(IDS_AppName)));
             MessageBox(null, message.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
             return S_FALSE;
         }
@@ -1940,26 +1940,26 @@ namespace App
         auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
 
         // clang-format off
-    std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
-        { ID_COPY, got_selection },
-        { ID_SELECT_ALL, got_image },
-        { ID_SELECT_NONE, got_image },
-        { ID_SELECT_CROP, got_selection },
-        { ID_FILE_SAVE, got_image },
-        { ID_FILE_NEXT, got_image },
-        { ID_FILE_PREV, got_image },
-        { ID_VIEW_ALPHA, check_alpha },
-        { ID_VIEW_FULLSCREEN, check_fullscreen },
-        { ID_VIEW_FIXEDGRID, check_fixedgrid },
-        { ID_ZOOM_1, got_image },
-        { ID_ZOOM_ALL, got_image },
-        { ID_ZOOM_CENTER, got_image },
-        { ID_ZOOM_FIT, got_image },
-        { ID_ZOOM_SHRINKTOFIT, got_image },
-        { ID_ZOOM_ORIGINAL, got_image },
-        { ID_ZOOM_RESET, got_image },
-        { ID_ZOOM_SELECTION, got_image },
-    };
+        std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
+            { ID_COPY, got_selection },
+            { ID_SELECT_ALL, got_image },
+            { ID_SELECT_NONE, got_image },
+            { ID_SELECT_CROP, got_selection },
+            { ID_FILE_SAVE, got_image },
+            { ID_FILE_NEXT, got_image },
+            { ID_FILE_PREV, got_image },
+            { ID_VIEW_ALPHA, check_alpha },
+            { ID_VIEW_FULLSCREEN, check_fullscreen },
+            { ID_VIEW_FIXEDGRID, check_fixedgrid },
+            { ID_ZOOM_1, got_image },
+            { ID_ZOOM_ALL, got_image },
+            { ID_ZOOM_CENTER, got_image },
+            { ID_ZOOM_FIT, got_image },
+            { ID_ZOOM_SHRINKTOFIT, got_image },
+            { ID_ZOOM_ORIGINAL, got_image },
+            { ID_ZOOM_RESET, got_image },
+            { ID_ZOOM_SELECTION, got_image },
+        };
         // clang-format on
 
         // scan the menu to enable/disable, add/remove checks and add hotkey info
@@ -2016,7 +2016,7 @@ namespace App
 
                         CHK_HR(get_accelerator_hotkey_text(mii.wID, accel_table, keyboard_layout, key_label));
 
-                        text = format(L"%s\t%s", text.c_str(), key_label.c_str());
+                        text = std::format(L"{}\t{}", text, key_label);
 
                         // set the menu item text and state
                         mii.dwTypeData = text.data();
@@ -2379,10 +2379,11 @@ namespace App
     }
 
     //////////////////////////////////////////////////////////////////////
+    // call this just after NCCREATE DefWindowProc
 
     HRESULT on_post_create()
     {
-        return set_window_text(localize(IDS_AppName));
+        return set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2395,101 +2396,101 @@ namespace App
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_[L/M/R]BUTTON[UP/DOWN]
+    // WM_[L/M/R]BUTTONDOWN]
 
-    void on_mouse_button(point_s pos, uint button, int state)
+    void on_mouse_button_down(point_s pos, uint button)
     {
         assert(button < btn_count);
 
-        if(state == btn_down) {
+        mouse_click_timestamp[button] = GetTickCount64();
+        mouse_click[button] = pos;
+        mouse_pos[button] = pos;
+        memset(mouse_offset + button, 0, sizeof(point_s));
 
-            mouse_click_timestamp[button] = GetTickCount64();
-            mouse_click[button] = pos;
-            mouse_pos[button] = pos;
-            memset(mouse_offset + button, 0, sizeof(point_s));
+        set_mouse_button(button);
 
-            set_mouse_button(button);
+        if(button == settings.select_button) {
 
-            if(button == settings.select_button) {
+            if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
 
-                if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
-
-                    // texel they were on when they grabbed the selection
-                    drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
-                    drag_selection = true;
-                }
-
-                if(!drag_selection) {
-
-                    select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
-                    select_current = select_anchor;
-                    select_active = false;
-                }
-
-            } else if(button == settings.zoom_button && !popup_menu_active) {
-
-                ShowCursor(FALSE);
+                // texel they were on when they grabbed the selection
+                drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
+                drag_selection = true;
             }
 
-        } else {    // state == btn_up
+            if(!drag_selection) {
 
-            clear_mouse_buttons(button);
+                select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
+                select_current = select_anchor;
+                select_active = false;
+            }
 
-            // if RMB released within double-click time and haven't
-            // moved it much since they pressed it, show popup menu
+        } else if(button == settings.zoom_button && !popup_menu_active) {
 
-            if(button == settings.drag_button) {
+            ShowCursor(FALSE);
+        }
+    }
 
-                uint64 since = GetTickCount64() - mouse_click_timestamp[settings.drag_button];
+    //////////////////////////////////////////////////////////////////////
+    // WM_[L/M/R]BUTTONUP]
 
-                if(since < static_cast<uint64>(GetDoubleClickTime())) {
+    void on_mouse_button_up(point_s pos, uint button)
+    {
+        clear_mouse_buttons(button);
 
-                    uint hover_high;
-                    uint hover_wide;
+        // if RMB released within double-click time and haven't
+        // moved it much since they pressed it, show popup menu
 
-                    SystemParametersInfo(SPI_GETMOUSEHOVERHEIGHT, 0, &hover_high, 0);
-                    SystemParametersInfo(SPI_GETMOUSEHOVERWIDTH, 0, &hover_wide, 0);
+        if(button == settings.drag_button) {
 
-                    point_s const &click_pos = mouse_click[settings.drag_button];
+            uint64 since = GetTickCount64() - mouse_click_timestamp[settings.drag_button];
 
-                    uint x_distance = std::abs(click_pos.x - pos.x);
-                    uint y_distance = std::abs(click_pos.y - pos.y);
+            if(since < static_cast<uint64>(GetDoubleClickTime())) {
 
-                    if(x_distance < hover_wide && y_distance < hover_high) {
+                uint hover_high;
+                uint hover_wide;
 
-                        HMENU menu = LoadMenu(GetModuleHandle(null), MAKEINTRESOURCE(IDR_MENU_POPUP));
-                        HMENU popup_menu = GetSubMenu(menu, 0);
-                        POINT screen_pos{ click_pos.x, click_pos.y };
-                        ClientToScreen(window, &screen_pos);
+                SystemParametersInfo(SPI_GETMOUSEHOVERHEIGHT, 0, &hover_high, 0);
+                SystemParametersInfo(SPI_GETMOUSEHOVERWIDTH, 0, &hover_wide, 0);
 
-                        setup_menu_accelerators(popup_menu);
+                point_s const &click_pos = mouse_click[settings.drag_button];
 
-                        popup_menu_active = true;
-                        set_message(L"", 0);
-                        TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
-                        m_timer.reset();
-                        popup_menu_active = false;
-                    }
+                uint x_distance = std::abs(click_pos.x - pos.x);
+                uint y_distance = std::abs(click_pos.y - pos.y);
+
+                if(x_distance < hover_wide && y_distance < hover_high) {
+
+                    HMENU menu = LoadMenu(GetModuleHandle(null), MAKEINTRESOURCE(IDR_MENU_POPUP));
+                    HMENU popup_menu = GetSubMenu(menu, 0);
+                    POINT screen_pos{ click_pos.x, click_pos.y };
+                    ClientToScreen(window, &screen_pos);
+
+                    setup_menu_accelerators(popup_menu);
+
+                    popup_menu_active = true;
+                    set_message(L"", 0);    // TODO (chs): clear_message()
+                    TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
+                    m_timer.reset();
+                    popup_menu_active = false;
                 }
             }
+        }
 
-            else if(button == settings.zoom_button) {
+        else if(button == settings.zoom_button) {
 
-                ShowCursor(TRUE);
-                clear_mouse_buttons(settings.drag_button);    // in case they pressed the drag button while zooming
+            ShowCursor(TRUE);
+            clear_mouse_buttons(settings.drag_button);    // in case they pressed the drag button while zooming
 
-            } else if(button == settings.select_button) {
+        } else if(button == settings.select_button) {
 
-                drag_selection = false;
+            drag_selection = false;
 
-                // when selection is finalized, select_anchor is top left, select_current is bottom
-                // right
-                vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
-                vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
-                select_anchor = tl;
-                select_current = br;
-                selection_size = sub_point(br, tl);
-            }
+            // when selection is finalized, select_anchor is top left, select_current is bottom right
+            vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
+            vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
+            select_anchor = tl;
+            select_current = br;
+            selection_size = sub_point(br, tl);
         }
     }
 
@@ -2620,7 +2621,7 @@ namespace App
     void zoom_to_selection()
     {
         if(!select_active) {
-            reset_zoom(reset_zoom_mode::fit_to_window);
+            reset_zoom(zoom_mode_t::fit_to_window);
             return;
         }
 
@@ -2806,20 +2807,27 @@ namespace App
             if(SUCCEEDED(select_color_dialog(window, bg_color, L"Choose background color"))) {
                 settings.background_color = uint32_to_color(bg_color);
             }
-        }
+        } break;
+
+        case ID_VIEW_SETBORDERCOLOR: {
+            uint32 border_color = color_to_uint32(settings.border_color);
+            if(SUCCEEDED(select_color_dialog(window, border_color, L"Choose border color"))) {
+                settings.border_color = uint32_to_color(border_color);
+            }
+        } break;
 
         case ID_ZOOM_1:
-            settings.zoom_mode = reset_zoom_mode::one_to_one;
+            settings.zoom_mode = zoom_mode_t::one_to_one;
             reset_zoom(settings.zoom_mode);
             break;
 
         case ID_ZOOM_FIT:
-            settings.zoom_mode = reset_zoom_mode::fit_to_window;
+            settings.zoom_mode = zoom_mode_t::fit_to_window;
             reset_zoom(settings.zoom_mode);
             break;
 
         case ID_ZOOM_SHRINKTOFIT:
-            settings.zoom_mode = reset_zoom_mode::shrink_to_fit;
+            settings.zoom_mode = zoom_mode_t::shrink_to_fit;
             reset_zoom(settings.zoom_mode);
             break;
 
@@ -2852,7 +2860,7 @@ namespace App
                 if(FAILED(hr)) {
                     MessageBox(window, windows_error_message(hr).c_str(), L"Can't save file", MB_ICONEXCLAMATION);
                 } else {
-                    set_message(format(L"Saved %s", filename.c_str()).c_str(), 5);
+                    set_message(std::format(L"Saved {}", filename), 5);
                 }
             }
         } break;
@@ -3245,7 +3253,7 @@ namespace App
 
             if(crosshairs_active) {
                 vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-                std::wstring text{ format(L"X %d Y %d", (int)p.x, (int)p.y) };
+                std::wstring text{ std::format(L"X {} Y {}", (int)p.x, (int)p.y) };
                 vec2 screen_pos = texture_to_screen_pos(p);
                 screen_pos.x -= dpi_scale(12);
                 screen_pos.y += dpi_scale(8);
@@ -3268,10 +3276,15 @@ namespace App
                 s_br.x += dpi_scale(12);
                 s_br.y += dpi_scale(8);
                 POINT s_dim{ (int)(floorf(br.x) - floorf(tl.x)) + 1, (int)(floorf(br.y) - floorf(tl.y)) + 1 };
+                draw_string(std::format(L"X {} Y {}", (int)tl.x, (int)tl.y),
+                            small_text_format.Get(),
+                            s_tl,
+                            { 1, 1 },
+                            1.0f,
+                            2,
+                            2);
                 draw_string(
-                    format(L"X %d Y %d", (int)tl.x, (int)tl.y), small_text_format.Get(), s_tl, { 1, 1 }, 1.0f, 2, 2);
-                draw_string(
-                    format(L"W %d H %d", s_dim.x, s_dim.y), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+                    std::format(L"W {} H {}", s_dim.x, s_dim.y), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
             }
 
             if(!current_message.empty()) {
@@ -3282,7 +3295,7 @@ namespace App
                 if(message_alpha <= 1) {
                     message_alpha = 1 - powf(message_alpha, 16);
                     vec2 pos{ window_width / 2.0f, window_height - 12.0f };
-                    draw_string(format(L"%s", current_message.c_str()),
+                    draw_string(std::format(L"{}", current_message),
                                 large_text_format.Get(),
                                 pos,
                                 { 0.5f, 1.0f },
@@ -3466,24 +3479,10 @@ namespace App
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    HRESULT save_image(image_file *f, std::wstring const &filename)
-    {
-        return save_image_file(filename.c_str(), f->img.pixels, f->img.width, f->img.height, f->img.row_pitch);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // WM_CLOSING
 
     HRESULT on_closing()
     {
-        if(relaunch_as_admin) {
-            wchar exe_path[MAX_PATH * 2];
-            uint32 got = GetModuleFileName(NULL, exe_path, _countof(exe_path));
-            if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
-                ShellExecute(null, L"runas", exe_path, 0, 0, SW_SHOWNORMAL);
-            }
-        }
         return S_OK;
     }
 
@@ -3597,5 +3596,14 @@ namespace App
         // then cleanup
         CloseHandle(quit_event);
         CloseHandle(window_created_event);
+
+        if(relaunch_as_admin) {
+
+            wchar exe_path[MAX_PATH * 2];
+            uint32 got = GetModuleFileName(NULL, exe_path, _countof(exe_path));
+            if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
+                ShellExecute(null, L"runas", exe_path, 0, 0, SW_SHOWNORMAL);
+            }
+        }
     }
 }

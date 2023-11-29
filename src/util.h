@@ -8,15 +8,6 @@ wchar const *get_wm_name(uint32 uMsg);
 #endif
 
 //////////////////////////////////////////////////////////////////////
-// string formatting
-
-std::wstring format_v(wchar const *fmt, va_list v);
-std::string format_v(char const *fmt, va_list v);
-
-std::wstring format(wchar const *fmt, ...);
-std::string format(char const *fmt, ...);
-
-//////////////////////////////////////////////////////////////////////
 // win32 error messages
 
 std::wstring windows_error_message(uint32 err = 0);
@@ -153,7 +144,7 @@ inline std::string str_from_wide(wchar const *s)
 
 inline void display_error(wchar const *message, HRESULT hr)
 {
-    std::wstring err = format(L"Error:\n\n%s\n\n%s", message, windows_error_message(hr).c_str());
+    std::wstring err = std::format(L"Error:\n\n{}\n\n{}", message, windows_error_message(hr));
     MessageBoxW(null, err.c_str(), localize(IDS_AppName), MB_ICONEXCLAMATION);
     log_win32_error(hr, err.c_str());
 }

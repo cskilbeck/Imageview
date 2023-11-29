@@ -26,7 +26,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_NEUTRAL
 STRINGTABLE
 BEGIN
     IDS_AppName             "ImageView"
-    IDS_OldCpu              "Your computer is too old to run %s"
+    IDS_OldCpu              "Your computer is too old to run {}"
 END
 
 STRINGTABLE
@@ -189,8 +189,10 @@ BEGIN
     VK_F1,          ID_FILE_SETTINGS,       VIRTKEY, NOINVERT
     "V",            ID_PASTE,               VIRTKEY, CONTROL, NOINVERT
     "A",            ID_SELECT_ALL,          VIRTKEY, NOINVERT
+    "A",            ID_SELECT_ALL,          VIRTKEY, CONTROL, NOINVERT
     "C",            ID_SELECT_CROP,         VIRTKEY, SHIFT, CONTROL, NOINVERT
     "N",            ID_SELECT_NONE,         VIRTKEY, NOINVERT
+    "N",            ID_SELECT_NONE,         VIRTKEY, CONTROL, NOINVERT
     "A",            ID_VIEW_ALPHA,          VIRTKEY, NOINVERT
     "G",            ID_VIEW_FIXEDGRID,      VIRTKEY, SHIFT, CONTROL, NOINVERT
     VK_SPACE,       ID_VIEW_FULLSCREEN,     VIRTKEY, NOINVERT
@@ -202,8 +204,7 @@ BEGIN
     "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
-    "A",            ID_SELECT_ALL,          VIRTKEY, CONTROL, NOINVERT
-    "N",            ID_SELECT_NONE,         VIRTKEY, CONTROL, NOINVERT
+    "B",            ID_VIEW_SETBORDERCOLOR, VIRTKEY, SHIFT, CONTROL, NOINVERT
 END
 
 
@@ -238,6 +239,7 @@ BEGIN
             MENUITEM "Fullscreen",                  ID_VIEW_FULLSCREEN
             MENUITEM "Alpha",                       ID_VIEW_ALPHA
             MENUITEM "Set background color",        ID_VIEW_SETBACKGROUNDCOLOR
+            MENUITEM "Set border color",            ID_VIEW_SETBORDERCOLOR
             MENUITEM "Cycle grid size",             ID_VIEW_GRIDSIZE
             MENUITEM "Fixed grid",                  ID_VIEW_FIXEDGRID
         END

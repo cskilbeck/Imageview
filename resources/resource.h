@@ -16,7 +16,6 @@
 #define IDD_DIALOG_SETTINGS_HOTKEYS     116
 #define IDD_DIALOG_SETTINGS_ABOUT       117
 #define IDD_DIALOG_SETTINGS_EXPLORER    118
-#define IDD_DIALOG_RELAUNCH             120
 #define IDD_DIALOG_SETTINGS_RELAUNCH    120
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
@@ -58,13 +57,14 @@
 #define ID_FILE_PREVIOUS                40042
 #define ID_SELECT_CROP                  40043
 #define ID_SHOW_SETTINGS                40069
+#define ID_VIEW_SETBORDERCOLOR          40075
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        122
-#define _APS_NEXT_COMMAND_VALUE         40075
+#define _APS_NEXT_RESOURCE_VALUE        123
+#define _APS_NEXT_COMMAND_VALUE         40078
 #define _APS_NEXT_CONTROL_VALUE         1010
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

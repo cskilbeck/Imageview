@@ -4,20 +4,37 @@
 
 //////////////////////////////////////////////////////////////////////
 
+enum format_flags : uint
+{
+    without_alpha = 0,
+    with_alpha = 1,
+    is_default = 2,
+    use_name = 4,
+};
+
 struct output_image_format
 {
     GUID file_format;
     WICPixelFormatGUID pixel_format;
-    bool alpha;
+    format_flags flags;
+
+    bool supports_alpha() const
+    {
+        return (flags & format_flags::with_alpha) == format_flags::with_alpha;
+    }
+
+    bool is_default() const
+    {
+        return (flags & format_flags::is_default) == format_flags::is_default;
+    }
+
+    bool use_name() const
+    {
+        return (flags & format_flags::use_name) == format_flags::use_name;
+    }
 };
 
-enum alpha_supported
-{
-    without_alpha = 0,
-    with_alpha = 1
-};
-
-extern std::map<std::wstring, output_image_format> save_formats;
+extern std::map<std::wstring, output_image_format> image_file_formats;
 
 //////////////////////////////////////////////////////////////////////
 

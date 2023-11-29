@@ -13,7 +13,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
 
     // check args
     if(filename.empty()) {
-        return ERROR_BAD_ARGUMENTS;
+        return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
     }
 
     // create an async file handle
@@ -30,7 +30,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
 
     // check 4GB file size limit
     if(file_size.HighPart != 0) {
-        return ERROR_FILE_TOO_LARGE;
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     }
 
     // make space in the buffer
@@ -79,7 +79,7 @@ HRESULT load_file(std::wstring filename, std::vector<byte> &buffer, HANDLE cance
 
             // didn't get it all, not sure how to find out what went wrong? GetLastError isn't it...
             // this shouldn't happen because FILE_SHARE_READ but... who knows?
-            return ERROR_IO_INCOMPLETE;
+            return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         // don't clean up the buffer, it's full of good stuff now
         cleanup_buffer.cancel();
@@ -113,7 +113,7 @@ HRESULT scan_folder2(wchar const *path,
                      HANDLE cancel_event)
 {
     if(result == null) {
-        return ERROR_BAD_ARGUMENTS;
+        return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
     }
 
     HANDLE dir_handle =
@@ -129,7 +129,7 @@ HRESULT scan_folder2(wchar const *path,
     CHK_NULL(GetFileInformationByHandle(dir_handle, &main_dir_info));
 
     if((main_dir_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-        return ERROR_BAD_PATHNAME;
+        return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
     }
 
     FILE_INFO_BY_HANDLE_CLASS info_class = FileIdBothDirectoryRestartInfo;

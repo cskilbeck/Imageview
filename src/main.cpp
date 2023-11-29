@@ -79,7 +79,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
     }
 
     if(FAILED(hr)) {
-        display_error(format(L"Command line %s", cmd_line).c_str(), hr);
+        display_error(std::format(L"Command line {}", cmd_line).c_str(), hr);
         return 0;
     }
 
@@ -290,37 +290,37 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_LBUTTONDOWN:
-        App::on_mouse_button(MAKEPOINTS(lParam), App::btn_left, App::btn_down);
+        App::on_mouse_button_down(MAKEPOINTS(lParam), App::btn_left);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_RBUTTONDOWN:
-        App::on_mouse_button(MAKEPOINTS(lParam), App::btn_right, App::btn_down);
+        App::on_mouse_button_down(MAKEPOINTS(lParam), App::btn_right);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MBUTTONDOWN:
-        App::on_mouse_button(MAKEPOINTS(lParam), App::btn_middle, App::btn_down);
+        App::on_mouse_button_down(MAKEPOINTS(lParam), App::btn_middle);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_LBUTTONUP:
-        App::on_mouse_button(MAKEPOINTS(lParam), App::btn_left, App::btn_up);
+        App::on_mouse_button_up(MAKEPOINTS(lParam), App::btn_left);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_RBUTTONUP:
-        App::on_mouse_button(MAKEPOINTS(lParam), App::btn_right, App::btn_up);
+        App::on_mouse_button_up(MAKEPOINTS(lParam), App::btn_right);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MBUTTONUP:
-        App::on_mouse_button(MAKEPOINTS(lParam), App::btn_middle, App::btn_up);
+        App::on_mouse_button_up(MAKEPOINTS(lParam), App::btn_middle);
         break;
 
         //////////////////////////////////////////////////////////////////////

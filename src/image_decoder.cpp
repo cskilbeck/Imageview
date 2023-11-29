@@ -8,12 +8,15 @@
 
 //////////////////////////////////////////////////////////////////////
 
-std::map<std::wstring, output_image_format> save_formats{
-    { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, with_alpha } },
-    { L"JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
-    { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, without_alpha } },
-    { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, without_alpha } },
-    { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, with_alpha } }
+std::map<std::wstring, output_image_format> image_file_formats{
+
+    { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
+    { L"JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
+    { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+    { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+    { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
+    { L"HEIF", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | use_name } } },
+    { L"HEIC", { GUID_ContainerFormatHeif, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
 };
 
 namespace
@@ -432,10 +435,10 @@ HRESULT save_image_file(wchar_t const *filename, byte const *bytes, uint width, 
 
     make_uppercase(extension);
 
-    auto found = save_formats.find(extension);
+    auto found = image_file_formats.find(extension);
 
-    if(found == save_formats.end()) {
-        return ERROR_UNSUPPORTED_TYPE;
+    if(found == image_file_formats.end()) {
+        return HRESULT_FROM_WIN32(ERROR_UNSUPPORTED_TYPE);
     }
 
     output_image_format const &format = found->second;
@@ -469,19 +472,23 @@ HRESULT save_image_file(wchar_t const *filename, byte const *bytes, uint width, 
     uint dst_row_pitch = width * sizeof(uint32);
     uint64 dst_size = (uint64)dst_row_pitch * height;
     if(dst_size > UINT_MAX) {
-        return ERROR_NOT_SUPPORTED;
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
     std::vector<byte> buffer(dst_size);
     byte *dst = buffer.data();
     byte const *src = bytes;
 
-    if(format.alpha == alpha_supported::with_alpha) {
+    if(format.supports_alpha()) {
+
         for(uint y = 0; y < height; ++y) {
+
             memcpy(dst, src, dst_row_pitch);
             dst += dst_row_pitch;
             src += pitch;
         }
+
     } else {
+
         for(uint y = 0; y < height; ++y) {
 
             uint32 const *src_pixel = reinterpret_cast<uint32 const *>(src);

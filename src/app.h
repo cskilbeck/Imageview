@@ -119,7 +119,8 @@ namespace App
     void on_process_exit();
     void on_mouse_move(point_s pos);
     void on_raw_mouse_move(point_s pos);
-    void on_mouse_button(point_s pos, uint button, int state);
+    void on_mouse_button_down(point_s pos, uint button);
+    void on_mouse_button_up(point_s pos, uint button);
     void on_mouse_wheel(point_s pos, int delta);
     void on_command(uint command);
     void on_key_down(int vk_key, LPARAM flags);

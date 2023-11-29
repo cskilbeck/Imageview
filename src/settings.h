@@ -145,6 +145,6 @@ DECL_SETTING(size_t, cache_size, 1048576llu * 1024);    // 1GB memory cache by d
 
 // what happens when you press 'z'
 
-DECL_SETTING(reset_zoom_mode, zoom_mode, reset_zoom_mode::shrink_to_fit);
+DECL_SETTING(zoom_mode_t, zoom_mode, zoom_mode_t::shrink_to_fit);
 
 #pragma warning(pop)

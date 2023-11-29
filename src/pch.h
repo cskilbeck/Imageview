@@ -94,6 +94,7 @@ using Microsoft::WRL::ComPtr;
 //////////////////////////////////////////////////////////////////////
 // New std lib
 
+#include <format>
 #include <string>
 #include <vector>
 #include <mutex>

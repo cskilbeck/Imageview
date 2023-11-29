@@ -33,13 +33,13 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
 
     PCSTR pszURL = (PCSTR)GlobalLock(medium.hGlobal);
     if(pszURL == null) {
-        return ERROR_CANTREAD;
+        return HRESULT_FROM_WIN32(ERROR_CANTREAD);
     }
     DEFER(GlobalUnlock(medium.hGlobal));
 
     WCHAR szURL[2048];
     if(SHAnsiToUnicode(pszURL, szURL, ARRAYSIZE(szURL)) == 0) {
-        return ERROR_ILLEGAL_CHARACTER;
+        return HRESULT_FROM_WIN32(ERROR_ILLEGAL_CHARACTER);
     }
 
     CHK_HR(SHCreateItemFromParsingName(szURL, NULL, riid, ppv));
