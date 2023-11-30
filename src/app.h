@@ -4,12 +4,12 @@
 
 //////////////////////////////////////////////////////////////////////
 
-namespace app
+namespace imageview::app
 {
     //////////////////////////////////////////////////////////////////////
     // mouse buttons
 
-    enum
+    enum mouse_button_t : int
     {
         btn_left = 0,
         btn_middle = 1,
@@ -20,7 +20,7 @@ namespace app
     //////////////////////////////////////////////////////////////////////
     // mouse button states
 
-    enum
+    enum mouse_button_state_t : int
     {
         btn_down = 0,
         btn_up = 1
@@ -37,7 +37,7 @@ namespace app
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for main window
 
-    enum
+    enum user_message_t : uint
     {
         WM_FILE_LOAD_COMPLETE = WM_USER,         // a file load completed (lparam -> file_loader *)
         WM_FOLDER_SCAN_COMPLETE = WM_USER + 1    // a folder scan completed (lparam -> folder_scan_results *)
@@ -46,7 +46,7 @@ namespace app
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for scanner thread
 
-    enum
+    enum scanner_thread_user_message_t : uint
     {
         WM_SCAN_FOLDER = WM_USER    // please scan a folder (lparam -> path)
     };
@@ -54,7 +54,7 @@ namespace app
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for file_loader thread
 
-    enum
+    enum loader_thread_user_message_t : uint
     {
         WM_LOAD_FILE = WM_USER    // please load this file (lparam -> filepath)
     };

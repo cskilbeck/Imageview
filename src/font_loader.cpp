@@ -1,31 +1,10 @@
 #include "pch.h"
 
-// This entire file is the boilerplate for using an embedded font in D2D in Windows 7 and later
+// This entire file is the boilerplate for using an embedded font in D2D in Windows 7
 
 
 // Ignore unreferenced parameters, since they are very common when implementing callbacks.
 #pragma warning(disable : 4100)
-
-////////////////////////////////////////
-// COM inheritance helpers.
-
-// Acquires an additional reference, if non-null.
-template <typename InterfaceType> inline InterfaceType *SafeAcquire(InterfaceType *newObject)
-{
-    if(newObject != NULL)
-        newObject->AddRef();
-
-    return newObject;
-}
-
-
-// Sets a new COM object, releasing the old one.
-template <typename InterfaceType> inline void SafeSet(InterfaceType **currentObject, InterfaceType *newObject)
-{
-    SafeAcquire(newObject);
-    SafeRelease(&currentObject);
-    currentObject = newObject;
-}
 
 //////////////////////////////////////////////////////////////////////
 // ResourceFontCollectionLoader

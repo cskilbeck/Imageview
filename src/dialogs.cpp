@@ -31,6 +31,8 @@ namespace
 
     filterspec all_image_files{ L"Image files", {}, {} };
 
+    using namespace imageview;
+
     //////////////////////////////////////////////////////////////////////
     // make the array of COMDLG_FILTERSPEC from image::file_formats
 
@@ -42,10 +44,10 @@ namespace
 
             wchar const *all_sep = L"";
 
-            for(auto const &fmt : image::file_formats) {
+            for(auto const &fmt : image::image_formats) {
 
                 std::wstring extension = unicode(fmt.first);
-                image::output_image_format const &image_format = fmt.second;
+                image::image_format const &image_format = fmt.second;
 
                 all_image_files.filter = std::format(L"{}{}*.{}", all_image_files.filter, all_sep, unicode(fmt.first));
                 all_sep = L";";
@@ -98,83 +100,87 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-HRESULT select_file_dialog(HWND window, std::string &path)
+namespace imageview::dialog
 {
-    CHK_HR(get_filter_specs());
 
-    ComPtr<IFileDialog> pfd;
-    DWORD dwFlags;
-    ComPtr<IShellItem> psiResult;
-    PWSTR pszFilePath{ null };
+    HRESULT open_file(HWND window, std::string &path)
+    {
+        CHK_HR(get_filter_specs());
 
-    std::string title = std::format("{}{}{}", localize(IDS_AppName), " : ", localize(IDS_SelectFile));
+        ComPtr<IFileDialog> pfd;
+        DWORD dwFlags;
+        ComPtr<IShellItem> psiResult;
+        PWSTR pszFilePath{ null };
 
-    CHK_HR(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
-    CHK_HR(pfd->GetOptions(&dwFlags));
-    CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
-    CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
-    CHK_HR(pfd->SetFileTypeIndex(num_filter_specs));
-    CHK_HR(pfd->SetOkButtonLabel(L"View"));
-    CHK_HR(pfd->SetTitle(unicode(title).c_str()));
-    CHK_HR(pfd->Show(window));
-    CHK_HR(pfd->GetResult(&psiResult));
-    CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
+        std::string title = std::format("{}{}{}", localize(IDS_AppName), " : ", localize(IDS_SelectFile));
 
-    path = utf8(pszFilePath);
-    CoTaskMemFree(pszFilePath);
+        CHK_HR(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
+        CHK_HR(pfd->GetOptions(&dwFlags));
+        CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
+        CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
+        CHK_HR(pfd->SetFileTypeIndex(num_filter_specs));
+        CHK_HR(pfd->SetOkButtonLabel(L"View"));
+        CHK_HR(pfd->SetTitle(unicode(title).c_str()));
+        CHK_HR(pfd->Show(window));
+        CHK_HR(pfd->GetResult(&psiResult));
+        CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
 
-    return S_OK;
-}
+        path = utf8(pszFilePath);
+        CoTaskMemFree(pszFilePath);
 
-//////////////////////////////////////////////////////////////////////
-
-HRESULT save_file_dialog(HWND window, std::string &path)
-{
-    CHK_HR(get_filter_specs());
-
-    ComPtr<IFileDialog> pfd;
-    DWORD dwFlags;
-    ComPtr<IShellItem> psiResult;
-    PWSTR pszFilePath{ null };
-
-    auto options = FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION | FOS_OVERWRITEPROMPT |
-                   FOS_STRICTFILETYPES;
-
-    std::string title = std::format("{}{}{}", localize(IDS_AppName), " : ", localize(IDS_SelectFile));
-
-    CHK_HR(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
-    CHK_HR(pfd->GetOptions(&dwFlags));
-    CHK_HR(pfd->SetOptions(dwFlags | options));
-    CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
-    CHK_HR(pfd->SetFileTypeIndex(default_filter_spec));
-    CHK_HR(pfd->SetTitle(unicode(title).c_str()));
-    CHK_HR(pfd->Show(window));
-    CHK_HR(pfd->GetResult(&psiResult));
-    CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
-
-    path = utf8(pszFilePath);
-    CoTaskMemFree(pszFilePath);
-
-    return S_OK;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-HRESULT select_color_dialog(HWND window, uint32 &color, char const *title)
-{
-    static COLORREF custom_colors[16];
-
-    CHOOSECOLORA cc{ 0 };
-    cc.lStructSize = sizeof(cc);
-    cc.hwndOwner = window;
-    cc.lpCustColors = (LPDWORD)custom_colors;
-    cc.lCustData = reinterpret_cast<LPARAM>(title);
-    cc.rgbResult = color;
-    cc.Flags = CC_FULLOPEN | CC_RGBINIT | CC_ANYCOLOR | CC_ENABLEHOOK;
-    cc.lpfnHook = select_color_dialog_hook_proc;
-    if(!ChooseColorA(&cc)) {
-        return E_ABORT;
+        return S_OK;
     }
-    color = cc.rgbResult;
-    return S_OK;
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT save_file(HWND window, std::string &path)
+    {
+        CHK_HR(get_filter_specs());
+
+        ComPtr<IFileDialog> pfd;
+        DWORD dwFlags;
+        ComPtr<IShellItem> psiResult;
+        PWSTR pszFilePath{ null };
+
+        auto options = FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION | FOS_OVERWRITEPROMPT |
+                       FOS_STRICTFILETYPES;
+
+        std::string title = std::format("{}{}{}", localize(IDS_AppName), " : ", localize(IDS_SelectFile));
+
+        CHK_HR(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
+        CHK_HR(pfd->GetOptions(&dwFlags));
+        CHK_HR(pfd->SetOptions(dwFlags | options));
+        CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
+        CHK_HR(pfd->SetFileTypeIndex(default_filter_spec));
+        CHK_HR(pfd->SetTitle(unicode(title).c_str()));
+        CHK_HR(pfd->Show(window));
+        CHK_HR(pfd->GetResult(&psiResult));
+        CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
+
+        path = utf8(pszFilePath);
+        CoTaskMemFree(pszFilePath);
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT select_color(HWND window, uint32 &color, char const *title)
+    {
+        static COLORREF custom_colors[16];
+
+        CHOOSECOLORA cc{ 0 };
+        cc.lStructSize = sizeof(cc);
+        cc.hwndOwner = window;
+        cc.lpCustColors = (LPDWORD)custom_colors;
+        cc.lCustData = reinterpret_cast<LPARAM>(title);
+        cc.rgbResult = color;
+        cc.Flags = CC_FULLOPEN | CC_RGBINIT | CC_ANYCOLOR | CC_ENABLEHOOK;
+        cc.lpfnHook = select_color_dialog_hook_proc;
+        if(!ChooseColorA(&cc)) {
+            return E_ABORT;
+        }
+        color = cc.rgbResult;
+        return S_OK;
+    }
 }

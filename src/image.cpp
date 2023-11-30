@@ -100,9 +100,9 @@ namespace
     }
 }
 
-namespace image
+namespace imageview::image
 {
-    std::map<std::string, output_image_format> file_formats{
+    std::map<std::string, image_format> image_formats{
 
         { "PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
         { "JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
@@ -137,19 +137,17 @@ namespace image
 
             LOG_INFO("HEIF support is enabled");
 
-            image::file_formats["HEIF"] = { GUID_ContainerFormatHeif,
-                                            GUID_WICPixelFormat32bppBGRA,
-                                            format_flags{ with_alpha | use_name } };
+            image::image_formats["HEIF"] = { GUID_ContainerFormatHeif,
+                                             GUID_WICPixelFormat32bppBGRA,
+                                             format_flags{ with_alpha | use_name } };
 
-            image::file_formats["HEIC"] = { GUID_ContainerFormatHeif,
-                                            GUID_WICPixelFormat32bppBGRA,
-                                            format_flags{ with_alpha | use_name } };
+            image::image_formats["HEIC"] = { GUID_ContainerFormatHeif,
+                                             GUID_WICPixelFormat32bppBGRA,
+                                             format_flags{ with_alpha } };
         }
 
         return S_OK;
     }
-
-
 
     //////////////////////////////////////////////////////////////////////
     // get width, height in pixels and size of output in bytes for an image file
@@ -235,8 +233,8 @@ namespace image
         UINT img_size = stride * h;
         CHK_HR(frame->WritePixels(h, stride, img_size, const_cast<BYTE *>(pixels)));
 
-        frame->Commit();
-        png_encoder->Commit();
+        CHK_HR(frame->Commit());
+        CHK_HR(png_encoder->Commit());
 
         uint64_t stream_size;
 
@@ -478,13 +476,13 @@ namespace image
 
         make_uppercase(extension);
 
-        auto found = image::file_formats.find(extension);
+        auto found = image::image_formats.find(extension);
 
-        if(found == image::file_formats.end()) {
+        if(found == image::image_formats.end()) {
             return HRESULT_FROM_WIN32(ERROR_UNSUPPORTED_TYPE);
         }
 
-        output_image_format const &format = found->second;
+        image_format const &format = found->second;
 
         auto wic = get_wic();
 
@@ -561,17 +559,18 @@ namespace image
     //////////////////////////////////////////////////////////////////////
     // create a d3d texture for an image
 
-    HRESULT image_t::create_texture(ID3D11Device *d3d_device,
-                                    ID3D11DeviceContext *d3d_context,
-                                    ID3D11Texture2D **texture,
-                                    ID3D11ShaderResourceView **srv)
+    HRESULT create_texture(ID3D11Device *d3d_device,
+                           ID3D11DeviceContext *d3d_context,
+                           ID3D11Texture2D **texture,
+                           ID3D11ShaderResourceView **srv,
+                           image_t &image)
     {
         if(d3d_device == null || d3d_context == null || texture == null || srv == null) {
             return E_INVALIDARG;
         }
 
         // object state
-        if(pixels == null || width == 0 || height == 0 || row_pitch == 0) {
+        if(image.pixels == null || image.width == 0 || image.height == 0 || image.row_pitch == 0) {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
@@ -591,8 +590,8 @@ namespace image
         // Create texture
 
         D3D11_TEXTURE2D_DESC desc = {};
-        desc.Width = width;
-        desc.Height = height;
+        desc.Width = image.width;
+        desc.Height = image.height;
         desc.MipLevels = 1u;
         desc.ArraySize = 1;
         desc.Format = format;
@@ -606,9 +605,9 @@ namespace image
         SRVDesc.Texture2D.MipLevels = 1u;
 
         D3D11_SUBRESOURCE_DATA initData;
-        initData.pSysMem = pixels;
-        initData.SysMemPitch = row_pitch;
-        initData.SysMemSlicePitch = (uint)size();
+        initData.pSysMem = image.pixels;
+        initData.SysMemPitch = image.row_pitch;
+        initData.SysMemSlicePitch = (uint)image.size();
 
         D3D11_SUBRESOURCE_DATA *id = &initData;
 
@@ -627,7 +626,7 @@ namespace image
         CHK_HR(d3d_device->CreateShaderResourceView(tex.Get(), &SRVDesc, &texture_view));
 
         if(autogen) {
-            d3d_context->UpdateSubresource(tex.Get(), 0, null, pixels, row_pitch, (uint)size());
+            d3d_context->UpdateSubresource(tex.Get(), 0, null, image.pixels, image.row_pitch, (uint)image.size());
             d3d_context->GenerateMips(texture_view.Get());
         }
 

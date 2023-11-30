@@ -6,7 +6,7 @@
 
 #if !defined(DISABLE_LOGGING)
 
-namespace logger
+namespace imageview::logger
 {
     level log_level = level::debug;
     bool log_to_stdout{ false };
@@ -48,7 +48,6 @@ namespace logger
     }
 
     //////////////////////////////////////////////////////////////////////
-
-}    // namespace logview::logger
+}
 
 #endif

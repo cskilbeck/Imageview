@@ -21,27 +21,6 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv);
 //////////////////////////////////////////////////////////////////////
 // COM helpers
 
-template <class T> void SafeRelease(T **ppT)
-{
-    if(*ppT) {
-        (*ppT)->Release();
-        *ppT = NULL;
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
-
-template <class T> HRESULT SetInterface(T **ppT, IUnknown *punk)
-{
-    SafeRelease(ppT);
-
-    if(punk == null) {
-        return E_NOINTERFACE;
-    }
-
-    return punk->QueryInterface(ppT);
-}
-
 //////////////////////////////////////////////////////////////////////
 
 class CDragDropHelper : public IDropTarget
@@ -76,7 +55,7 @@ public:
         _dropImageType = dropImageType;
         _pszDropTipTemplate = pszDropTipTemplate;
         if(FAILED(RegisterDragDrop(hwnd, this))) {
-            log_win32_error("RegisterDragDrop failed");
+            imageview::log_win32_error("RegisterDragDrop failed");
         } else {
             _hwndRegistered = hwnd;
         }

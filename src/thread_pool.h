@@ -5,86 +5,90 @@
 
 //////////////////////////////////////////////////////////////////////
 
-struct thread_pool_t
+namespace imageview
 {
-    HRESULT init();
-    void cleanup();
 
-    // NOTE: these create_thread... functions pass the args by value!!!
-
-    //////////////////////////////////////////////////////////////////////
-    // fire and forget a thread
-
-    template <class FUNC, class... Args> HRESULT create_thread(FUNC function, Args... arguments)
+    struct thread_pool_t
     {
-        increment_thread_count();
+        HRESULT init();
+        void cleanup();
 
-        std::thread(
+        // NOTE: these create_thread... functions pass the args by value!!!
 
-            [this, function](Args... args) {
+        //////////////////////////////////////////////////////////////////////
+        // fire and forget a thread
 
-                function(args...);
+        template <class FUNC, class... Args> HRESULT create_thread(FUNC function, Args... arguments)
+        {
+            increment_thread_count();
 
-                decrement_thread_count();
-            },
-            arguments...)
-            .detach();
+            std::thread(
 
-        return S_OK;
-    }
+                [this, function](Args... args) {
 
-    //////////////////////////////////////////////////////////////////////
-    // force a message pump to be created before returning the thread_id
-    // so you can PostMessage to it safely as soon as this function returns
+                    function(args...);
 
-    template <class FUNC, class... Args>
-    HRESULT create_thread_with_message_pump(uint *thread_id, FUNC function, Args... arguments)
-    {
-        if(thread_id == null) {
-            return E_INVALIDARG;
+                    decrement_thread_count();
+                },
+                arguments...)
+                .detach();
+
+            return S_OK;
         }
 
-        HANDLE msg_q_created;
-        CHK_NULL(msg_q_created = CreateEvent(null, false, false, null));
+        //////////////////////////////////////////////////////////////////////
+        // force a message pump to be created before returning the thread_id
+        // so you can PostMessage to it safely as soon as this function returns
 
-        DEFER(CloseHandle(msg_q_created));
+        template <class FUNC, class... Args>
+        HRESULT create_thread_with_message_pump(uint *thread_id, FUNC function, Args... arguments)
+        {
+            if(thread_id == null) {
+                return E_INVALIDARG;
+            }
 
-        increment_thread_count();
+            HANDLE msg_q_created;
+            CHK_NULL(msg_q_created = CreateEvent(null, false, false, null));
 
-        std::thread thread = std::thread(
+            DEFER(CloseHandle(msg_q_created));
 
-            [this, function](HANDLE ev, Args... args) {
+            increment_thread_count();
 
-                MSG msg;
-                PeekMessage(&msg, (HWND)-1, 0, 0, PM_NOREMOVE);
+            std::thread thread = std::thread(
 
-                SetEvent(ev);
+                [this, function](HANDLE ev, Args... args) {
 
-                function(args...);
+                    MSG msg;
+                    PeekMessage(&msg, (HWND)-1, 0, 0, PM_NOREMOVE);
 
-                decrement_thread_count();
-            },
-            msg_q_created,
-            arguments...);
+                    SetEvent(ev);
 
-        uint id;
-        CHK_BOOL(id = GetThreadId(thread.native_handle()));
+                    function(args...);
 
-        if(WaitForSingleObject(msg_q_created, INFINITE) != WAIT_OBJECT_0) {
-            return HRESULT_FROM_WIN32(GetLastError());
+                    decrement_thread_count();
+                },
+                msg_q_created,
+                arguments...);
+
+            uint id;
+            CHK_BOOL(id = GetThreadId(thread.native_handle()));
+
+            if(WaitForSingleObject(msg_q_created, INFINITE) != WAIT_OBJECT_0) {
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+
+            thread.detach();
+
+            *thread_id = id;
+
+            return S_OK;
         }
 
-        thread.detach();
+    private:
+        void increment_thread_count();
+        HRESULT decrement_thread_count();
 
-        *thread_id = id;
-
-        return S_OK;
-    }
-
-private:
-    void increment_thread_count();
-    HRESULT decrement_thread_count();
-
-    LONG thread_count;
-    HANDLE thread_exit_event;
-};
+        LONG thread_count;
+        HANDLE thread_exit_event;
+    };
+}

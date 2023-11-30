@@ -23,10 +23,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 {
     std::string cmd_line{ GetCommandLineA() };
 
-    HRESULT hr = app::init(cmd_line);
+    HRESULT hr = imageview::app::init(cmd_line);
 
     if(FAILED(hr)) {
-        display_error(std::format("Command line {}", cmd_line), hr);
+        imageview::display_error(std::format("Command line {}", cmd_line), hr);
         return 0;
     }
 
@@ -40,20 +40,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     wcex.hInstance = hInstance;
     wcex.hIcon = icon;
     wcex.hCursor = cursor;
-    wcex.lpszClassName = app::window_class;
+    wcex.lpszClassName = imageview::app::window_class;
     wcex.hIconSm = icon;
 
     CHK_BOOL(RegisterClassExA(&wcex));
 
     DWORD window_style;
     DWORD window_ex_style;
-    rect rc;
-    CHECK(app::get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
+    imageview::rect rc;
+    CHECK(imageview::app::get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
     HWND hwnd;
     CHK_NULL(hwnd = CreateWindowExA(window_ex_style,
-                                    app::window_class,
-                                    localize(IDS_AppName).c_str(),
+                                    imageview::app::window_class,
+                                    imageview::localize(IDS_AppName).c_str(),
                                     window_style,
                                     rc.x(),
                                     rc.y(),
@@ -64,22 +64,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
                                     hInstance,
                                     null));
 
-    CHK_HR(app::load_accelerators());
+    CHK_HR(imageview::app::load_accelerators());
 
     MSG msg{ 0 };
 
     do {
         if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
-            if(!TranslateAccelerator(hwnd, app::accelerators, &msg)) {
+            if(!TranslateAccelerator(hwnd, imageview::app::accelerators, &msg)) {
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }
         } else {
-            app::update();
+            imageview::app::update();
         }
     } while(msg.message != WM_QUIT);
 
-    app::on_process_exit();
+    imageview::app::on_process_exit();
 
     CoUninitialize();
 
@@ -104,7 +104,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_ENTERIDLE:
         break;
     default:
-        LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
+        LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, imageview::get_wm_name(message), wParam, lParam);
         break;
     }
 #endif
@@ -125,7 +125,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_NCCREATE: {
         LRESULT r = DefWindowProc(hWnd, message, wParam, lParam);
-        app::on_post_create(hWnd);
+        imageview::app::on_post_create(hWnd);
         return r;
     } break;
 
@@ -145,8 +145,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         DefWindowProc(hWnd, message, wParam, lParam);
         if(IsWindowVisible(hWnd)) {
             NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
-            rect const &new_client_rect = params->rgrc[0];
-            app::on_window_size_changing(new_client_rect.w(), new_client_rect.h());
+            imageview::rect const &new_client_rect = params->rgrc[0];
+            imageview::app::on_window_size_changing(new_client_rect.w(), new_client_rect.h());
         }
         return 0;
     }
@@ -163,7 +163,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         (void)BeginPaint(hWnd, &ps);
         EndPaint(hWnd, &ps);
         if(s_in_sizemove) {
-            app::update();
+            imageview::app::update();
         }
         break;
 
@@ -173,14 +173,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COPYDATA: {
         COPYDATASTRUCT *c = reinterpret_cast<COPYDATASTRUCT *>(lParam);
         if(c != null) {
-            switch((app::copydata_t)c->dwData) {
-            case app::copydata_t::commandline:
+            switch((imageview::app::copydata_t)c->dwData) {
+            case imageview::app::copydata_t::commandline:
                 if(s_minimized) {
                     ShowWindow(hWnd, SW_RESTORE);
                 }
                 SetForegroundWindow(hWnd);
                 SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                app::on_command_line(reinterpret_cast<char const *>(c->lpData));
+                imageview::app::on_command_line(reinterpret_cast<char const *>(c->lpData));
                 break;
             default:
                 break;
@@ -199,7 +199,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_SETCURSOR:
-        if(LOWORD(lParam) != HTCLIENT || !app::on_setcursor()) {
+        if(LOWORD(lParam) != HTCLIENT || !imageview::app::on_setcursor()) {
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
         break;
@@ -207,7 +207,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_DPICHANGED:
-        app::on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<rect *>(lParam));
+        imageview::app::on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<imageview::rect *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
@@ -217,7 +217,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if(!s_minimized) {
                 s_minimized = true;
                 if(!s_in_suspend) {
-                    app::on_suspending();
+                    imageview::app::on_suspending();
                 }
                 s_in_suspend = true;
             }
@@ -225,70 +225,70 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if(s_minimized) {
                 s_minimized = false;
                 if(s_in_suspend) {
-                    app::on_resuming();
+                    imageview::app::on_resuming();
                 }
                 s_in_suspend = false;
             }
-            rect rc;
+            imageview::rect rc;
             GetClientRect(hWnd, &rc);
-            app::on_window_size_changed(rc.w(), rc.h());
+            imageview::app::on_window_size_changed(rc.w(), rc.h());
         }
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_WINDOWPOSCHANGING:
-        app::on_window_pos_changing(reinterpret_cast<WINDOWPOS *>(lParam));
+        imageview::app::on_window_pos_changing(reinterpret_cast<WINDOWPOS *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_LBUTTONDOWN:
-        app::on_mouse_button_down(MAKEPOINTS(lParam), app::btn_left);
+        imageview::app::on_mouse_button_down(MAKEPOINTS(lParam), imageview::app::btn_left);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_RBUTTONDOWN:
-        app::on_mouse_button_down(MAKEPOINTS(lParam), app::btn_right);
+        imageview::app::on_mouse_button_down(MAKEPOINTS(lParam), imageview::app::btn_right);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MBUTTONDOWN:
-        app::on_mouse_button_down(MAKEPOINTS(lParam), app::btn_middle);
+        imageview::app::on_mouse_button_down(MAKEPOINTS(lParam), imageview::app::btn_middle);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_LBUTTONUP:
-        app::on_mouse_button_up(MAKEPOINTS(lParam), app::btn_left);
+        imageview::app::on_mouse_button_up(MAKEPOINTS(lParam), imageview::app::btn_left);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_RBUTTONUP:
-        app::on_mouse_button_up(MAKEPOINTS(lParam), app::btn_right);
+        imageview::app::on_mouse_button_up(MAKEPOINTS(lParam), imageview::app::btn_right);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MBUTTONUP:
-        app::on_mouse_button_up(MAKEPOINTS(lParam), app::btn_middle);
+        imageview::app::on_mouse_button_up(MAKEPOINTS(lParam), imageview::app::btn_middle);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MOUSEMOVE:
-        app::on_mouse_move(MAKEPOINTS(lParam));
+        imageview::app::on_mouse_move(MAKEPOINTS(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_MOUSEWHEEL: {
-        POINT pos{ get_x(lParam), get_y(lParam) };
+        POINT pos{ imageview::get_x(lParam), imageview::get_y(lParam) };
         ScreenToClient(hWnd, &pos);
-        app::on_mouse_wheel(pos, get_y(wParam) / WHEEL_DELTA);
+        imageview::app::on_mouse_wheel(pos, imageview::get_y(wParam) / WHEEL_DELTA);
     } break;
 
         //////////////////////////////////////////////////////////////////////
@@ -299,26 +299,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
         RAWINPUT *raw = (RAWINPUT *)lpb;
         if(raw->header.dwType == RIM_TYPEMOUSE) {
-            app::on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
+            imageview::app::on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
         }
     } break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_COMMAND:
-        app::on_command(LOWORD(wParam));
+        imageview::app::on_command(LOWORD(wParam));
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_KEYDOWN:
-        app::on_key_down((int)wParam, lParam);
+        imageview::app::on_key_down((int)wParam, lParam);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
     case WM_KEYUP:
-        app::on_key_up((int)wParam);
+        imageview::app::on_key_up((int)wParam);
         break;
 
         //////////////////////////////////////////////////////////////////////
@@ -337,9 +337,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_ACTIVATEAPP:
         if(wParam) {
-            app::on_activated();
+            imageview::app::on_activated();
         } else {
-            app::on_deactivated();
+            imageview::app::on_deactivated();
         }
         break;
 
@@ -351,7 +351,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         case PBT_APMQUERYSUSPEND:
             if(!s_in_suspend) {
-                app::on_suspending();
+                imageview::app::on_suspending();
             }
             s_in_suspend = true;
             return TRUE;
@@ -359,7 +359,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case PBT_APMRESUMESUSPEND:
             if(!s_minimized) {
                 if(s_in_suspend) {
-                    app::on_resuming();
+                    imageview::app::on_resuming();
                 }
                 s_in_suspend = false;
             }
@@ -370,7 +370,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //////////////////////////////////////////////////////////////////////
 
     case WM_DESTROY:
-        app::on_closing();
+        imageview::app::on_closing();
         PostQuitMessage(0);
         break;
 
@@ -385,7 +385,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if(!key_up && !repeat && alt_down) {
             switch(wParam) {
             case VK_RETURN:
-                app::toggle_fullscreen();
+                imageview::app::toggle_fullscreen();
                 break;
             case VK_F4:
                 DestroyWindow(hWnd);
@@ -400,14 +400,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
         //////////////////////////////////////////////////////////////////////
 
-    case app::WM_FILE_LOAD_COMPLETE:
-        app::on_file_load_complete(lParam);
+    case imageview::app::WM_FILE_LOAD_COMPLETE:
+        imageview::app::on_file_load_complete(lParam);
         break;
 
         //////////////////////////////////////////////////////////////////////
 
-    case app::WM_FOLDER_SCAN_COMPLETE:
-        app::on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
+    case imageview::app::WM_FOLDER_SCAN_COMPLETE:
+        imageview::app::on_folder_scanned(reinterpret_cast<imageview::file::folder_scan_result *>(lParam));
         break;
 
         //////////////////////////////////////////////////////////////////////

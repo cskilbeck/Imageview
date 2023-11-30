@@ -25,7 +25,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-namespace logger
+namespace imageview::logger
 {
     //////////////////////////////////////////////////////////////////////
     // This enum must match the #defines above
@@ -252,11 +252,11 @@ namespace logger
     do {        \
     } while(false)
 
-#define LOG_EMIT_MESSAGE(_level, _msg, ...)                                                    \
-    do {                                                                                       \
-        if(logger::log_level >= logger::level::_level) {                                       \
-            logger::emit_log_message<__log_context>(logger::level::_level, _msg, __VA_ARGS__); \
-        }                                                                                      \
+#define LOG_EMIT_MESSAGE(_level, _msg, ...)                                                                          \
+    do {                                                                                                             \
+        if(imageview::logger::log_level >= imageview::logger::level::_level) {                                       \
+            imageview::logger::emit_log_message<__log_context>(imageview::logger::level::_level, _msg, __VA_ARGS__); \
+        }                                                                                                            \
     } while(false)
 
 
@@ -295,9 +295,9 @@ namespace logger
 #define LOG_JOIN2(x, y) x##y
 #define LOG_JOIN(x, y) LOG_JOIN2(x, y)
 
-#define LOG_CONTEXT(ctx) static constexpr logger::log_context __log_context{ ctx, LOG_JOIN(L, ctx) };
+#define LOG_CONTEXT(ctx) static constexpr imageview::logger::log_context __log_context{ ctx, LOG_JOIN(L, ctx) };
 
-#define LOG_SET_LEVEL(l) logger::set_level(logger::level::l)
+#define LOG_SET_LEVEL(l) imageview::logger::set_level(imageview::logger::level::l)
 
 //////////////////////////////////////////////////////////////////////
 

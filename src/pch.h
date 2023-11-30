@@ -4,11 +4,6 @@
 #pragma once
 
 //////////////////////////////////////////////////////////////////////
-// TODO(chs): replace codecvt stuff with MultiByteToWideChar and WideCharToMultiByte
-
-#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
-
-//////////////////////////////////////////////////////////////////////
 // Logging
 
 #if defined(_DEBUG)
@@ -130,7 +125,6 @@ using Microsoft::WRL::ComPtr;
 #include "dialogs.h"
 #include "drag_drop.h"
 #include "font_loader.h"
-#include "new_windows.h"
 #include "timer.h"
 #include "thread_pool.h"
 #include "image.h"

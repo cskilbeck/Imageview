@@ -3,9 +3,8 @@
 //////////////////////////////////////////////////////////////////////
 // defer / scoped
 
-namespace defer
+namespace imageview::defer
 {
-
     template <typename F> class defer_finalizer
     {
         F f;
@@ -52,5 +51,5 @@ namespace defer
 
 #define DEFER_TOKENPASTE(x, y) x##y
 #define DEFER_TOKENPASTE2(x, y) DEFER_TOKENPASTE(x, y)
-#define SCOPED defer::deferrer <<
-#define DEFER(X) auto DEFER_TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = defer::deferrer << [=] { X; }
+#define SCOPED imageview::defer::deferrer <<
+#define DEFER(X) auto DEFER_TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = imageview::defer::deferrer << [=] { X; }

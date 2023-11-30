@@ -1,178 +1,175 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Shaders">
-      <UniqueIdentifier>{2189bf36-68b3-4129-86bd-1cf44c9a7424}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src">
-      <UniqueIdentifier>{7194a920-2a00-43ef-b096-76dc73fa5cbc}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources">
+    <Filter Include="1_resources">
       <UniqueIdentifier>d8c01ff7-548f-42c5-99c5-c92b9c9080da</UniqueIdentifier>
       <Extensions>ico;cur;bmp;dds;dlg;fbx;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tga;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="2_shaders">
+      <UniqueIdentifier>{2189bf36-68b3-4129-86bd-1cf44c9a7424}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="4_include">
+      <UniqueIdentifier>{ccd7567f-49ec-4338-867d-e652b7af8552}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3_src">
+      <UniqueIdentifier>{7194a920-2a00-43ef-b096-76dc73fa5cbc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\app.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\drag_drop.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\font_loader.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\log.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\new_windows.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\pch.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\rect.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\settings.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\shader_constants.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\timer.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\util.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="resources\resource.h">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </ClInclude>
     <ClInclude Include="shaders\hlsl.h">
-      <Filter>Shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="src\defer.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\types.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\file.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\image.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\dialogs.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\thread_pool.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="src\settings_dialog.h">
-      <Filter>src</Filter>
+      <Filter>2_shaders</Filter>
     </ClInclude>
     <ClInclude Include="src\ansi.h">
-      <Filter>src</Filter>
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\defer.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\dialogs.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\drag_drop.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\file.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\font_loader.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\log.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\pch.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\settings.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\settings_dialog.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\shader_constants.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\thread_pool.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\timer.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\types.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\util.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rect.h">
+      <Filter>4_include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\font_loader.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\log.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\new_windows.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\pch.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\util.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\wm_names.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\file.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\drag_drop.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\image.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\dialogs.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\thread_pool.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\settings_dialog.cpp">
-      <Filter>src</Filter>
+      <Filter>3_src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="resources\magnifying_glass.ico">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </Image>
     <Image Include="resources\grab.bmp">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="settings.manifest">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </Manifest>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\ps_drawgrid.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>2_shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ps_drawimage.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>2_shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ps_drawrect.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>2_shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ps_solid.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>2_shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\vs_rectangle.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>2_shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ps_spinner.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>2_shaders</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Font Include="resources\NotoSans-Regular.ttf">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </Font>
     <Font Include="resources\RobotoMono-Regular.ttf">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </Font>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resources\imageview.rc">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\cursor1.cur">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </None>
     <None Include="resources\hand.cur">
-      <Filter>resources</Filter>
+      <Filter>1_resources</Filter>
     </None>
   </ItemGroup>
 </Project>

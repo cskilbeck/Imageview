@@ -20,11 +20,14 @@ using wchar = wchar_t;
 
 // share some types with the HLSL header
 
-struct vec2;
+namespace imageview
+{
+    struct vec2;
+}
 
 using matrix = XMMATRIX;
 using vec4 = XMVECTOR;
 using uint = uint32;
 using float4 = vec4;
-using float2 = vec2;
+using float2 = imageview::vec2;
 using int4 = int[4];

@@ -16,6 +16,8 @@ namespace
 
     HWND current_page = null;
 
+    using namespace imageview;
+
     //////////////////////////////////////////////////////////////////////
 
     enum elevation_t
@@ -165,8 +167,7 @@ namespace
             int index = 0;
             for(auto const &a : accelerators) {
 
-                std::string action_text;
-                get_hotkey_description(a, action_text);
+                std::string action_text = localize(a.cmd);
 
                 std::string key_text;
                 get_accelerator_hotkey_text(a.cmd, accelerators, layout, key_text);
@@ -455,9 +456,13 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-LRESULT show_settings_dialog(HWND parent)
+namespace imageview
 {
-    current_page = null;
-    tab_pages.clear();
-    return DialogBoxA(GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler);
+    LRESULT show_settings_dialog(HWND parent)
+    {
+        current_page = null;
+        tab_pages.clear();
+        return DialogBoxA(
+            GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler);
+    }
 }

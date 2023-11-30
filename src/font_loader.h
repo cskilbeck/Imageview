@@ -18,16 +18,16 @@ public:
     }
 
     // IUnknown methods
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject);
-    virtual ULONG STDMETHODCALLTYPE AddRef();
-    virtual ULONG STDMETHODCALLTYPE Release();
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
 
     // IDWriteFontCollectionLoader methods
-    virtual HRESULT STDMETHODCALLTYPE
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE
     CreateEnumeratorFromKey(IDWriteFactory *factory,
                             void const *collectionKey,    // [collectionKeySize] in bytes
                             UINT32 collectionKeySize,
-                            OUT IDWriteFontFileEnumerator **fontFileEnumerator);
+                            OUT IDWriteFontFileEnumerator **fontFileEnumerator) override;
 
     // Gets the singleton loader instance.
     static IDWriteFontCollectionLoader *GetLoader()
@@ -99,13 +99,13 @@ public:
     }
 
     // IUnknown methods
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject);
-    virtual ULONG STDMETHODCALLTYPE AddRef();
-    virtual ULONG STDMETHODCALLTYPE Release();
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
 
     // IDWriteFontFileEnumerator methods
-    virtual HRESULT STDMETHODCALLTYPE MoveNext(OUT BOOL *hasCurrentFile);
-    virtual HRESULT STDMETHODCALLTYPE GetCurrentFontFile(OUT IDWriteFontFile **fontFile);
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE MoveNext(OUT BOOL *hasCurrentFile) override;
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE GetCurrentFontFile(OUT IDWriteFontFile **fontFile) override;
 
 private:
     ULONG refCount_;
@@ -134,15 +134,15 @@ public:
     }
 
     // IUnknown methods
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject);
-    virtual ULONG STDMETHODCALLTYPE AddRef();
-    virtual ULONG STDMETHODCALLTYPE Release();
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
 
     // IDWriteFontFileLoader methods
-    virtual HRESULT STDMETHODCALLTYPE
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE
     CreateStreamFromKey(void const *fontFileReferenceKey,    // [fontFileReferenceKeySize] in bytes
                         UINT32 fontFileReferenceKeySize,
-                        OUT IDWriteFontFileStream **fontFileStream);
+                        OUT IDWriteFontFileStream **fontFileStream) override;
 
     // Gets the singleton loader instance.
     static IDWriteFontFileLoader *GetLoader()
@@ -177,21 +177,22 @@ public:
     explicit ResourceFontFileStream(UINT resourceID);
 
     // IUnknown methods
-    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject);
-    virtual ULONG STDMETHODCALLTYPE AddRef();
-    virtual ULONG STDMETHODCALLTYPE Release();
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **ppvObject) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
 
     // IDWriteFontFileStream methods
-    virtual HRESULT STDMETHODCALLTYPE ReadFileFragment(void const **fragmentStart,    // [fragmentSize] in bytes
-                                                       UINT64 fileOffset,
-                                                       UINT64 fragmentSize,
-                                                       OUT void **fragmentContext);
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE
+    ReadFileFragment(void const **fragmentStart,    // [fragmentSize] in bytes
+                     UINT64 fileOffset,
+                     UINT64 fragmentSize,
+                     OUT void **fragmentContext) override;
 
-    virtual void STDMETHODCALLTYPE ReleaseFileFragment(void *fragmentContext);
+    COM_DECLSPEC_NOTHROW void STDMETHODCALLTYPE ReleaseFileFragment(void *fragmentContext) override;
 
-    virtual HRESULT STDMETHODCALLTYPE GetFileSize(OUT UINT64 *fileSize);
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE GetFileSize(OUT UINT64 *fileSize) override;
 
-    virtual HRESULT STDMETHODCALLTYPE GetLastWriteTime(OUT UINT64 *lastWriteTime);
+    COM_DECLSPEC_NOTHROW HRESULT STDMETHODCALLTYPE GetLastWriteTime(OUT UINT64 *lastWriteTime) override;
 
     bool IsInitialized()
     {

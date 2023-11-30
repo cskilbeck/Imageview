@@ -27,7 +27,7 @@ namespace
     };
 }
 
-namespace file
+namespace imageview::file
 {
     HRESULT load(std::string const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
     {
@@ -128,12 +128,12 @@ namespace file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT scan_folder2(std::string const &path,
-                         std::vector<std::string> const &extensions,
-                         scan_folder_sort_field sort_field,
-                         scan_folder_sort_order order,
-                         folder_scan_result **result,
-                         HANDLE cancel_event)
+    HRESULT scan_folder(std::string const &path,
+                        std::vector<std::string> const &extensions,
+                        scan_folder_sort_field sort_field,
+                        scan_folder_sort_order order,
+                        folder_scan_result **result,
+                        HANDLE cancel_event)
     {
         if(result == null) {
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);

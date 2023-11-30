@@ -10,7 +10,8 @@
 // flip/rotate? losslessly?
 //////////////////////////////////////////////////////////////////////
 // TO FIX
-// get all the d3d crap into another file
+// get d3d into another file
+// get cache into another file
 // the cache
 // all the leaks
 
@@ -81,7 +82,7 @@ namespace
 
 #define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
 
-namespace app
+namespace imageview::app
 {
     // where on selection is mouse hovering
     enum selection_hover_t : uint
@@ -166,11 +167,6 @@ namespace app
 
     struct image_file
     {
-        image_file() = default;
-        image_file(std::string const &name) : filename(name)
-        {
-        }
-
         std::string filename;            // file path, use this as key for map
         std::vector<byte> bytes;         // file contents, once it has been loaded
         HRESULT hresult{ E_PENDING };    // error code or S_OK from load_file()
@@ -649,7 +645,8 @@ namespace app
                             if((cache_in_use + img_size) <= settings.cache_size) {
 
                                 LOG_DEBUG("Caching {} at {}", this_file, y);
-                                image_file *cache_file = new image_file(this_file);
+                                image_file *cache_file = new image_file();
+                                cache_file->filename = this_file;
                                 cache_file->is_cache_load = true;
                                 loading_files[this_file] = cache_file;
                                 start_file_loader(cache_file);
@@ -1206,7 +1203,7 @@ namespace app
 
         // or hresult from create_texture
         if(SUCCEEDED(hr)) {
-            hr = f->img.create_texture(d3d_device.Get(), d3d_context.Get(), &new_texture, &new_srv);
+            hr = create_texture(d3d_device.Get(), d3d_context.Get(), &new_texture, &new_srv, f->img);
         }
 
         // set texture as current
@@ -1382,7 +1379,7 @@ namespace app
 
         std::vector<std::string> extensions;
 
-        for(auto const &f : image::file_formats) {
+        for(auto const &f : image::image_formats) {
             extensions.push_back(f.first);
         }
 
@@ -1391,7 +1388,7 @@ namespace app
 
         file::folder_scan_result *results;
 
-        CHK_HR(scan_folder2(path, extensions, sort_field, order, &results, quit_event));
+        CHK_HR(scan_folder(path, extensions, sort_field, order, &results, quit_event));
 
         // send the results to the window, it will forward them to the app
         WaitForSingleObject(window_created_event, INFINITE);
@@ -2209,7 +2206,7 @@ namespace app
 
         CHK_HR(font_context.CreateFontCollection(fontResourceIDs, sizeof(fontResourceIDs), &font_collection));
 
-        dpi = GetWindowDPI(window);
+        dpi = get_window_dpi(window);
 
         CHK_HR(create_text_formats());
 
@@ -2821,14 +2818,14 @@ namespace app
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
             uint32 bg_color = color_to_uint32(settings.background_color);
-            if(SUCCEEDED(select_color_dialog(window, bg_color, "Choose background color"))) {
+            if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
                 settings.background_color = uint32_to_color(bg_color);
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
             uint32 border_color = color_to_uint32(settings.border_color);
-            if(SUCCEEDED(select_color_dialog(window, border_color, "Choose border color"))) {
+            if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
                 settings.border_color = uint32_to_color(border_color);
             }
         } break;
@@ -2862,7 +2859,7 @@ namespace app
 
         case ID_FILE_OPEN: {
             std::string selected_filename;
-            if(SUCCEEDED(select_file_dialog(window, selected_filename))) {
+            if(SUCCEEDED(dialog::open_file(window, selected_filename))) {
                 load_image(selected_filename);
             }
         } break;
@@ -2870,7 +2867,7 @@ namespace app
         case ID_FILE_SAVE: {
 
             std::string filename;
-            if(SUCCEEDED(save_file_dialog(window, filename))) {
+            if(SUCCEEDED(dialog::save_file(window, filename))) {
 
                 image::image_t const &img = current_file->img;
                 HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);

@@ -2,10 +2,9 @@
 
 //////////////////////////////////////////////////////////////////////
 
-namespace file
+namespace imageview::file
 {
     HRESULT load(std::string const &filename, std::vector<byte> &buffer, HANDLE cancel_event = null);
-
     HRESULT get_full_path(std::string const &filename, std::string &fullpath);
     HRESULT get_path(std::string const &filename, std::string &path);
     HRESULT get_filename(std::string const &filename, std::string &name);
@@ -43,10 +42,10 @@ namespace file
         std::vector<info> files;
     };
 
-    HRESULT scan_folder2(std::string const &path,
-                         std::vector<std::string> const &extensions,
-                         scan_folder_sort_field sort_field,
-                         scan_folder_sort_order order,
-                         folder_scan_result **result,
-                         HANDLE cancel_event);
+    HRESULT scan_folder(std::string const &path,
+                        std::vector<std::string> const &extensions,
+                        scan_folder_sort_field sort_field,
+                        scan_folder_sort_order order,
+                        folder_scan_result **result,
+                        HANDLE cancel_event);
 }
