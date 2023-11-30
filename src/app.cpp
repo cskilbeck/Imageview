@@ -3,7 +3,7 @@
 // show settings if relaunched as admin (command line thing?)
 // settings / keyboard shortcuts dialog
 // localization
-// file associations
+// file type association / handler thing
 // show message if file load is slow
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
 // handle SRGB / premultiplied alpha correctly in image decoder
@@ -12,12 +12,12 @@
 // -log_level
 // -log_to_file=filename
 // -log_to_console
+// get d3d, cache, scanner into another file
 //////////////////////////////////////////////////////////////////////
 // TO FIX
-// get d3d into another file
-// get cache into another file
 // the cache
 // all the leaks
+// error handling/reporting
 
 #include "pch.h"
 #include <dcomp.h>
@@ -379,6 +379,12 @@ namespace imageview::app
 
     bool relaunch_as_admin{ false };
 
+    // some window admin
+
+    bool s_in_sizemove = false;
+    bool s_in_suspend = false;
+    bool s_minimized = false;
+
     //////////////////////////////////////////////////////////////////////
     // shader constants header is shared with the HLSL files
 
@@ -594,6 +600,17 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
+    void fatal_message_box(std::string const &msg, HRESULT hr)
+    {
+        std::string message = windows_error_message(hr);
+        MessageBoxA(null,
+                    std::format("FATAL ERROR\r\n{}\r\r\r\n{}", msg, message).c_str(),
+                    localize(IDS_AppName).c_str(),
+                    MB_ICONEXCLAMATION);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     HRESULT get_image_file_size(std::string const &filename, uint64 *size)
     {
         if(size == null || filename.empty()) {
@@ -740,13 +757,8 @@ namespace imageview::app
             // if this is the first file being loaded and there was a file loading error
             if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
-                // show a messagebox (because they probably ran it just now)
-                std::string load_err = windows_error_message(load_hr);
-                std::string err_msg = std::format("Error loading {}\n\n{}", f->filename, load_err);
-                MessageBoxA(null, err_msg.c_str(), "ImageView", MB_ICONEXCLAMATION);
-
-                // don't wait for window creation to complete, window might be null, that's ok
-                PostMessage(window, WM_CLOSE, 0, 0);
+                fatal_message_box(std::format("Loading {}", f->filename), load_hr);
+                DestroyWindow(window);
             }
 
             // and in any case, set window message to error text
@@ -880,10 +892,11 @@ namespace imageview::app
     {
         if(!settings.first_run && !settings.fullscreen) {
             rect const &rc = settings.window_placement.rcNormalPosition;
-            LOG_DEBUG("INITIALLY: {}", rc.to_string());
-            settings.window_placement.flags = 0;
-            settings.window_placement.showCmd = SW_HIDE;
-            SetWindowPlacement(window, &settings.window_placement);
+            LOG_DEBUG("INITIALLY: {} ({})", rc.to_string(), settings.window_placement.showCmd);
+            WINDOWPLACEMENT hidden = settings.window_placement;
+            hidden.flags = 0;
+            hidden.showCmd = SW_HIDE;
+            SetWindowPlacement(window, &hidden);
         }
     }
 
@@ -1170,6 +1183,8 @@ namespace imageview::app
 
     HRESULT on_command_line(std::string const &cmd_line)
     {
+        LOG_INFO("COMMAND LINE: {}", cmd_line);
+
         // parse args
         int argc;
         wchar **argv = CommandLineToArgvW(unicode(cmd_line).c_str(), &argc);
@@ -1230,13 +1245,347 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT set_window_text(std::string const &text)
+    void set_window_text(std::string const &text)
     {
         std::string admin;
         if(is_elevated) {
             admin = "** ADMIN! ** ";
         }
         SetWindowTextA(window, std::format("{}{}", admin, text).c_str());
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // get dimensions of a string including padding
+
+    HRESULT measure_string(std::string const &text, IDWriteTextFormat *format, float padding, vec2 &size)
+    {
+        ComPtr<IDWriteTextLayout> text_layout;
+
+        CHK_HR(dwrite_factory->CreateTextLayout(unicode(text).c_str(),
+                                                (UINT32)text.size(),
+                                                format,
+                                                (float)window_width * 2,
+                                                (float)window_height * 2,
+                                                &text_layout));
+
+        DWRITE_TEXT_METRICS m;
+        CHK_HR(text_layout->GetMetrics(&m));
+
+        size.x = m.width + padding * 4;
+        size.y = m.height + padding;
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // create the d2d text formats
+
+    HRESULT create_text_formats()
+    {
+        float large_font_size = dpi_scale(16.0f);
+        float small_font_size = dpi_scale(12.0f);
+
+        auto weight = DWRITE_FONT_WEIGHT_REGULAR;
+        auto style = DWRITE_FONT_STYLE_NORMAL;
+        auto stretch = DWRITE_FONT_STRETCH_NORMAL;
+
+        // TODO (chs): localization
+
+        CHK_HR(dwrite_factory->CreateTextFormat(unicode(small_font_family_name).c_str(),
+                                                font_collection.Get(),
+                                                weight,
+                                                style,
+                                                stretch,
+                                                large_font_size,
+                                                L"en-us",
+                                                &large_text_format));
+        CHK_HR(dwrite_factory->CreateTextFormat(unicode(mono_font_family_name).c_str(),
+                                                font_collection.Get(),
+                                                weight,
+                                                style,
+                                                stretch,
+                                                small_font_size,
+                                                L"en-us",
+                                                &small_text_format));
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // create the d3d device
+
+    HRESULT create_device()
+    {
+        UINT create_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+#if defined(_DEBUG)
+        create_flags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+        static D3D_FEATURE_LEVEL const feature_levels[] = { D3D_FEATURE_LEVEL_11_1 };
+
+        D3D_FEATURE_LEVEL feature_level{ D3D_FEATURE_LEVEL_11_1 };
+
+        uint32 num_feature_levels = (UINT)std::size(feature_levels);
+
+        ComPtr<ID3D11Device> device;
+        ComPtr<ID3D11DeviceContext> context;
+        CHK_HR(D3D11CreateDevice(null,
+                                 D3D_DRIVER_TYPE_HARDWARE,
+                                 null,
+                                 create_flags,
+                                 feature_levels,
+                                 num_feature_levels,
+                                 D3D11_SDK_VERSION,
+                                 &device,
+                                 &feature_level,
+                                 &context));
+
+#if defined(_DEBUG)
+        if(SUCCEEDED(device.As(&d3d_debug))) {
+            ComPtr<ID3D11InfoQueue> d3d_info_queue;
+            if(SUCCEEDED(d3d_debug.As(&d3d_info_queue))) {
+                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+                D3D11_MESSAGE_ID hide[] = {
+                    D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
+                    // TODO: Add more message IDs here as needed.
+                };
+                D3D11_INFO_QUEUE_FILTER filter = {};
+                filter.DenyList.NumIDs = static_cast<UINT>(std::size(hide));
+                filter.DenyList.pIDList = hide;
+                d3d_info_queue->AddStorageFilterEntries(&filter);
+            }
+        }
+#endif
+
+        CHK_HR(device.As(&d3d_device));
+        CHK_HR(context.As(&d3d_context));
+
+        CHK_HR(d3d_device->CreateVertexShader(
+            vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
+        D3D_SET_NAME(vertex_shader);
+
+        CHK_HR(
+            d3d_device->CreatePixelShader(ps_drawimage_shaderbin, sizeof(ps_drawimage_shaderbin), null, &pixel_shader));
+        CHK_HR(d3d_device->CreatePixelShader(ps_drawrect_shaderbin, sizeof(ps_drawrect_shaderbin), null, &rect_shader));
+        CHK_HR(d3d_device->CreatePixelShader(ps_drawgrid_shaderbin, sizeof(ps_drawgrid_shaderbin), null, &grid_shader));
+        CHK_HR(d3d_device->CreatePixelShader(ps_solid_shaderbin, sizeof(ps_solid_shaderbin), null, &solid_shader));
+        CHK_HR(
+            d3d_device->CreatePixelShader(ps_spinner_shaderbin, sizeof(ps_spinner_shaderbin), null, &spinner_shader));
+
+        D3D_SET_NAME(pixel_shader);
+        D3D_SET_NAME(rect_shader);
+        D3D_SET_NAME(grid_shader);
+        D3D_SET_NAME(solid_shader);
+
+        D3D11_SAMPLER_DESC sampler_desc{ CD3D11_SAMPLER_DESC(D3D11_DEFAULT) };
+
+        sampler_desc.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+        sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+        sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
+
+        CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
+        D3D_SET_NAME(sampler_state);
+
+        D3D11_BUFFER_DESC constant_buffer_desc{};
+
+        constant_buffer_desc.ByteWidth = (sizeof(shader_const_t) + 0xf) & 0xfffffff0;
+        constant_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+        constant_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        CHK_HR(d3d_device->CreateBuffer(&constant_buffer_desc, null, &constant_buffer));
+        D3D_SET_NAME(constant_buffer);
+
+        D3D11_RASTERIZER_DESC rasterizer_desc{};
+
+        rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+        rasterizer_desc.CullMode = D3D11_CULL_NONE;
+
+        CHK_HR(d3d_device->CreateRasterizerState(&rasterizer_desc, &rasterizer_state));
+        D3D_SET_NAME(rasterizer_state);
+
+        // DirectWrite / Direct2D init
+
+        CHK_HR(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_PPV_ARGS(&d2d_factory)));
+
+        auto dwf = reinterpret_cast<IUnknown **>(dwrite_factory.ReleaseAndGetAddressOf());
+        CHK_HR(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), dwf));
+
+        CHK_HR(font_context.Initialize(dwrite_factory.Get()));
+
+        UINT const fontResourceIDs[] = { IDR_FONT_NOTO, IDR_FONT_ROBOTO };
+
+        CHK_HR(font_context.CreateFontCollection(fontResourceIDs, sizeof(fontResourceIDs), &font_collection));
+
+        dpi = get_window_dpi(window);
+
+        CHK_HR(create_text_formats());
+
+        CHK_HR(measure_string("X 9999 Y 9999", small_text_format.Get(), small_label_padding, small_label_size));
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // create window size dependent resources
+
+    HRESULT create_resources()
+    {
+        if(d3d_context.Get() == null) {
+            create_device();
+        }
+
+        ID3D11RenderTargetView *nullViews[] = { null };
+        d3d_context->OMSetRenderTargets(static_cast<UINT>(std::size(nullViews)), nullViews, null);
+        d3d_context->Flush();
+
+        rendertarget_view.Reset();
+        d2d_render_target.Reset();
+
+        const UINT client_width = static_cast<UINT>(window_width);
+        const UINT client_height = static_cast<UINT>(window_height);
+        const DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        const DXGI_SCALING scaling_mode = DXGI_SCALING_STRETCH;
+        const DXGI_SWAP_CHAIN_FLAG swap_flags = (DXGI_SWAP_CHAIN_FLAG)0;
+
+#if USE_DIRECTCOMPOSITION
+        constexpr UINT backBufferCount = 2;
+        const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+#else
+        constexpr UINT backBufferCount = 1;
+        const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_DISCARD;
+#endif
+
+        // If the swap chain already exists, resize it, otherwise create one.
+        if(swap_chain.Get() != null) {
+
+            HRESULT hr = swap_chain->ResizeBuffers(backBufferCount, client_width, client_height, format, swap_flags);
+
+            if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+
+                CHK_HR(on_device_lost());
+
+                // OnDeviceLost will set up the new device.
+                return S_OK;
+            }
+
+        } else {
+
+            // First, retrieve the underlying DXGI Device from the D3D Device.
+            ComPtr<IDXGIDevice1> dxgiDevice;
+            CHK_HR(d3d_device.As(&dxgiDevice));
+
+            // Identify the physical adapter (GPU or card) this device is running on.
+            ComPtr<IDXGIAdapter> dxgiAdapter;
+            CHK_HR(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
+
+            // And obtain the factory object that created it.
+            ComPtr<IDXGIFactory2> dxgiFactory;
+            CHK_HR(dxgiAdapter->GetParent(IID_PPV_ARGS(dxgiFactory.GetAddressOf())));
+
+            // Create a descriptor for the swap chain.
+            DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+            swapChainDesc.Width = client_width;
+            swapChainDesc.Height = client_height;
+            swapChainDesc.Format = format;
+            swapChainDesc.SampleDesc.Count = 1;
+            swapChainDesc.SampleDesc.Quality = 0;
+            swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            swapChainDesc.BufferCount = backBufferCount;
+            swapChainDesc.SwapEffect = swap_effect;
+            swapChainDesc.Scaling = scaling_mode;
+            swapChainDesc.Flags = swap_flags;
+
+            DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+            fsSwapChainDesc.Windowed = TRUE;
+
+#if USE_DIRECTCOMPOSITION
+            CHK_HR(dxgiFactory->CreateSwapChainForComposition(d3d_device.Get(), &swapChainDesc, NULL, &swap_chain));
+
+            CHK_HR(DCompositionCreateDevice(NULL, IID_PPV_ARGS(&directcomposition_device)));
+            CHK_HR(directcomposition_device->CreateTargetForHwnd(window, FALSE, &directcomposition_target));
+            CHK_HR(directcomposition_device->CreateVisual(&directcomposition_visual));
+            CHK_HR(directcomposition_target->SetRoot(directcomposition_visual.Get()));
+            CHK_HR(directcomposition_visual->SetContent(swap_chain.Get()));
+            CHK_HR(directcomposition_device->Commit());
+#else
+            CHK_HR(
+                dxgiFactory->CreateSwapChainForHwnd(d3d_device.Get(), window, &swapChainDesc, NULL, NULL, &swap_chain));
+#endif
+        }
+
+        ComPtr<ID3D11Texture2D> back_buffer;
+        CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
+        D3D_SET_NAME(back_buffer);
+
+        CD3D11_RENDER_TARGET_VIEW_DESC desc(D3D11_RTV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
+
+        CHK_HR(d3d_device->CreateRenderTargetView(back_buffer.Get(), &desc, &rendertarget_view));
+        D3D_SET_NAME(rendertarget_view);
+
+        D3D11_BLEND_DESC blend_desc{ 0 };
+
+        blend_desc.RenderTarget[0].BlendEnable = TRUE;
+        blend_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+        blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+        blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+        CHK_HR(d3d_device->CreateBlendState(&blend_desc, &blend_state));
+        D3D_SET_NAME(blend_state);
+
+        // Direct 2D init
+
+        ComPtr<IDXGISurface> render_surface;
+        CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(render_surface.GetAddressOf())));
+
+        D2D1_RENDER_TARGET_PROPERTIES props;
+        props.dpiX = dpi;
+        props.dpiY = dpi;
+        props.pixelFormat.format = DXGI_FORMAT_UNKNOWN;
+        props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
+        props.minLevel = D2D1_FEATURE_LEVEL_DEFAULT;
+        props.type = D2D1_RENDER_TARGET_TYPE_HARDWARE;
+        props.usage = D2D1_RENDER_TARGET_USAGE_NONE;
+
+        CHK_HR(
+            d2d_factory->CreateDxgiSurfaceRenderTarget(render_surface.Get(), &props, d2d_render_target.GetAddressOf()));
+
+        CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.9f }, &text_fg_brush));
+        CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.25f }, &text_outline_brush));
+        CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 0, 0, 0, 0.4f }, &text_bg_brush));
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // recreate device and recreate current image texture if necessary
+
+    HRESULT on_device_lost()
+    {
+        CHK_HR(create_device());
+
+        CHK_HR(create_resources());
+
+        if(current_file != null) {
+            CHK_HR(display_image(current_file));
+        }
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT init_d3d()
+    {
+        CHK_HR(create_device());
+        CHK_HR(create_resources());
+
         return S_OK;
     }
 
@@ -1254,6 +1603,10 @@ namespace imageview::app
 
         ComPtr<ID3D11Texture2D> new_texture;
         ComPtr<ID3D11ShaderResourceView> new_srv;
+
+        if(d3d_device.Get() == null) {
+            CHK_HR(init_d3d());
+        }
 
         // or hresult from create_texture
         if(SUCCEEDED(hr)) {
@@ -1999,365 +2352,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // get dimensions of a string including padding
-
-    HRESULT measure_string(std::string const &text, IDWriteTextFormat *format, float padding, vec2 &size)
-    {
-        ComPtr<IDWriteTextLayout> text_layout;
-
-        CHK_HR(dwrite_factory->CreateTextLayout(unicode(text).c_str(),
-                                                (UINT32)text.size(),
-                                                format,
-                                                (float)window_width * 2,
-                                                (float)window_height * 2,
-                                                &text_layout));
-
-        DWRITE_TEXT_METRICS m;
-        CHK_HR(text_layout->GetMetrics(&m));
-
-        size.x = m.width + padding * 4;
-        size.y = m.height + padding;
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // create the d2d text formats
-
-    HRESULT create_text_formats()
-    {
-        float large_font_size = dpi_scale(16.0f);
-        float small_font_size = dpi_scale(12.0f);
-
-        auto weight = DWRITE_FONT_WEIGHT_REGULAR;
-        auto style = DWRITE_FONT_STYLE_NORMAL;
-        auto stretch = DWRITE_FONT_STRETCH_NORMAL;
-
-        // TODO (chs): localization
-
-        CHK_HR(dwrite_factory->CreateTextFormat(unicode(small_font_family_name).c_str(),
-                                                font_collection.Get(),
-                                                weight,
-                                                style,
-                                                stretch,
-                                                large_font_size,
-                                                L"en-us",
-                                                &large_text_format));
-        CHK_HR(dwrite_factory->CreateTextFormat(unicode(mono_font_family_name).c_str(),
-                                                font_collection.Get(),
-                                                weight,
-                                                style,
-                                                stretch,
-                                                small_font_size,
-                                                L"en-us",
-                                                &small_text_format));
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // create the d3d device
-
-    HRESULT create_device()
-    {
-        UINT create_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-
-#if defined(_DEBUG)
-        create_flags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
-
-        static D3D_FEATURE_LEVEL const feature_levels[] = { D3D_FEATURE_LEVEL_11_1 };
-
-        D3D_FEATURE_LEVEL feature_level{ D3D_FEATURE_LEVEL_11_1 };
-
-        uint32 num_feature_levels = (UINT)std::size(feature_levels);
-
-        ComPtr<ID3D11Device> device;
-        ComPtr<ID3D11DeviceContext> context;
-        CHK_HR(D3D11CreateDevice(null,
-                                 D3D_DRIVER_TYPE_HARDWARE,
-                                 null,
-                                 create_flags,
-                                 feature_levels,
-                                 num_feature_levels,
-                                 D3D11_SDK_VERSION,
-                                 &device,
-                                 &feature_level,
-                                 &context));
-
-#if defined(_DEBUG)
-        if(SUCCEEDED(device.As(&d3d_debug))) {
-            ComPtr<ID3D11InfoQueue> d3d_info_queue;
-            if(SUCCEEDED(d3d_debug.As(&d3d_info_queue))) {
-                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
-                D3D11_MESSAGE_ID hide[] = {
-                    D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-                    // TODO: Add more message IDs here as needed.
-                };
-                D3D11_INFO_QUEUE_FILTER filter = {};
-                filter.DenyList.NumIDs = static_cast<UINT>(std::size(hide));
-                filter.DenyList.pIDList = hide;
-                d3d_info_queue->AddStorageFilterEntries(&filter);
-            }
-        }
-#endif
-
-        CHK_HR(device.As(&d3d_device));
-        CHK_HR(context.As(&d3d_context));
-
-        CHK_HR(d3d_device->CreateVertexShader(
-            vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
-        D3D_SET_NAME(vertex_shader);
-
-        CHK_HR(
-            d3d_device->CreatePixelShader(ps_drawimage_shaderbin, sizeof(ps_drawimage_shaderbin), null, &pixel_shader));
-        CHK_HR(d3d_device->CreatePixelShader(ps_drawrect_shaderbin, sizeof(ps_drawrect_shaderbin), null, &rect_shader));
-        CHK_HR(d3d_device->CreatePixelShader(ps_drawgrid_shaderbin, sizeof(ps_drawgrid_shaderbin), null, &grid_shader));
-        CHK_HR(d3d_device->CreatePixelShader(ps_solid_shaderbin, sizeof(ps_solid_shaderbin), null, &solid_shader));
-        CHK_HR(
-            d3d_device->CreatePixelShader(ps_spinner_shaderbin, sizeof(ps_spinner_shaderbin), null, &spinner_shader));
-
-        D3D_SET_NAME(pixel_shader);
-        D3D_SET_NAME(rect_shader);
-        D3D_SET_NAME(grid_shader);
-        D3D_SET_NAME(solid_shader);
-
-        D3D11_SAMPLER_DESC sampler_desc{ CD3D11_SAMPLER_DESC(D3D11_DEFAULT) };
-
-        sampler_desc.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
-        sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
-
-        CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
-        D3D_SET_NAME(sampler_state);
-
-        D3D11_BUFFER_DESC constant_buffer_desc{};
-
-        constant_buffer_desc.ByteWidth = (sizeof(shader_const_t) + 0xf) & 0xfffffff0;
-        constant_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
-        constant_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-        CHK_HR(d3d_device->CreateBuffer(&constant_buffer_desc, null, &constant_buffer));
-        D3D_SET_NAME(constant_buffer);
-
-        D3D11_RASTERIZER_DESC rasterizer_desc{};
-
-        rasterizer_desc.FillMode = D3D11_FILL_SOLID;
-        rasterizer_desc.CullMode = D3D11_CULL_NONE;
-
-        CHK_HR(d3d_device->CreateRasterizerState(&rasterizer_desc, &rasterizer_state));
-        D3D_SET_NAME(rasterizer_state);
-
-        // DirectWrite / Direct2D init
-
-        CHK_HR(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_PPV_ARGS(&d2d_factory)));
-
-        auto dwf = reinterpret_cast<IUnknown **>(dwrite_factory.ReleaseAndGetAddressOf());
-        CHK_HR(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), dwf));
-
-        CHK_HR(font_context.Initialize(dwrite_factory.Get()));
-
-        UINT const fontResourceIDs[] = { IDR_FONT_NOTO, IDR_FONT_ROBOTO };
-
-        CHK_HR(font_context.CreateFontCollection(fontResourceIDs, sizeof(fontResourceIDs), &font_collection));
-
-        dpi = get_window_dpi(window);
-
-        CHK_HR(create_text_formats());
-
-        CHK_HR(measure_string("X 9999 Y 9999", small_text_format.Get(), small_label_padding, small_label_size));
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // create window size dependent resources
-
-    HRESULT create_resources()
-    {
-        if(d3d_context.Get() == null) {
-            create_device();
-        }
-
-        ID3D11RenderTargetView *nullViews[] = { null };
-        d3d_context->OMSetRenderTargets(static_cast<UINT>(std::size(nullViews)), nullViews, null);
-        d3d_context->Flush();
-
-        rendertarget_view.Reset();
-        d2d_render_target.Reset();
-
-        const UINT client_width = static_cast<UINT>(window_width);
-        const UINT client_height = static_cast<UINT>(window_height);
-        const DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM;
-        const DXGI_SCALING scaling_mode = DXGI_SCALING_STRETCH;
-        const DXGI_SWAP_CHAIN_FLAG swap_flags = (DXGI_SWAP_CHAIN_FLAG)0;
-
-#if USE_DIRECTCOMPOSITION
-        constexpr UINT backBufferCount = 2;
-        const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-#else
-        constexpr UINT backBufferCount = 1;
-        const DXGI_SWAP_EFFECT swap_effect = DXGI_SWAP_EFFECT_DISCARD;
-#endif
-
-        // If the swap chain already exists, resize it, otherwise create one.
-        if(swap_chain.Get() != null) {
-
-            HRESULT hr = swap_chain->ResizeBuffers(backBufferCount, client_width, client_height, format, swap_flags);
-
-            if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-
-                CHK_HR(on_device_lost());
-
-                // OnDeviceLost will set up the new device.
-                return S_OK;
-            }
-
-        } else {
-
-            // First, retrieve the underlying DXGI Device from the D3D Device.
-            ComPtr<IDXGIDevice1> dxgiDevice;
-            CHK_HR(d3d_device.As(&dxgiDevice));
-
-            // Identify the physical adapter (GPU or card) this device is running on.
-            ComPtr<IDXGIAdapter> dxgiAdapter;
-            CHK_HR(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
-
-            // And obtain the factory object that created it.
-            ComPtr<IDXGIFactory2> dxgiFactory;
-            CHK_HR(dxgiAdapter->GetParent(IID_PPV_ARGS(dxgiFactory.GetAddressOf())));
-
-            // Create a descriptor for the swap chain.
-            DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-            swapChainDesc.Width = client_width;
-            swapChainDesc.Height = client_height;
-            swapChainDesc.Format = format;
-            swapChainDesc.SampleDesc.Count = 1;
-            swapChainDesc.SampleDesc.Quality = 0;
-            swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-            swapChainDesc.BufferCount = backBufferCount;
-            swapChainDesc.SwapEffect = swap_effect;
-            swapChainDesc.Scaling = scaling_mode;
-            swapChainDesc.Flags = swap_flags;
-
-            DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-            fsSwapChainDesc.Windowed = TRUE;
-
-#if USE_DIRECTCOMPOSITION
-            CHK_HR(dxgiFactory->CreateSwapChainForComposition(d3d_device.Get(), &swapChainDesc, NULL, &swap_chain));
-
-            CHK_HR(DCompositionCreateDevice(NULL, IID_PPV_ARGS(&directcomposition_device)));
-            CHK_HR(directcomposition_device->CreateTargetForHwnd(window, FALSE, &directcomposition_target));
-            CHK_HR(directcomposition_device->CreateVisual(&directcomposition_visual));
-            CHK_HR(directcomposition_target->SetRoot(directcomposition_visual.Get()));
-            CHK_HR(directcomposition_visual->SetContent(swap_chain.Get()));
-            CHK_HR(directcomposition_device->Commit());
-#else
-            CHK_HR(
-                dxgiFactory->CreateSwapChainForHwnd(d3d_device.Get(), window, &swapChainDesc, NULL, NULL, &swap_chain));
-#endif
-        }
-
-        ComPtr<ID3D11Texture2D> back_buffer;
-        CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
-        D3D_SET_NAME(back_buffer);
-
-        CD3D11_RENDER_TARGET_VIEW_DESC desc(D3D11_RTV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
-
-        CHK_HR(d3d_device->CreateRenderTargetView(back_buffer.Get(), &desc, &rendertarget_view));
-        D3D_SET_NAME(rendertarget_view);
-
-        D3D11_BLEND_DESC blend_desc{ 0 };
-
-        blend_desc.RenderTarget[0].BlendEnable = TRUE;
-        blend_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-        blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-        blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-        blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-        blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-        blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-        blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-
-        CHK_HR(d3d_device->CreateBlendState(&blend_desc, &blend_state));
-        D3D_SET_NAME(blend_state);
-
-        // Direct 2D init
-
-        ComPtr<IDXGISurface> render_surface;
-        CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(render_surface.GetAddressOf())));
-
-        D2D1_RENDER_TARGET_PROPERTIES props;
-        props.dpiX = dpi;
-        props.dpiY = dpi;
-        props.pixelFormat.format = DXGI_FORMAT_UNKNOWN;
-        props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
-        props.minLevel = D2D1_FEATURE_LEVEL_DEFAULT;
-        props.type = D2D1_RENDER_TARGET_TYPE_HARDWARE;
-        props.usage = D2D1_RENDER_TARGET_USAGE_NONE;
-
-        CHK_HR(
-            d2d_factory->CreateDxgiSurfaceRenderTarget(render_surface.Get(), &props, d2d_render_target.GetAddressOf()));
-
-        CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.9f }, &text_fg_brush));
-        CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.25f }, &text_outline_brush));
-        CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 0, 0, 0, 0.4f }, &text_bg_brush));
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // recreate device and recreate current image texture if necessary
-
-    HRESULT on_device_lost()
-    {
-        CHK_HR(create_device());
-
-        CHK_HR(create_resources());
-
-        if(current_file != null) {
-            CHK_HR(display_image(current_file));
-        }
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // call this just after NCCREATE DefWindowProc
-
-    HRESULT on_post_create(HWND hwnd)
-    {
-        window = hwnd;
-
-        RAWINPUTDEVICE Rid[1];
-        Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-        Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
-        Rid[0].dwFlags = RIDEV_INPUTSINK;
-        Rid[0].hwndTarget = hwnd;
-        RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
-
-        setup_initial_windowplacement();
-
-        get_is_process_elevated(is_elevated);
-
-        SetEvent(window_created_event);
-
-        CHK_HR(create_device());
-
-        CHK_HR(create_resources());
-
-        file_dropper.InitializeDragDropHelper(window);
-
-        // if there was no file load requested on the command line
-        // and auto-paste is on, try to paste an image from the clipboard
-        if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
-            return on_paste();
-        }
-        return set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // WM_SETCURSOR
 
     bool on_setcursor()
@@ -2516,16 +2510,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // Raw mouse input move (for zooming while MMB held down)
-
-    void on_raw_mouse_move(point_s delta)
-    {
-        if(get_mouse_buttons(settings.zoom_button) && !popup_menu_active) {
-            do_zoom(mouse_click[settings.zoom_button], std::max(-4, std::min(-delta.y, 4)));
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // WM_MOUSEMOVE
 
     void on_mouse_move(point_s pos)
@@ -2640,25 +2624,6 @@ namespace imageview::app
     {
         target_rect.x = (window_width - current_rect.w) / 2.0f;
         target_rect.y = (window_height - current_rect.h) / 2.0f;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // WM_KEYUP
-
-    void on_key_up(int vk_key)
-    {
-        switch(vk_key) {
-        case VK_SHIFT: {
-            POINT p;
-            GetCursorPos(&p);
-            ScreenToClient(window, &p);
-            snap_mode = snap_mode_t::none;
-            on_mouse_move(p);
-        } break;
-        case VK_CONTROL:
-            snap_mode = snap_mode_t::none;
-            break;
-        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2866,32 +2831,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_KEYDOWN
-
-    void on_key_down(int vk_key, LPARAM flags)
-    {
-        UNREFERENCED_PARAMETER(flags);
-
-        uint f = HIWORD(flags);
-        bool repeat = (f & KF_REPEAT) == KF_REPEAT;    // previous key-state flag, 1 on autorepeat
-
-        switch(vk_key) {
-
-        case VK_SHIFT:
-            if(!repeat) {
-                shift_mouse_pos = cur_mouse_pos;
-                snap_mode = snap_mode_t::axis;
-                snap_axis = shift_snap_axis_t::none;
-            }
-            break;
-
-        case VK_CONTROL:
-            snap_mode = snap_mode_t::square;
-            break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // clear the backbuffer
 
     void clear()
@@ -2997,6 +2936,10 @@ namespace imageview::app
 
     HRESULT render()
     {
+        if(d3d_device.Get() == null) {
+            CHK_HR(init_d3d());
+        }
+
         clear();
 
         if(image_texture.Get() != null) {
@@ -3440,8 +3383,11 @@ namespace imageview::app
 
         CHK_HR(render());
 
-        if(frame_count > 1 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null)) {
-            ShowWindow(window, SW_SHOW);
+        // delay showing window until file is loaded (or 1/4 second, whichever comes first)
+
+        if(frame_count > 1 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
+            settings.window_placement.flags = 0;
+            SetWindowPlacement(window, &settings.window_placement);
         }
 
         frame_count += 1;
@@ -3552,32 +3498,9 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // deal with DPI changed
 
-    HRESULT on_dpi_changed(UINT new_dpi, rect *new_rect)
+    LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     {
-        if(!ignore_dpi_for_a_moment) {
-
-            current_rect.w = (current_rect.w * new_dpi) / dpi;
-            current_rect.h = (current_rect.h * new_dpi) / dpi;
-
-            dpi = (float)new_dpi;
-
-            create_text_formats();
-
-            MoveWindow(window, new_rect->x(), new_rect->y(), new_rect->w(), new_rect->h(), true);
-        }
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-    {
-        static bool s_in_sizemove = false;
-        static bool s_in_suspend = false;
-        static bool s_minimized = false;
-
 #if defined(_DEBUG)
         switch(message) {
         case WM_INPUT:
@@ -3588,7 +3511,7 @@ namespace imageview::app
         case WM_ENTERIDLE:
             break;
         default:
-            LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
+            LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wparam, lparam);
             break;
         }
 #endif
@@ -3599,8 +3522,8 @@ namespace imageview::app
             // 1st message is always WM_GETMINMAXINFO
 
         case WM_GETMINMAXINFO:
-            if(lParam != 0) {
-                reinterpret_cast<MINMAXINFO *>(lParam)->ptMinTrackSize = { 320, 200 };
+            if(lparam != 0) {
+                reinterpret_cast<MINMAXINFO *>(lparam)->ptMinTrackSize = { 320, 200 };
             }
             break;
 
@@ -3608,15 +3531,39 @@ namespace imageview::app
             // 2nd message is always WM_NCCREATE
 
         case WM_NCCREATE: {
-            LRESULT r = DefWindowProc(hWnd, message, wParam, lParam);
-            on_post_create(hWnd);
+
+            LRESULT r = DefWindowProc(hwnd, message, wparam, lparam);
+
+            window = hwnd;
+
+            RAWINPUTDEVICE Rid[1];
+            Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+            Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
+            Rid[0].dwFlags = RIDEV_INPUTSINK;
+            Rid[0].hwndTarget = hwnd;
+            RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+
+            setup_initial_windowplacement();
+
+            get_is_process_elevated(is_elevated);
+
+            SetEvent(window_created_event);
+
+            file_dropper.InitializeDragDropHelper(window);
+
+            // if there was no file load requested on the command line
+            // and auto-paste is on, try to paste an image from the clipboard
+            if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
+                return on_paste();
+            }
+            set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
             return r;
-        } break;
+        }
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_CLOSE:
-            DestroyWindow(hWnd);
+            DestroyWindow(hwnd);
             break;
 
             //////////////////////////////////////////////////////////////////////
@@ -3626,9 +3573,9 @@ namespace imageview::app
             // BUT minimize/maximize...
 
         case WM_NCCALCSIZE: {
-            DefWindowProc(hWnd, message, wParam, lParam);
-            if(IsWindowVisible(hWnd)) {
-                NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
+            DefWindowProc(hwnd, message, wparam, lparam);
+            if(IsWindowVisible(hwnd)) {
+                NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lparam);
                 rect const &new_client_rect = params->rgrc[0];
                 on_window_size_changing(new_client_rect.w(), new_client_rect.h());
             }
@@ -3644,8 +3591,8 @@ namespace imageview::app
 
         case WM_PAINT:
             PAINTSTRUCT ps;
-            (void)BeginPaint(hWnd, &ps);
-            EndPaint(hWnd, &ps);
+            (void)BeginPaint(hwnd, &ps);
+            EndPaint(hwnd, &ps);
             if(s_in_sizemove) {
                 update();
             }
@@ -3655,15 +3602,15 @@ namespace imageview::app
             // in single instance mode, we can get sent a new command line
 
         case WM_COPYDATA: {
-            COPYDATASTRUCT *c = reinterpret_cast<COPYDATASTRUCT *>(lParam);
+            COPYDATASTRUCT *c = reinterpret_cast<COPYDATASTRUCT *>(lparam);
             if(c != null) {
                 switch((copydata_t)c->dwData) {
                 case copydata_t::commandline:
                     if(s_minimized) {
-                        ShowWindow(hWnd, SW_RESTORE);
+                        ShowWindow(hwnd, SW_RESTORE);
                     }
-                    SetForegroundWindow(hWnd);
-                    SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                    SetForegroundWindow(hwnd);
+                    SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
                     on_command_line(reinterpret_cast<char const *>(c->lpData));
                     break;
                 default:
@@ -3675,7 +3622,7 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         case WM_SHOWWINDOW:
-            if(wParam) {
+            if(wparam) {
                 SetCursor(LoadCursor(null, IDC_ARROW));
             }
             break;
@@ -3683,21 +3630,34 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         case WM_SETCURSOR:
-            if(LOWORD(lParam) != HTCLIENT || !on_setcursor()) {
-                return DefWindowProc(hWnd, message, wParam, lParam);
+            if(LOWORD(lparam) != HTCLIENT || !on_setcursor()) {
+                return DefWindowProc(hwnd, message, wparam, lparam);
             }
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_DPICHANGED:
-            on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<rect *>(lParam));
+            if(!ignore_dpi_for_a_moment) {
+
+                uint new_dpi = LOWORD(wparam);
+                rect const *new_rect = reinterpret_cast<rect const *>(lparam);
+
+                current_rect.w = (current_rect.w * new_dpi) / dpi;
+                current_rect.h = (current_rect.h * new_dpi) / dpi;
+
+                dpi = (float)new_dpi;
+
+                create_text_formats();
+
+                MoveWindow(window, new_rect->x(), new_rect->y(), new_rect->w(), new_rect->h(), true);
+            }
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_SIZE:
-            if(wParam == SIZE_MINIMIZED) {
+            if(wparam == SIZE_MINIMIZED) {
                 if(!s_minimized) {
                     s_minimized = true;
                     if(!s_in_suspend) {
@@ -3714,7 +3674,7 @@ namespace imageview::app
                     s_in_suspend = false;
                 }
                 rect rc;
-                GetClientRect(hWnd, &rc);
+                GetClientRect(hwnd, &rc);
                 on_window_size_changed(rc.w(), rc.h());
             }
             break;
@@ -3722,51 +3682,51 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         case WM_LBUTTONDOWN:
-            on_mouse_button_down(MAKEPOINTS(lParam), btn_left);
+            on_mouse_button_down(MAKEPOINTS(lparam), btn_left);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_RBUTTONDOWN:
-            on_mouse_button_down(MAKEPOINTS(lParam), btn_right);
+            on_mouse_button_down(MAKEPOINTS(lparam), btn_right);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_MBUTTONDOWN:
-            on_mouse_button_down(MAKEPOINTS(lParam), btn_middle);
+            on_mouse_button_down(MAKEPOINTS(lparam), btn_middle);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_LBUTTONUP:
-            on_mouse_button_up(MAKEPOINTS(lParam), btn_left);
+            on_mouse_button_up(MAKEPOINTS(lparam), btn_left);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_RBUTTONUP:
-            on_mouse_button_up(MAKEPOINTS(lParam), btn_right);
+            on_mouse_button_up(MAKEPOINTS(lparam), btn_right);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_MBUTTONUP:
-            on_mouse_button_up(MAKEPOINTS(lParam), btn_middle);
+            on_mouse_button_up(MAKEPOINTS(lparam), btn_middle);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_MOUSEMOVE:
-            on_mouse_move(MAKEPOINTS(lParam));
+            on_mouse_move(MAKEPOINTS(lparam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_MOUSEWHEEL: {
-            POINT pos{ get_x(lParam), get_y(lParam) };
-            ScreenToClient(hWnd, &pos);
-            on_mouse_wheel(pos, get_y(wParam) / WHEEL_DELTA);
+            POINT pos{ get_x(lparam), get_y(lparam) };
+            ScreenToClient(hwnd, &pos);
+            on_mouse_wheel(pos, get_y(wparam) / WHEEL_DELTA);
         } break;
 
             //////////////////////////////////////////////////////////////////////
@@ -3774,30 +3734,59 @@ namespace imageview::app
         case WM_INPUT: {
             UINT dwSize = sizeof(RAWINPUT);
             static BYTE lpb[sizeof(RAWINPUT)];
-            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+            GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
             RAWINPUT *raw = (RAWINPUT *)lpb;
-            if(raw->header.dwType == RIM_TYPEMOUSE) {
-                on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
+            if(raw->header.dwType == RIM_TYPEMOUSE && get_mouse_buttons(settings.zoom_button) && !popup_menu_active) {
+                int delta_y = static_cast<int>(raw->data.mouse.lLastY);
+                do_zoom(mouse_click[settings.zoom_button], std::max(-4, std::min(-delta_y, 4)));
             }
         } break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_COMMAND:
-            on_command(LOWORD(wParam));
+            on_command(LOWORD(wparam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
-        case WM_KEYDOWN:
-            on_key_down((int)wParam, lParam);
-            break;
+        case WM_KEYDOWN: {
+            int vk_key = static_cast<int>(wparam);
+            uint f = HIWORD(lparam);
+            bool repeat = (f & KF_REPEAT) == KF_REPEAT;    // previous key-state flag, 1 on autorepeat
+
+            switch(vk_key) {
+
+            case VK_SHIFT:
+                if(!repeat) {
+                    shift_mouse_pos = cur_mouse_pos;
+                    snap_mode = snap_mode_t::axis;
+                    snap_axis = shift_snap_axis_t::none;
+                }
+                break;
+
+            case VK_CONTROL:
+                snap_mode = snap_mode_t::square;
+                break;
+            }
+        } break;
 
             //////////////////////////////////////////////////////////////////////
 
-        case WM_KEYUP:
-            on_key_up((int)wParam);
-            break;
+        case WM_KEYUP: {
+            switch(wparam) {
+            case VK_SHIFT: {
+                POINT p;
+                GetCursorPos(&p);
+                ScreenToClient(window, &p);
+                snap_mode = snap_mode_t::none;
+                on_mouse_move(p);
+            } break;
+            case VK_CONTROL:
+                snap_mode = snap_mode_t::none;
+                break;
+            }
+        } break;
 
             //////////////////////////////////////////////////////////////////////
 
@@ -3814,7 +3803,7 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         case WM_ACTIVATEAPP:
-            if(wParam) {
+            if(wparam) {
                 on_activated();
             } else {
                 on_deactivated();
@@ -3825,7 +3814,7 @@ namespace imageview::app
 
         case WM_POWERBROADCAST:
 
-            switch(wParam) {
+            switch(wparam) {
 
             case PBT_APMQUERYSUSPEND:
                 if(!s_in_suspend) {
@@ -3855,18 +3844,18 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         case WM_SYSKEYDOWN: {
-            uint flags = HIWORD(lParam);
+            uint flags = HIWORD(lparam);
             bool key_up = (flags & KF_UP) == KF_UP;                // transition-state flag, 1 on keyup
             bool repeat = (flags & KF_REPEAT) == KF_REPEAT;        // previous key-state flag, 1 on autorepeat
             bool alt_down = (flags & KF_ALTDOWN) == KF_ALTDOWN;    // ALT key was pressed
 
             if(!key_up && !repeat && alt_down) {
-                switch(wParam) {
+                switch(wparam) {
                 case VK_RETURN:
                     toggle_fullscreen();
                     break;
                 case VK_F4:
-                    DestroyWindow(hWnd);
+                    DestroyWindow(hwnd);
                 }
             }
         } break;
@@ -3879,19 +3868,19 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         case WM_FILE_LOAD_COMPLETE:
-            on_file_load_complete(lParam);
+            on_file_load_complete(lparam);
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_FOLDER_SCAN_COMPLETE:
-            on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
+            on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lparam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         default:
-            return DefWindowProc(hWnd, message, wParam, lParam);
+            return DefWindowProc(hwnd, message, wparam, lparam);
         }
 
         return 0;
@@ -4032,7 +4021,11 @@ namespace imageview::app
                     DispatchMessage(&msg);
                 }
             } else {
-                update();
+                HRESULT hr = update();
+                if(FAILED(hr)) {
+                    fatal_message_box("Error!", hr);
+                    ExitProcess(0);
+                }
             }
         } while(msg.message != WM_QUIT);
 
