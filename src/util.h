@@ -28,6 +28,9 @@ std::string strip_quotes(std::string const &s);
 
 HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
 
+//////////////////////////////////////////////////////////////////////
+// hotkey stuff
+
 HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_table, HKL layout, std::string &text);
 HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
 HRESULT get_hotkey_description(ACCEL const &accel, std::string &text);
@@ -43,12 +46,12 @@ std::string const &localize(uint64 id);
 
 inline int get_x(LPARAM lp)
 {
-    return (int)(short)LOWORD(lp);
+    return static_cast<int>(static_cast<short>(LOWORD(lp)));
 }
 
 inline int get_y(LPARAM lp)
 {
-    return (int)(short)HIWORD(lp);
+    return static_cast<int>(static_cast<short>(HIWORD(lp)));
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -230,3 +233,5 @@ inline void display_error(std::string const &message, HRESULT hr)
 
 // if(x == null) { return HRESULT_FROM_WIN32(GetLastError()); }
 #define CHK_NULL(x) _DO_NULL(x, __COUNTER__)
+
+//////////////////////////////////////////////////////////////////////

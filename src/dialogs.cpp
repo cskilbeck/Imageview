@@ -12,6 +12,7 @@ namespace
     {
         std::wstring description;
         std::wstring filter;
+        bool is_default;
     };
 
     struct GUIDComparer
@@ -25,44 +26,43 @@ namespace
     std::map<GUID, filterspec, GUIDComparer> slots;
     std::vector<COMDLG_FILTERSPEC> filter_specs;
     uint num_filter_specs;
-    uint default_filter_spec;
+
+    uint default_filter_spec{ 1 };
+
+    filterspec all_image_files{ L"Image files", {}, {} };
 
     //////////////////////////////////////////////////////////////////////
+    // make the array of COMDLG_FILTERSPEC from image::file_formats
 
     HRESULT get_filter_specs()
     {
         if(filter_specs.empty()) {
 
-            uint current_filter_spec = 1;
-
             // file type guid can be referenced by more than one extension (eg jpg, jpeg both point at same guid)
+
+            wchar const *all_sep = L"";
 
             for(auto const &fmt : image::file_formats) {
 
                 std::wstring extension = unicode(fmt.first);
                 image::output_image_format const &image_format = fmt.second;
 
-                auto found = slots.find(image_format.file_format);
+                all_image_files.filter = std::format(L"{}{}*.{}", all_image_files.filter, all_sep, unicode(fmt.first));
+                all_sep = L";";
 
-                if(image_format.is_default()) {
-                    default_filter_spec = current_filter_spec;
+                filterspec &spec = slots[image_format.file_format];
+
+                wchar const *sep = L";";
+
+                if(spec.description.empty()) {
+                    sep = L"";
                 }
 
-                current_filter_spec += 1;
+                spec.filter = std::format(L"{}{}*.{}", spec.filter, sep, extension);
+                spec.is_default = image_format.is_default();
 
-                if(found == slots.end()) {
-
-                    slots[image_format.file_format] = { std::format(L"{} files", extension),
-                                                        std::format(L"*.{}", extension) };
-
-                } else {
-
-                    filterspec &spec = found->second;
-                    spec.filter = std::format(L"{};*.{}", spec.filter, extension);
-
-                    if(image_format.use_name()) {
-                        spec.description = std::format(L"{} files", extension);
-                    }
+                if(image_format.use_name() || spec.description.empty()) {
+                    spec.description = std::format(L"{} files", extension);
                 }
             }
 
@@ -72,6 +72,9 @@ namespace
                 make_lowercase(spec.second.filter);
                 filter_specs.push_back({ spec.second.description.c_str(), spec.second.filter.c_str() });
             }
+
+            make_lowercase(all_image_files.filter);
+            filter_specs.push_back({ all_image_files.description.c_str(), all_image_files.filter.c_str() });
         }
         num_filter_specs = static_cast<uint>(filter_specs.size());
         return S_OK;
@@ -110,7 +113,7 @@ HRESULT select_file_dialog(HWND window, std::string &path)
     CHK_HR(pfd->GetOptions(&dwFlags));
     CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
     CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
-    CHK_HR(pfd->SetFileTypeIndex(default_filter_spec));
+    CHK_HR(pfd->SetFileTypeIndex(num_filter_specs));
     CHK_HR(pfd->SetOkButtonLabel(L"View"));
     CHK_HR(pfd->SetTitle(unicode(title).c_str()));
     CHK_HR(pfd->Show(window));
