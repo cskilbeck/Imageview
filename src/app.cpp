@@ -8,6 +8,10 @@
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
 // handle SRGB / premultiplied alpha correctly in image decoder
 // flip/rotate? losslessly?
+// command line parameters
+// -log_level
+// -log_to_file=filename
+// -log_to_console
 //////////////////////////////////////////////////////////////////////
 // TO FIX
 // get d3d into another file
@@ -38,11 +42,54 @@ LOG_CONTEXT("app");
 // For each supported file extension
 // HKEY_CLASSES_ROOT\{.ext}\OpenWithProgids\ImageView.files (empty REG_SZ)
 
-
 //////////////////////////////////////////////////////////////////////
 
 namespace
 {
+    //////////////////////////////////////////////////////////////////////
+    // mouse buttons
+
+    enum mouse_button_t : int
+    {
+        btn_left = 0,
+        btn_middle = 1,
+        btn_right = 2,
+        btn_count = 3
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // WM_USER messages for main window
+
+    enum user_message_t : uint
+    {
+        WM_FILE_LOAD_COMPLETE = WM_USER,         // a file load completed (lparam -> file_loader *)
+        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1    // a folder scan completed (lparam -> folder_scan_results *)
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // WM_USER messages for scanner thread
+
+    enum scanner_thread_user_message_t : uint
+    {
+        WM_SCAN_FOLDER = WM_USER    // please scan a folder (lparam -> path)
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // WM_USER messages for file_loader thread
+
+    enum loader_thread_user_message_t : uint
+    {
+        WM_LOAD_FILE = WM_USER    // please load this file (lparam -> filepath)
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // types of WM_COPYDATA messages that can be sent
+
+    enum class copydata_t : DWORD
+    {
+        commandline = 1
+    };
+
     using namespace DirectX;
 
     //////////////////////////////////////////////////////////////////////
@@ -148,21 +195,6 @@ namespace imageview::app
     };
 
     //////////////////////////////////////////////////////////////////////
-    // DragDrop admin
-
-    struct FileDropper : public CDragDropHelper
-    {
-        IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv);
-        IFACEMETHODIMP_(ULONG) AddRef();
-        IFACEMETHODIMP_(ULONG) Release();
-
-        long refcount{ 0 };
-
-        HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState);
-        HRESULT on_drop_string(wchar const *str);
-    };
-
-    //////////////////////////////////////////////////////////////////////
     // an image file that has maybe been loaded, successfully or not
 
     struct image_file
@@ -189,6 +221,72 @@ namespace imageview::app
                 return 0;
             }
             return bytes.size() + img.size();
+        }
+    };
+
+    HRESULT load_image_file(std::string const &filepath);
+    HRESULT show_image(image_file *f);
+
+    //////////////////////////////////////////////////////////////////////
+    // DragDrop admin
+
+    struct FileDropper : public CDragDropHelper
+    {
+        long refcount{ 0 };
+
+        //////////////////////////////////////////////////////////////////////
+        // DragDropHelper stuff
+
+        IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv)
+        {
+            static QITAB const qit[] = {
+                QITABENT(FileDropper, IDropTarget),
+                { 0 },
+            };
+            return QISearch(this, qit, riid, ppv);
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        IFACEMETHODIMP_(ULONG) AddRef()
+        {
+            return InterlockedIncrement(&refcount);
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        IFACEMETHODIMP_(ULONG) Release()
+        {
+            long cRef = InterlockedDecrement(&refcount);
+            if(cRef == 0) {
+                delete this;
+            }
+            return cRef;
+        }
+
+        //////////////////////////////////////////////////////////////////////
+        // user dropped something on the window, try to load it as a file
+
+        HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
+        {
+            UNREFERENCED_PARAMETER(grfKeyState);
+            ComPtr<IShellItem> shell_item;
+            CHK_HR(psia->GetItemAt(0, &shell_item));
+            PWSTR path{};
+            CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
+            DEFER(CoTaskMemFree(path));
+            return load_image_file(utf8(path));
+        }
+
+        //////////////////////////////////////////////////////////////////////
+        // they dropped something that cam be interpreted as text
+        // if it exists as a file, try to load it
+        // otherwise.... no dice I guess
+
+        HRESULT on_drop_string(wchar const *str)
+        {
+            std::string bare_name = strip_quotes(utf8(str));
+            return load_image_file(bare_name);
         }
     };
 
@@ -252,8 +350,6 @@ namespace imageview::app
 
     vec2 small_label_size{ 0, 0 };
     float small_label_padding{ 2.0f };
-
-    uint64 system_memory_size_kb{ 0 };
 
     uint64 cache_in_use{ 0 };
     std::mutex cache_mutex;
@@ -484,39 +580,7 @@ namespace imageview::app
         { app::cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
     };
 
-    HRESULT display_image(image_file *f);
-
     HRESULT on_device_lost();
-
-    //////////////////////////////////////////////////////////////////////
-    // DragDropHelper stuff
-
-    IFACEMETHODIMP FileDropper::QueryInterface(REFIID riid, void **ppv)
-    {
-        static QITAB const qit[] = {
-            QITABENT(FileDropper, IDropTarget),
-            { 0 },
-        };
-        return QISearch(this, qit, riid, ppv);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    IFACEMETHODIMP_(ULONG) FileDropper::AddRef()
-    {
-        return InterlockedIncrement(&refcount);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    IFACEMETHODIMP_(ULONG) FileDropper::Release()
-    {
-        long cRef = InterlockedDecrement(&refcount);
-        if(cRef == 0) {
-            delete this;
-        }
-        return cRef;
-    }
 
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
@@ -660,6 +724,44 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
+    // make an image the current one
+
+    HRESULT display_image(image_file *f)
+    {
+        if(f == null) {
+            return E_INVALIDARG;
+        }
+        select_active = false;
+
+        HRESULT load_hr = f->hresult;
+
+        if(FAILED(load_hr)) {
+
+            // if this is the first file being loaded and there was a file loading error
+            if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
+
+                // show a messagebox (because they probably ran it just now)
+                std::string load_err = windows_error_message(load_hr);
+                std::string err_msg = std::format("Error loading {}\n\n{}", f->filename, load_err);
+                MessageBoxA(null, err_msg.c_str(), "ImageView", MB_ICONEXCLAMATION);
+
+                // don't wait for window creation to complete, window might be null, that's ok
+                PostMessage(window, WM_CLOSE, 0, 0);
+            }
+
+            // and in any case, set window message to error text
+            std::string err_str = windows_error_message(load_hr);
+            std::string name;
+            CHK_HR(file::get_filename(f->filename, name));
+            set_message(std::format("Can't load {} - {}", name, err_str), 3);
+            return load_hr;
+        }
+        files_loaded += 1;
+        f->view_count += 1;
+        return show_image(f);
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // load an image file or get it from the cache (or notice that it's
     // already being loaded and just let it arrive later)
 
@@ -753,31 +855,6 @@ namespace imageview::app
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // user dropped something on the window, try to load it as a file
-
-    HRESULT FileDropper::on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
-    {
-        UNREFERENCED_PARAMETER(grfKeyState);
-        ComPtr<IShellItem> shell_item;
-        CHK_HR(psia->GetItemAt(0, &shell_item));
-        PWSTR path{};
-        CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
-        DEFER(CoTaskMemFree(path));
-        return app::load_image_file(utf8(path));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // they dropped something that cam be interpreted as text
-    // if it exists as a file, try to load it
-    // otherwise.... no dice I guess
-
-    HRESULT FileDropper::on_drop_string(wchar const *str)
-    {
-        std::string bare_name = strip_quotes(utf8(str));
-        return app::load_image_file(bare_name);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1089,29 +1166,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // if it's already running, send it the command line and return S_FALSE
-
-    HRESULT reuse_window(std::string const &cmd_line)
-    {
-        if(settings.reuse_window) {
-            HWND existing_window = FindWindowA(window_class, null);
-            if(existing_window != null) {
-                COPYDATASTRUCT c;
-                c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
-                c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
-                c.dwData = static_cast<DWORD>(copydata_t::commandline);
-                SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
-
-                // some confusion about whether this is legit but
-                // BringWindowToFront doesn't work for top level windows
-                SwitchToThisWindow(existing_window, TRUE);
-                return S_FALSE;
-            }
-        }
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // process a command line, could be from another instance
 
     HRESULT on_command_line(std::string const &cmd_line)
@@ -1323,44 +1377,6 @@ namespace imageview::app
             return file_dropper.on_drop_string(reinterpret_cast<wchar const *>(buffer.data()));
         }
         return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // make an image the current one
-
-    HRESULT display_image(image_file *f)
-    {
-        if(f == null) {
-            return E_INVALIDARG;
-        }
-        select_active = false;
-
-        HRESULT load_hr = f->hresult;
-
-        if(FAILED(load_hr)) {
-
-            // if this is the first file being loaded and there was a file loading error
-            if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
-
-                // show a messagebox (because they probably ran it just now)
-                std::string load_err = windows_error_message(load_hr);
-                std::string err_msg = std::format("Error loading {}\n\n{}", f->filename, load_err);
-                MessageBoxA(null, err_msg.c_str(), "ImageView", MB_ICONEXCLAMATION);
-
-                // don't wait for window creation to complete, window might be null, that's ok
-                PostMessage(window, WM_CLOSE, 0, 0);
-            }
-
-            // and in any case, set window message to error text
-            std::string err_str = windows_error_message(load_hr);
-            std::string name;
-            CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format("Can't load {} - {}", name, err_str), 3);
-            return load_hr;
-        }
-        files_loaded += 1;
-        f->view_count += 1;
-        return show_image(f);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1662,65 +1678,6 @@ namespace imageview::app
     vec2 texture_to_screen_pos_unclamped(vec2 pos)
     {
         return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(pos)));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // call this before doing anything else with App, e.g. top of main
-    //   checks cpu is supported, displays error dialog and returns S_FALSE if not
-    //   check if reuse_window == true and another instance is running, if so, sends command line there and returns
-    //   S_FALSE creates some events sets up default mouse cursor starts some threads loads settings checks command line
-    //   and maybe initiates loading an image file
-
-    HRESULT init(std::string const &cmd_line)
-    {
-        CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
-
-        if(!XMVerifyCPUSupport()) {
-            std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
-            MessageBoxA(null, message.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
-            return S_FALSE;
-        }
-
-        HRESULT hr = reuse_window(cmd_line);
-
-        if(hr == S_FALSE) {
-            return S_FALSE;
-        }
-
-        if(FAILED(hr)) {
-            return hr;
-        }
-
-        CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
-
-        LOG_INFO("System has {}GB of memory", system_memory_size_kb / 1048576);
-
-        window_created_event = CreateEvent(null, true, false, null);
-
-        current_mouse_cursor = LoadCursor(null, IDC_ARROW);
-
-        // remember default settings for 'reset settings to default' feature in settings dialog
-        default_settings = settings;
-
-        // in debug builds, hold middle mouse button at startup to reset settings to defaults
-#if defined(_DEBUG)
-        if(!is_key_down(VK_MBUTTON))
-#endif
-            settings.load();
-
-        CHK_NULL(quit_event = CreateEvent(null, true, false, null));
-
-        CHK_HR(thread_pool.init());
-
-        CHK_HR(thread_pool.create_thread_with_message_pump(&scanner_thread_id, []() { scanner_function(); }));
-
-        CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, []() { file_loader_function(); }));
-
-        CHK_HR(image::check_heif_support());
-
-        CHK_HR(on_command_line(cmd_line));
-
-        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3539,17 +3496,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_WINDOWPOSCHANGING
-
-    HRESULT on_window_pos_changing(WINDOWPOS *new_pos)
-    {
-        LOG_DEBUG(
-            "NEW POS: {},{} ({}x{}) Flags 0x{:04x}", new_pos->x, new_pos->y, new_pos->cx, new_pos->cy, new_pos->flags);
-        UNREFERENCED_PARAMETER(new_pos);
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // WM_SIZE
 
     HRESULT on_window_size_changed(int width, int height)
@@ -3625,29 +3571,501 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // call this last thing before the end of main
 
-    void on_process_exit()
+    LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
-        settings.save();
+        static bool s_in_sizemove = false;
+        static bool s_in_suspend = false;
+        static bool s_minimized = false;
 
-        // set global quit event
+#if defined(_DEBUG)
+        switch(message) {
+        case WM_INPUT:
+        case WM_SETCURSOR:
+        case WM_NCMOUSEMOVE:
+        case WM_MOUSEMOVE:
+        case WM_NCHITTEST:
+        case WM_ENTERIDLE:
+            break;
+        default:
+            LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
+            break;
+        }
+#endif
+
+        switch(message) {
+
+            //////////////////////////////////////////////////////////////////////
+            // 1st message is always WM_GETMINMAXINFO
+
+        case WM_GETMINMAXINFO:
+            if(lParam != 0) {
+                reinterpret_cast<MINMAXINFO *>(lParam)->ptMinTrackSize = { 320, 200 };
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+            // 2nd message is always WM_NCCREATE
+
+        case WM_NCCREATE: {
+            LRESULT r = DefWindowProc(hWnd, message, wParam, lParam);
+            on_post_create(hWnd);
+            return r;
+        } break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_CLOSE:
+            DestroyWindow(hWnd);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+            // resize backbuffer before window size actually changes to avoid
+            // flickering at the borders when resizing
+
+            // BUT minimize/maximize...
+
+        case WM_NCCALCSIZE: {
+            DefWindowProc(hWnd, message, wParam, lParam);
+            if(IsWindowVisible(hWnd)) {
+                NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lParam);
+                rect const &new_client_rect = params->rgrc[0];
+                on_window_size_changing(new_client_rect.w(), new_client_rect.h());
+            }
+            return 0;
+        }
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_ERASEBKGND:
+            return 1;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_PAINT:
+            PAINTSTRUCT ps;
+            (void)BeginPaint(hWnd, &ps);
+            EndPaint(hWnd, &ps);
+            if(s_in_sizemove) {
+                update();
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+            // in single instance mode, we can get sent a new command line
+
+        case WM_COPYDATA: {
+            COPYDATASTRUCT *c = reinterpret_cast<COPYDATASTRUCT *>(lParam);
+            if(c != null) {
+                switch((copydata_t)c->dwData) {
+                case copydata_t::commandline:
+                    if(s_minimized) {
+                        ShowWindow(hWnd, SW_RESTORE);
+                    }
+                    SetForegroundWindow(hWnd);
+                    SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                    on_command_line(reinterpret_cast<char const *>(c->lpData));
+                    break;
+                default:
+                    break;
+                }
+            }
+        } break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_SHOWWINDOW:
+            if(wParam) {
+                SetCursor(LoadCursor(null, IDC_ARROW));
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_SETCURSOR:
+            if(LOWORD(lParam) != HTCLIENT || !on_setcursor()) {
+                return DefWindowProc(hWnd, message, wParam, lParam);
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_DPICHANGED:
+            on_dpi_changed((UINT)wParam & 0xffff, reinterpret_cast<rect *>(lParam));
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_SIZE:
+            if(wParam == SIZE_MINIMIZED) {
+                if(!s_minimized) {
+                    s_minimized = true;
+                    if(!s_in_suspend) {
+                        on_suspending();
+                    }
+                    s_in_suspend = true;
+                }
+            } else {
+                if(s_minimized) {
+                    s_minimized = false;
+                    if(s_in_suspend) {
+                        on_resuming();
+                    }
+                    s_in_suspend = false;
+                }
+                rect rc;
+                GetClientRect(hWnd, &rc);
+                on_window_size_changed(rc.w(), rc.h());
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_LBUTTONDOWN:
+            on_mouse_button_down(MAKEPOINTS(lParam), btn_left);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_RBUTTONDOWN:
+            on_mouse_button_down(MAKEPOINTS(lParam), btn_right);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_MBUTTONDOWN:
+            on_mouse_button_down(MAKEPOINTS(lParam), btn_middle);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_LBUTTONUP:
+            on_mouse_button_up(MAKEPOINTS(lParam), btn_left);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_RBUTTONUP:
+            on_mouse_button_up(MAKEPOINTS(lParam), btn_right);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_MBUTTONUP:
+            on_mouse_button_up(MAKEPOINTS(lParam), btn_middle);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_MOUSEMOVE:
+            on_mouse_move(MAKEPOINTS(lParam));
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_MOUSEWHEEL: {
+            POINT pos{ get_x(lParam), get_y(lParam) };
+            ScreenToClient(hWnd, &pos);
+            on_mouse_wheel(pos, get_y(wParam) / WHEEL_DELTA);
+        } break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_INPUT: {
+            UINT dwSize = sizeof(RAWINPUT);
+            static BYTE lpb[sizeof(RAWINPUT)];
+            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+            RAWINPUT *raw = (RAWINPUT *)lpb;
+            if(raw->header.dwType == RIM_TYPEMOUSE) {
+                on_raw_mouse_move({ (short)raw->data.mouse.lLastX, (short)raw->data.mouse.lLastY });
+            }
+        } break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_COMMAND:
+            on_command(LOWORD(wParam));
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_KEYDOWN:
+            on_key_down((int)wParam, lParam);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_KEYUP:
+            on_key_up((int)wParam);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_ENTERSIZEMOVE:
+            s_in_sizemove = true;
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_EXITSIZEMOVE:
+            s_in_sizemove = false;
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_ACTIVATEAPP:
+            if(wParam) {
+                on_activated();
+            } else {
+                on_deactivated();
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_POWERBROADCAST:
+
+            switch(wParam) {
+
+            case PBT_APMQUERYSUSPEND:
+                if(!s_in_suspend) {
+                    on_suspending();
+                }
+                s_in_suspend = true;
+                return TRUE;
+
+            case PBT_APMRESUMESUSPEND:
+                if(!s_minimized) {
+                    if(s_in_suspend) {
+                        on_resuming();
+                    }
+                    s_in_suspend = false;
+                }
+                return TRUE;
+            }
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_DESTROY:
+            on_closing();
+            PostQuitMessage(0);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_SYSKEYDOWN: {
+            uint flags = HIWORD(lParam);
+            bool key_up = (flags & KF_UP) == KF_UP;                // transition-state flag, 1 on keyup
+            bool repeat = (flags & KF_REPEAT) == KF_REPEAT;        // previous key-state flag, 1 on autorepeat
+            bool alt_down = (flags & KF_ALTDOWN) == KF_ALTDOWN;    // ALT key was pressed
+
+            if(!key_up && !repeat && alt_down) {
+                switch(wParam) {
+                case VK_RETURN:
+                    toggle_fullscreen();
+                    break;
+                case VK_F4:
+                    DestroyWindow(hWnd);
+                }
+            }
+        } break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_MENUCHAR:
+            return MAKELRESULT(0, MNC_CLOSE);
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_FILE_LOAD_COMPLETE:
+            on_file_load_complete(lParam);
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_FOLDER_SCAN_COMPLETE:
+            on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
+            break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT main()
+    {
+        // check for required CPU support (for DirectXMath SIMD)
+
+        if(!XMVerifyCPUSupport()) {
+            std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
+            MessageBoxA(null, message.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
+            return 0;
+        }
+
+        // com
+
+        CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
+
+        // remember default settings for 'reset settings to default' feature in settings dialog
+        default_settings = settings;
+
+        // in debug builds, hold middle mouse button at startup to reset settings to defaults
+#if defined(_DEBUG)
+        if(!is_key_down(VK_MBUTTON))
+#endif
+            settings.load();
+
+        std::string cmd_line{ GetCommandLineA() };
+
+        // if single window mode
+
+        if(settings.reuse_window) {
+
+            // and it's already running
+
+            HWND existing_window = FindWindowA(window_class, null);
+            if(existing_window != null) {
+
+                // send the existing instance the command line (which might be
+                // a filename to load)
+
+                COPYDATASTRUCT c;
+                c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
+                c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
+                c.dwData = static_cast<DWORD>(copydata_t::commandline);
+                SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
+
+                // some confusion about whether this is legit but
+                // BringWindowToFront doesn't work for top level windows
+                SwitchToThisWindow(existing_window, TRUE);
+                return S_OK;
+            }
+        }
+
+        // report system memory for log
+
+        uint64 system_memory_size_kb{ 0 };
+
+        CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
+
+        LOG_INFO("System has {}GB of memory", system_memory_size_kb / 1048576);
+
+        // load/create/init some things
+
+        window_created_event = CreateEvent(null, true, false, null);
+
+        current_mouse_cursor = LoadCursor(null, IDC_ARROW);
+
+        CHK_NULL(quit_event = CreateEvent(null, true, false, null));
+
+        CHK_HR(thread_pool.init());
+
+        CHK_HR(thread_pool.create_thread_with_message_pump(&scanner_thread_id, []() { scanner_function(); }));
+
+        CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, []() { file_loader_function(); }));
+
+        // check if HEIF image support is enabled (it's not always there by default)
+
+        CHK_HR(image::check_heif_support());
+
+        // tee up a loadimage if specified on the command line
+
+        CHK_HR(on_command_line(cmd_line));
+
+        // right, register window class
+
+        HICON icon = LoadIcon(GetModuleHandle(null), MAKEINTRESOURCE(IDI_ICON_DEFAULT));
+        HCURSOR cursor = LoadCursor(null, IDC_ARROW);
+
+        WNDCLASSEXA wcex = {};
+        wcex.cbSize = sizeof(WNDCLASSEXW);
+        wcex.style = CS_HREDRAW | CS_VREDRAW;
+        wcex.lpfnWndProc = WndProc;
+        wcex.hInstance = GetModuleHandle(null);
+        wcex.hIcon = icon;
+        wcex.hCursor = cursor;
+        wcex.lpszClassName = window_class;
+        wcex.hIconSm = icon;
+
+        CHK_BOOL(RegisterClassExA(&wcex));
+
+        // get window position from settings
+
+        DWORD window_style;
+        DWORD window_ex_style;
+        rect rc;
+        CHK_HR(get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
+
+        // create the window
+
+        HWND hwnd;
+        CHK_NULL(hwnd = CreateWindowExA(window_ex_style,
+                                        window_class,
+                                        localize(IDS_AppName).c_str(),
+                                        window_style,
+                                        rc.x(),
+                                        rc.y(),
+                                        rc.w(),
+                                        rc.h(),
+                                        null,
+                                        null,
+                                        GetModuleHandle(null),
+                                        null));
+
+        // pump messages
+
+        CHK_HR(load_accelerators());
+
+        MSG msg{ 0 };
+
+        do {
+            if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
+                if(!TranslateAccelerator(hwnd, accelerators, &msg)) {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                }
+            } else {
+                update();
+            }
+        } while(msg.message != WM_QUIT);
+
+        // window has been destroyed, save settings and clean up
+
+        CHK_HR(settings.save());
+
         SetEvent(quit_event);
 
-        // wait for thread pool to drain
         thread_pool.cleanup();
 
-        // then cleanup
         CloseHandle(quit_event);
         CloseHandle(window_created_event);
 
-        if(relaunch_as_admin) {
+        CoUninitialize();
 
-            char exe_path[MAX_PATH * 2];
-            uint32 got = GetModuleFileNameA(NULL, exe_path, _countof(exe_path));
-            if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
-                ShellExecuteA(null, "runas", exe_path, 0, 0, SW_SHOWNORMAL);
-            }
+        // if relaunching as admin, do it last thing
+
+        if(relaunch_as_admin) {
+            ShellExecuteA(null, "runas", get_app_filename().c_str(), 0, 0, SW_SHOWNORMAL);
         }
+        return 0;
     }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+{
+    HRESULT hr = imageview::app::main();
+    if(FAILED(hr)) {
+        imageview::display_error(imageview::localize(IDS_AppName), hr);
+        return 1;
+    }
+    return 0;
 }

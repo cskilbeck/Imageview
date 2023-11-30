@@ -100,6 +100,14 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    LRESULT CALLBACK suppress_cursor(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    {
+        HideCaret(dlg);
+        return DefSubclassProc(dlg, msg, wparam, lparam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     INT_PTR about_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
     {
         UNREFERENCED_PARAMETER(wparam);
@@ -109,9 +117,11 @@ namespace
 
         case WM_INITDIALOG: {
             HWND about = GetDlgItem(dlg, IDC_SETTINGS_EDIT_ABOUT);
+            SetWindowSubclass(about, suppress_cursor, 0, 0);
             SendMessage(about, EM_SETREADONLY, 1, 0);
-            SetWindowTextA(about,
-                           "\r\n\r\n\r\n\r\nImageView\r\n\r\nVersion ${version}\r\n\r\nBuilt ${build_timestamp}");
+            std::string version{ "Version?" };
+            get_app_version(version);
+            SetWindowTextA(about, std::format("ImageView\r\nVersion {}\r\nBuilt {}", version, __TIMESTAMP__).c_str());
             return 0;
         }
         }
@@ -126,9 +136,6 @@ namespace
 
     INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
     {
-        UNREFERENCED_PARAMETER(wparam);
-        UNREFERENCED_PARAMETER(lparam);
-
         HWND listview = GetDlgItem(dlg, IDC_LIST_HOTKEYS);
 
         switch(msg) {
@@ -167,6 +174,7 @@ namespace
             int index = 0;
             for(auto const &a : accelerators) {
 
+                // there should be a string corresponding to the command id
                 std::string action_text = localize(a.cmd);
 
                 std::string key_text;
@@ -191,6 +199,7 @@ namespace
 
         // if being hidden, deselect listview item and hide change button
         case WM_SHOWWINDOW: {
+
             if(wparam == false) {
                 int selected_item_index = ListView_GetSelectionMark(listview);
                 int clear_state = 0;

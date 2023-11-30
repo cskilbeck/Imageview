@@ -18,7 +18,6 @@ namespace imageview
     HRESULT log_win32_error(char const *message, ...);
 
     //////////////////////////////////////////////////////////////////////
-    // general utility functions
 
     HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format);
 
@@ -30,21 +29,15 @@ namespace imageview
 
     HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
 
-    //////////////////////////////////////////////////////////////////////
-    // hotkey stuff
-
     HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_table, HKL layout, std::string &text);
     HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
 
     HRESULT get_is_process_elevated(bool &is_elevated);
-
-    //////////////////////////////////////////////////////////////////////
-
     float get_window_dpi(HWND w);
-
-    //////////////////////////////////////////////////////////////////////
-
     std::string const &localize(uint64 id);
+
+    std::string get_app_filename();
+    HRESULT get_app_version(std::string &version);
 
     //////////////////////////////////////////////////////////////////////
 
@@ -187,17 +180,6 @@ namespace imageview
 //////////////////////////////////////////////////////////////////////
 // error checking macros
 
-#define _DO_CHECK(x, y)                              \
-    {                                                \
-        do {                                         \
-            HRESULT hr##y = (x);                     \
-            if(FAILED(hr##y)) {                      \
-                imageview::display_error(#x, hr##y); \
-                return 1;                            \
-            }                                        \
-        } while(false);                              \
-    }
-
 #define _DO_HR(x, y)                                   \
     {                                                  \
         do {                                           \
@@ -233,14 +215,14 @@ namespace imageview
         } while(false);                               \
     }
 
-// if(FAILED(x)) { messagebox(error); return 1; }
-#define CHECK(x) _DO_CHECK(x, __COUNTER__)
-
 // if(FAILED(x)) { return hresult; }
 #define CHK_HR(x) _DO_HR(x, __COUNTER__)
 
 // if(!x) { return HRESULT_FROM_WIN32(GetLastError()); }
 #define CHK_BOOL(x) _DO_BOOL(x, __COUNTER__)
+
+// if(x == 0) { return HRESULT_FROM_WIN32(GetLastError()); }
+#define CHK_ZERO(x) _DO_BOOL(x, __COUNTER__)
 
 // if(x == null) { return HRESULT_FROM_WIN32(GetLastError()); }
 #define CHK_NULL(x) _DO_NULL(x, __COUNTER__)

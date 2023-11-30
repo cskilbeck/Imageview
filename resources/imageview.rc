@@ -60,6 +60,7 @@ BEGIN
     ID_VIEW_SETBACKGROUNDCOLOR "Set background color"
     ID_ZOOM_SHRINKTOFIT     "Zoom shrink to fit"
     ID_VIEW_GRIDSIZE        "Cycle grid size"
+    ID_ZOOM_CENTER          "Zoom to center"
     ID_VIEW_FULLSCREEN      "Toggle fullscreen"
 END
 
@@ -70,6 +71,11 @@ BEGIN
     ID_ZOOM_FIT             "Zoom to fit"
     ID_ZOOM_SELECTION       "Zoom to selection"
     ID_ZOOM_1               "Zoom 1:1"
+END
+
+STRINGTABLE
+BEGIN
+    ID_VIEW_SETBORDERCOLOR  "Set border color"
 END
 
 #endif    // English (Neutral) resources
@@ -301,7 +307,7 @@ STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_SYSMENU
 EXSTYLE WS_EX_TRANSPARENT
 FONT 8, "MS Shell Dlg", 400, 0, 0x0
 BEGIN
-    EDITTEXT        IDC_SETTINGS_EDIT_ABOUT,0,0,299,249,ES_CENTER | ES_MULTILINE | ES_AUTOVSCROLL | NOT WS_BORDER,WS_EX_TRANSPARENT
+    EDITTEXT        IDC_SETTINGS_EDIT_ABOUT,29,97,238,33,ES_CENTER | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | NOT WS_BORDER,WS_EX_TRANSPARENT
 END
 
 IDD_DIALOG_SETTINGS_EXPLORER DIALOGEX 0, 0, 300, 250
@@ -350,7 +356,6 @@ BEGIN
     IDD_DIALOG_SETTINGS_ABOUT, DIALOG
     BEGIN
         RIGHTMARGIN, 299
-        BOTTOMMARGIN, 148
     END
 
     IDD_DIALOG_SETTINGS_EXPLORER, DIALOG
@@ -401,6 +406,44 @@ END
 IDD_DIALOG_SETTINGS_RELAUNCH AFX_DIALOG_LAYOUT
 BEGIN
     0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x0L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080904b0"
+        BEGIN
+            VALUE "FileDescription", "ImageView"
+            VALUE "FileVersion", "1.0.0.1"
+            VALUE "InternalName", "imageview.rc"
+            VALUE "LegalCopyright", "Copyright (C) 2023 chs"
+            VALUE "OriginalFilename", "imageview.rc"
+            VALUE "ProductName", "ImageView"
+            VALUE "ProductVersion", "1.0.0.1"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x809, 1200
+    END
 END
 
 #endif    // English (United Kingdom) resources

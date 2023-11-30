@@ -9,30 +9,22 @@ namespace imageview
     HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size)
     {
         if(buffer == null || size == null || type == null || id == 0) {
-            return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
+            return E_INVALIDARG;
         }
 
         HINSTANCE instance = GetModuleHandle(null);
 
-        HRSRC rsrc = FindResourceA(instance, MAKEINTRESOURCEA(id), type);
-        if(rsrc == null) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
+        HRSRC rsrc;
+        CHK_NULL(rsrc = FindResourceA(instance, MAKEINTRESOURCEA(id), type));
 
-        size_t len = SizeofResource(instance, rsrc);
-        if(len == 0) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
+        size_t len;
+        CHK_ZERO(len = SizeofResource(instance, rsrc));
 
-        HGLOBAL mem = LoadResource(instance, rsrc);
-        if(mem == null) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
+        HGLOBAL mem;
+        CHK_NULL(mem = LoadResource(instance, rsrc));
 
-        void *data = LockResource(mem);
-        if(data == null) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
+        void *data;
+        CHK_NULL(data = LockResource(mem));
 
         *buffer = data;
         *size = len;
@@ -118,15 +110,13 @@ namespace imageview
     std::string const &localize(uint64 id)
     {
         static std::unordered_map<uint64, std::string> localized_strings;
-        static std::string const unknown{ "?" };
+        static std::string const unknown;
 
         auto f = localized_strings.find(id);
 
         if(f != localized_strings.end()) {
             return f->second;
         }
-
-        // SetThreadUILanguage(MAKELCID(LANG_FRENCH, SUBLANG_NEUTRAL));
 
         // For some reason LoadStringA doesn't work...?
 
@@ -372,5 +362,48 @@ namespace imageview
         }
 
         return (float)dpi;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    std::string get_app_filename()
+    {
+        std::string path;
+        char exe_path[MAX_PATH * 2];
+        uint32 got = GetModuleFileNameA(NULL, exe_path, _countof(exe_path));
+        if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
+            path = std::string(exe_path);
+        }
+        return path;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT get_app_version(std::string &version)
+    {
+        std::string app_filename = get_app_filename();
+
+        DWORD dummy;
+        uint32 len = GetFileVersionInfoSizeA(app_filename.c_str(), &dummy);
+
+        if(len == 0) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        std::vector<byte> buffer;
+        buffer.resize(len);
+
+        CHK_BOOL(GetFileVersionInfoA(get_app_filename().c_str(), 0, len, buffer.data()));
+
+        VS_FIXEDFILEINFO *version_info;
+        uint version_size;
+        CHK_BOOL(VerQueryValueA(buffer.data(), "\\", reinterpret_cast<void **>(&version_info), &version_size));
+
+        uint32 vh = version_info->dwFileVersionMS;
+        uint32 vl = version_info->dwFileVersionLS;
+
+        version = std::format("{}.{}.{}.{}", (vh >> 16) & 0xffff, vh & 0xffff, (vl >> 16) & 0xffff, vl & 0xffff);
+
+        return S_OK;
     }
 }
