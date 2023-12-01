@@ -2,7 +2,7 @@
 
 #define TRACE_ID(iD) \
     case iD:         \
-        return #iD;
+        return #iD
 
 namespace imageview
 {
@@ -224,6 +224,11 @@ namespace imageview
             TRACE_ID(WM_PENWINFIRST);
             TRACE_ID(WM_PENWINLAST);
             TRACE_ID(WM_APP);
+            TRACE_ID(WM_USER);
+            TRACE_ID(WM_USER + 1);
+            TRACE_ID(WM_USER + 2);
+            TRACE_ID(WM_USER + 3);
+            TRACE_ID(WM_USER + 4);
 #if(_WIN32_WINNT >= 0x0501)
             TRACE_ID(WM_CLIPBOARDUPDATE);
 #endif /* _WIN32_WINNT >= 0x0501 */
