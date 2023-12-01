@@ -109,10 +109,17 @@ namespace imageview::image
         { "JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
         { "BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
         { "TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
+        { "ICO", { GUID_ContainerFormatIco, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
+        { "DNG", { GUID_ContainerFormatAdng, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { "WMP", { GUID_ContainerFormatWmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { "WEBP", { GUID_ContainerFormatWebp, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
+        { "RAW", { GUID_ContainerFormatRaw, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { "DDS", { GUID_ContainerFormatDds, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
     };
 
     //////////////////////////////////////////////////////////////////////
     // add heif file support if it's installed
+    // only need to do this before showing a load/save dialog...
 
     HRESULT check_heif_support()
     {
@@ -268,13 +275,11 @@ namespace imageview::image
     //////////////////////////////////////////////////////////////////////
     // Decode an image into a pixel buffer and get dimensions
 
-    HRESULT decode(byte const *bytes,
-                   size_t file_size,
-                   std::vector<byte> &pixels,
-                   uint &texture_width,
-                   uint &texture_height,
-                   uint &row_pitch)
+    HRESULT decode(image_file *file)
     {
+        byte const *bytes = file->bytes.data();
+        size_t file_size = file->bytes.size();
+
         if(bytes == null || file_size == 0) {
             return E_INVALIDARG;
         }
@@ -440,15 +445,15 @@ namespace imageview::image
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
-        pixels.resize((size_t)total_bytes);
+        file->pixels.resize((size_t)total_bytes);
 
         // if CopyPixels fails, free the buffer on exit
 
-        auto release_pixels = defer::deferred([&]() { pixels.clear(); });
+        auto release_pixels = defer::deferred([&]() { file->pixels.clear(); });
 
         // actually get the pixels
 
-        CHK_HR(bmp_src->CopyPixels(null, (uint32)t_row_pitch, (uint32)total_bytes, &pixels[0]));
+        CHK_HR(bmp_src->CopyPixels(null, (uint32)t_row_pitch, (uint32)total_bytes, file->pixels.data()));
 
         // don't free the buffer now, it's full of good stuff
 
@@ -456,9 +461,11 @@ namespace imageview::image
 
         // return dimensions to caller
 
-        texture_width = dst_size.w;
-        texture_height = dst_size.h;
-        row_pitch = (uint32)t_row_pitch;
+        file->img.width = dst_size.w;
+        file->img.height = dst_size.h;
+        file->img.row_pitch = (uint32)t_row_pitch;
+
+        file->img.pixels = file->pixels.data();
 
         return S_OK;
     }

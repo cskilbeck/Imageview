@@ -6,6 +6,8 @@
 
 namespace
 {
+    bool heif_support_checked = false;
+
     // get file type filter list from save_formats in image_decoder.cpp
 
     struct filterspec
@@ -38,6 +40,11 @@ namespace
 
     HRESULT get_filter_specs()
     {
+        if(!heif_support_checked) {
+            CHK_HR(image::check_heif_support());
+            heif_support_checked = true;
+        }
+
         if(filter_specs.empty()) {
 
             // file type guid can be referenced by more than one extension (eg jpg, jpeg both point at same guid)

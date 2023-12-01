@@ -22,6 +22,36 @@ namespace imageview::image
     };
 
     //////////////////////////////////////////////////////////////////////
+    // an image file that has maybe been loaded, successfully or not
+
+    struct image_file
+    {
+        std::string filename;            // file path, use this as key for map
+        std::vector<byte> bytes;         // file contents, once it has been loaded
+        HRESULT hresult{ E_PENDING };    // error code or S_OK from load_file()
+        int index{ -1 };                 // position in the list of files
+        int view_count{ 0 };             // how many times this has been viewed since being loaded
+        bool is_cache_load{ false };     // true if being loaded just for cache (don't call warm_cache when it arrives)
+        std::vector<byte> pixels;        // decoded pixels from the file, format is always BGRA32
+        bool is_clipboard{ false };      // is it the dummy clipboard image_file?
+
+        image_t img;
+
+        bool is_decoded() const
+        {
+            return img.pixels != null;
+        }
+
+        size_t total_size() const
+        {
+            if(!is_decoded()) {
+                return 0;
+            }
+            return bytes.size() + img.size();
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
 
     HRESULT create_texture(ID3D11Device *d3d_device,
                            ID3D11DeviceContext *d3d_context,
@@ -71,12 +101,7 @@ namespace imageview::image
 
     HRESULT get_size(std::string const &filename, uint32 &width, uint32 &height, uint64 &total_size);
 
-    HRESULT decode(byte const *bytes,
-                   size_t file_size,
-                   std::vector<byte> &pixels,
-                   uint &texture_width,
-                   uint &texture_height,
-                   uint &row_pitch);
+    HRESULT decode(image_file *file);
 
     HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 

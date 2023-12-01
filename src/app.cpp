@@ -194,38 +194,8 @@ namespace imageview::app
         square
     };
 
-    //////////////////////////////////////////////////////////////////////
-    // an image file that has maybe been loaded, successfully or not
-
-    struct image_file
-    {
-        std::string filename;            // file path, use this as key for map
-        std::vector<byte> bytes;         // file contents, once it has been loaded
-        HRESULT hresult{ E_PENDING };    // error code or S_OK from load_file()
-        int index{ -1 };                 // position in the list of files
-        int view_count{ 0 };             // how many times this has been viewed since being loaded
-        bool is_cache_load{ false };     // true if being loaded just for cache (don't call warm_cache when it arrives)
-        std::vector<byte> pixels;        // decoded pixels from the file, format is always BGRA32
-        bool is_clipboard{ false };      // is it the dummy clipboard image_file?
-
-        image::image_t img;
-
-        bool is_decoded() const
-        {
-            return img.pixels != null;
-        }
-
-        size_t total_size() const
-        {
-            if(!is_decoded()) {
-                return 0;
-            }
-            return bytes.size() + img.size();
-        }
-    };
-
     HRESULT load_image_file(std::string const &filepath);
-    HRESULT show_image(image_file *f);
+    HRESULT show_image(image::image_file *f);
 
     //////////////////////////////////////////////////////////////////////
     // DragDrop admin
@@ -293,12 +263,12 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // files which have been loaded
 
-    std::unordered_map<std::string, image_file *> loaded_files;
+    std::unordered_map<std::string, image::image_file *> loaded_files;
 
     //////////////////////////////////////////////////////////////////////
     // files which have been requested to load
 
-    std::unordered_map<std::string, image_file *> loading_files;
+    std::unordered_map<std::string, image::image_file *> loading_files;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -324,10 +294,10 @@ namespace imageview::app
     // how many files loaded so far in this run
     int files_loaded{ 0 };
 
-    image_file *requested_file{ null };
+    image::image_file *requested_file{ null };
 
     // the most recently requested file to show - when a file_load succeeds, if it's this one, show it
-    image_file clipboard_image_file;
+    image::image_file clipboard_image_file;
 
     // folder scanner thread id so we can PostMessage to it
     uint scanner_thread_id{ (uint)-1 };
@@ -338,7 +308,7 @@ namespace imageview::app
     HANDLE quit_event;
 
     // which image currently being displayed
-    image_file *current_file{ null };
+    image::image_file *current_file{ null };
 
     // wait on this before sending a message to the window which must arrive safely
     HANDLE window_created_event{ null };
@@ -634,10 +604,10 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // kick off a file loader thread
 
-    void start_file_loader(image_file *loader)
+    void start_file_loader(image::image_file *loader)
     {
         thread_pool.create_thread(
-            [](image_file *fl) {
+            [](image::image_file *fl) {
 
                 // load the file synchronously to this thread
                 fl->hresult = file::load(fl->filename, fl->bytes, quit_event);
@@ -648,14 +618,7 @@ namespace imageview::app
                     CoInitializeEx(null, COINIT_APARTMENTTHREADED);
 
                     // decode the image
-                    fl->hresult = image::decode(fl->bytes.data(),
-                                                fl->bytes.size(),
-                                                fl->pixels,
-                                                fl->img.width,
-                                                fl->img.height,
-                                                fl->img.row_pitch);
-
-                    fl->img.pixels = fl->pixels.data();
+                    fl->hresult = image::decode(fl);
 
                     CoUninitialize();
                 }
@@ -698,7 +661,7 @@ namespace imageview::app
 
                                 while(cache_in_use + img_size > settings.cache_size) {
 
-                                    image_file *loser = null;
+                                    image::image_file *loser = null;
                                     uint loser_diff = 0;
                                     for(auto const &fl : loaded_files) {
                                         uint diff = std::abs(fl.second->index - current_file_cursor);
@@ -726,7 +689,7 @@ namespace imageview::app
                             if((cache_in_use + img_size) <= settings.cache_size) {
 
                                 LOG_DEBUG("Caching {} at {}", this_file, y);
-                                image_file *cache_file = new image_file();
+                                image::image_file *cache_file = new image::image_file();
                                 cache_file->filename = this_file;
                                 cache_file->is_cache_load = true;
                                 loading_files[this_file] = cache_file;
@@ -743,7 +706,7 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // make an image the current one
 
-    HRESULT display_image(image_file *f)
+    HRESULT display_image(image::image_file *f)
     {
         if(f == null) {
             return E_INVALIDARG;
@@ -825,7 +788,7 @@ namespace imageview::app
 
         LOG_INFO("Loading {}", name);
 
-        image_file *fl = new image_file();
+        image::image_file *fl = new image::image_file();
         fl->filename = fullpath;
         loading_files[fullpath] = fl;
 
@@ -890,21 +853,6 @@ namespace imageview::app
     template <typename T> T dpi_unscale(T x)
     {
         return (T)((x * 96.0f) / dpi);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // restore window position if not fullscreen and not first time running
-
-    void setup_initial_windowplacement()
-    {
-        if(!settings.first_run && !settings.fullscreen) {
-            rect const &rc = settings.window_placement.rcNormalPosition;
-            LOG_DEBUG("INITIALLY: {} ({})", rc.to_string(), settings.window_placement.showCmd);
-            WINDOWPLACEMENT hidden = settings.window_placement;
-            hidden.flags = 0;
-            hidden.showCmd = SW_HIDE;
-            SetWindowPlacement(window, &hidden);
-        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1320,9 +1268,12 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
     // create the d3d device
+    // it's ok to do this before we know how big to make the rendertarget_view
 
     HRESULT create_device()
     {
+        LOG_DEBUG("CREATE DEVICE: {}x{}", window_width, window_height);
+
         UINT create_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
 #if defined(_DEBUG)
@@ -1440,7 +1391,9 @@ namespace imageview::app
 
     HRESULT create_resources()
     {
-        if(d3d_context.Get() == null) {
+        LOG_DEBUG("CREATE RESOURCES: {}x{}", window_width, window_height);
+
+        if(d3d_device.Get() == null) {
             create_device();
         }
 
@@ -1587,19 +1540,9 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    HRESULT init_d3d()
-    {
-        CHK_HR(create_device());
-        CHK_HR(create_resources());
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // actually show an image
 
-    HRESULT show_image(image_file *f)
+    HRESULT show_image(image::image_file *f)
     {
         current_file = f;
 
@@ -1612,7 +1555,7 @@ namespace imageview::app
         ComPtr<ID3D11ShaderResourceView> new_srv;
 
         if(d3d_device.Get() == null) {
-            CHK_HR(init_d3d());
+            CHK_HR(create_device());
         }
 
         // or hresult from create_texture
@@ -1684,7 +1627,7 @@ namespace imageview::app
 
         bool got_clipboard = false;
 
-        image_file &f = clipboard_image_file;
+        image::image_file &f = clipboard_image_file;
         f.is_clipboard = true;
         f.bytes.clear();
         f.pixels.clear();
@@ -1719,8 +1662,7 @@ namespace imageview::app
             f.index = -1;
             f.is_cache_load = true;
             f.view_count = 0;
-            image::image_t &img = f.img;
-            CHK_HR(image::decode(f.bytes.data(), f.bytes.size(), f.pixels, img.width, img.height, img.row_pitch));
+            CHK_HR(image::decode(&f));
             f.img.pixels = f.pixels.data();
             return show_image(&f);
         }
@@ -1786,7 +1728,7 @@ namespace imageview::app
             if(PeekMessage(&msg, null, 0, 0, PM_REMOVE) != 0) {
                 switch(msg.message) {
                 case WM_LOAD_FILE:
-                    start_file_loader(reinterpret_cast<image_file *>(msg.lParam));
+                    start_file_loader(reinterpret_cast<image::image_file *>(msg.lParam));
                     break;
                 }
             }
@@ -1826,7 +1768,7 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // if loaded file is in the current folder, find index with list of files
 
-    HRESULT update_file_index(image_file *f)
+    HRESULT update_file_index(image::image_file *f)
     {
         if(current_folder_scan == null || f == null) {
             return E_INVALIDARG;
@@ -1899,12 +1841,14 @@ namespace imageview::app
 
     void on_file_load_complete(LPARAM lparam)
     {
-        image_file *f = reinterpret_cast<image_file *>(lparam);
+        image::image_file *f = reinterpret_cast<image::image_file *>(lparam);
 
-        // if(FAILED(f->hresult)) {
-        //    delete f;
-        //    return;
-        //}
+        LOG_DEBUG("LOADED {}", f->filename);
+
+        if(FAILED(f->hresult)) {
+            delete f;
+            return;
+        }
 
         // transfer from loading to loaded
         loading_files.erase(f->filename);
@@ -2652,7 +2596,7 @@ namespace imageview::app
 
         select_active = false;
 
-        image_file &f = clipboard_image_file;
+        image::image_file &f = clipboard_image_file;
 
         f.is_clipboard = true;
         f.bytes.clear();
@@ -2944,7 +2888,11 @@ namespace imageview::app
     HRESULT render()
     {
         if(d3d_device.Get() == null) {
-            CHK_HR(init_d3d());
+            CHK_HR(create_device());
+        }
+
+        if(rendertarget_view.Get() == null) {
+            CHK_HR(create_resources());
         }
 
         clear();
@@ -3388,13 +3336,14 @@ namespace imageview::app
         }
         memset(mouse_offset, 0, sizeof(mouse_offset));
 
-        CHK_HR(render());
-
         // delay showing window until file is loaded (or 1/4 second, whichever comes first)
 
-        if(frame_count > 1 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
-            settings.window_placement.flags = 0;
+        if(frame_count > 0 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
             SetWindowPlacement(window, &settings.window_placement);
+        }
+
+        if(rendertarget_view.Get() != null) {
+            CHK_HR(render());
         }
 
         frame_count += 1;
@@ -3472,12 +3421,9 @@ namespace imageview::app
             return S_OK;
         }
 
-        if(window_width != width || window_height != height) {
-
-            window_width = std::max(width, 1);
-            window_height = std::max(height, 1);
-            CHK_HR(create_resources());
-        }
+        window_width = std::max(width, 1);
+        window_height = std::max(height, 1);
+        CHK_HR(create_resources());
 
         if(!settings.fullscreen) {
 
@@ -3550,7 +3496,14 @@ namespace imageview::app
             Rid[0].hwndTarget = hwnd;
             RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
-            setup_initial_windowplacement();
+            if(!settings.first_run && !settings.fullscreen) {
+                rect const &rc = settings.window_placement.rcNormalPosition;
+                LOG_DEBUG("INITIALLY: {} ({})", rc.to_string(), settings.window_placement.showCmd);
+                WINDOWPLACEMENT hidden = settings.window_placement;
+                hidden.flags = 0;
+                hidden.showCmd = SW_HIDE;
+                SetWindowPlacement(window, &hidden);
+            }
 
             get_is_process_elevated(is_elevated);
 
@@ -3567,9 +3520,13 @@ namespace imageview::app
             return r;
         }
 
+        case WM_CREATE:
+            break;
+
             //////////////////////////////////////////////////////////////////////
 
         case WM_CLOSE:
+            LOG_DEBUG("CLOSE!");
             DestroyWindow(hwnd);
             break;
 
@@ -3581,9 +3538,13 @@ namespace imageview::app
 
         case WM_NCCALCSIZE: {
             DefWindowProc(hwnd, message, wparam, lparam);
-            if(IsWindowVisible(hwnd)) {
-                NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lparam);
-                rect const &new_client_rect = params->rgrc[0];
+            NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lparam);
+            rect const &new_client_rect = params->rgrc[0];
+
+            // if starting window maximized, ignore the first
+            // wm_nccalcsize, it's got bogus dimensions
+
+            if(frame_count != 0 || settings.window_placement.showCmd != SW_SHOWMAXIMIZED) {
                 on_window_size_changing(new_client_rect.w(), new_client_rect.h());
             }
             return 0;
@@ -3618,6 +3579,7 @@ namespace imageview::app
                     }
                     SetForegroundWindow(hwnd);
                     SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                    SwitchToThisWindow(window, true);
                     on_command_line(reinterpret_cast<char const *>(c->lpData));
                     break;
                 default:
@@ -3897,6 +3859,7 @@ namespace imageview::app
 
     HRESULT main()
     {
+        LOG_DEBUG(L"HELLO?");
         // check for required CPU support (for DirectXMath SIMD)
 
         if(!XMVerifyCPUSupport()) {
@@ -3969,8 +3932,6 @@ namespace imageview::app
 
         // check if HEIF image support is enabled (it's not always there by default)
 
-        CHK_HR(image::check_heif_support());
-
         // tee up a loadimage if specified on the command line
 
         CHK_HR(on_command_line(cmd_line));
@@ -3989,6 +3950,7 @@ namespace imageview::app
         wcex.hCursor = cursor;
         wcex.lpszClassName = window_class;
         wcex.hIconSm = icon;
+        wcex.hbrBackground = null;
 
         CHK_BOOL(RegisterClassExA(&wcex));
 
