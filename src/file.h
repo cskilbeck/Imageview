@@ -10,6 +10,7 @@ namespace imageview::file
     HRESULT get_filename(std::string const &filename, std::string &name);
     HRESULT get_extension(std::string const &filename, std::string &extension);
     HRESULT get_size(std::string const &filename, uint64_t &size);
+    HRESULT paths_are_different(std::string const &a, std::string const &b, bool &differ);
     BOOL exists(std::string const &name);
 
     //////////////////////////////////////////////////////////////////////

@@ -16,6 +16,7 @@
 #pragma comment(lib, "WinHTTP.lib")
 #pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "Version.lib")
+#pragma comment(lib, "Pathcch.lib")
 
 #pragma comment(linker,                                                                                         \
                 "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0'" \

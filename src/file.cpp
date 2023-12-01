@@ -353,4 +353,23 @@ namespace imageview::file
         size = file_size.QuadPart;
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT paths_are_different(std::string const &a, std::string const &b, bool &differ)
+    {
+        std::vector<wchar> pa(MAX_PATH * 2 + 1);
+        std::vector<wchar> pb(MAX_PATH * 2 + 1);
+        CHK_HR(PathCchCanonicalizeEx(pa.data(), pa.size(), unicode(a).c_str(), 0));
+        CHK_HR(PathCchCanonicalizeEx(pb.data(), pb.size(), unicode(b).c_str(), 0));
+        size_t la = wcslen(pa.data());
+        size_t lb = wcslen(pb.data());
+        differ = true;
+        if(la == lb) {
+            _wcslwr_s(pa.data(), la + 1);
+            _wcslwr_s(pb.data(), lb + 1);
+            differ = memcmp(&pa[0], &pb[0], la) != 0;
+        }
+        return S_OK;
+    }
 }

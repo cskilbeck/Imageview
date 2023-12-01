@@ -74,6 +74,7 @@
 #include <wincodec.h>
 #include <DirectXMath.h>
 #include <propkey.h>
+#include <pathcch.h>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;

@@ -833,11 +833,18 @@ namespace imageview::app
 
         requested_file = fl;
 
+        // ask the loader thread to load it
+
         PostThreadMessage(file_loader_thread_id, WM_LOAD_FILE, 0, reinterpret_cast<LPARAM>(fl));
 
-        // loading a file from a new folder or the current scanned folder?
+        // if it's coming from a new folder
 
-        if(_stricmp(current_folder.c_str(), folder.c_str()) != 0) {
+        bool is_new_folder;
+        CHK_HR(file::paths_are_different(current_folder, folder, is_new_folder));
+
+        if(is_new_folder) {
+
+            // if(_stricmp(current_folder.c_str(), folder.c_str()) != 0) {
 
             // tell the scanner thread to scan this new folder
             // when it's done it will notify main thread with a windows message
