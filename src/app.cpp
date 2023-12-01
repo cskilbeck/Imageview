@@ -600,7 +600,7 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
-    void fatal_message_box(std::string const &msg, HRESULT hr)
+    void error_message_box(std::string const &msg, HRESULT hr)
     {
         std::string message = windows_error_message(hr);
         MessageBoxA(null,
@@ -757,7 +757,7 @@ namespace imageview::app
             // if this is the first file being loaded and there was a file loading error
             if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
-                fatal_message_box(std::format("Loading {}", f->filename), load_hr);
+                error_message_box(std::format("Loading {}", f->filename), load_hr);
                 DestroyWindow(window);
             }
 
@@ -4023,14 +4023,14 @@ namespace imageview::app
 
         do {
             if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
-                if(!TranslateAccelerator(hwnd, accelerators, &msg)) {
+                if(!TranslateAccelerator(window, accelerators, &msg)) {
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
             } else {
                 HRESULT hr = update();
                 if(FAILED(hr)) {
-                    fatal_message_box("Error!", hr);
+                    error_message_box("Fatal error, exiting", hr);
                     ExitProcess(0);
                 }
             }
