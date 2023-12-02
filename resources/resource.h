@@ -2,6 +2,7 @@
 // Microsoft Visual C++ generated include file.
 // Used by imageview.rc
 //
+#define ID_FILE_SETTINGS_EXPLORER       101
 #define IDR_FONT_NOTO                   102
 #define IDI_ICON_DEFAULT                103
 #define IDR_FONT_ROBOTO                 104
@@ -58,7 +59,6 @@
 #define ID_SELECT_CROP                  40043
 #define ID_SHOW_SETTINGS                40069
 #define ID_VIEW_SETBORDERCOLOR          40075
-#define ID_ACCELERATOR40078             40078
 
 // Next default values for new objects
 // 
@@ -67,6 +67,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        124
 #define _APS_NEXT_COMMAND_VALUE         40080
 #define _APS_NEXT_CONTROL_VALUE         1010
-#define _APS_NEXT_SYMED_VALUE           101
+#define _APS_NEXT_SYMED_VALUE           102
 #endif
 #endif

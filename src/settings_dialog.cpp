@@ -30,7 +30,7 @@ namespace
 
     struct settings_tab_t
     {
-        LPCSTR resource_id;
+        uint resource_id;
         DLGPROC handler;
         int flags;
     };
@@ -44,11 +44,11 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     settings_tab_t tabs[] = {
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_MAIN), main_settings_handler, dont_care | ignore_size },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, dont_care },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, hide_if_not_elevated },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, hide_if_elevated },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_ABOUT), about_handler, dont_care },
+        { IDD_DIALOG_SETTINGS_MAIN, main_settings_handler, dont_care | ignore_size },
+        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_handler, dont_care },
+        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_handler, hide_if_not_elevated },
+        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_handler, hide_if_elevated },
+        { IDD_DIALOG_SETTINGS_ABOUT, about_handler, dont_care },
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -264,7 +264,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT add_tab_pages(HWND dlg)
+    HRESULT add_tab_pages(HWND dlg, uint show_tab_id, int &active_tab)
     {
         // create the tabbed dialog pages
 
@@ -284,8 +284,12 @@ namespace
                 continue;
             }
 
+            if(tab.resource_id == show_tab_id) {
+                active_tab = i;
+            }
+
             HRSRC hrsrc;
-            CHK_NULL(hrsrc = FindResource(NULL, tab.resource_id, RT_DIALOG));
+            CHK_NULL(hrsrc = FindResource(NULL, MAKEINTRESOURCE(tab.resource_id), RT_DIALOG));
 
             HGLOBAL hglb;
             CHK_NULL(hglb = LoadResource(GetModuleHandle(nullptr), hrsrc));
@@ -365,6 +369,9 @@ namespace
         for(auto const page : tab_pages) {
             SetWindowPos(page, null, tab_rect.x(), tab_rect.y(), tab_rect.w(), tab_rect.h(), SWP_NOZORDER);
         }
+
+        TabCtrl_SetCurSel(tab_ctrl, active_tab);
+
         return S_OK;
     }
 
@@ -388,15 +395,16 @@ namespace
 
     INT_PTR settings_dialog_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
     {
-        UNREFERENCED_PARAMETER(lparam);
-
         switch(msg) {
 
         case WM_INITDIALOG: {
 
             main_dialog = dlg;
 
-            if(FAILED(add_tab_pages(dlg))) {
+            uint show_tab_id = static_cast<uint>(lparam);
+            int active_tab{ 0 };
+
+            if(FAILED(add_tab_pages(dlg, show_tab_id, active_tab))) {
                 // TODO (chs): report windows error
                 return 0;
             }
@@ -419,8 +427,7 @@ namespace
 
             SetWindowPos(dlg, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
 
-            // show the first page because tab 0 is initially selected
-            show_settings_page(0);
+            show_settings_page(active_tab);
 
         } break;
 
@@ -470,11 +477,11 @@ namespace
 
 namespace imageview
 {
-    LRESULT show_settings_dialog(HWND parent)
+    LRESULT show_settings_dialog(HWND parent, uint tab_id)
     {
         current_page = null;
         tab_pages.clear();
-        return DialogBoxA(
-            GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler);
+        return DialogBoxParamA(
+            GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler, tab_id);
     }
 }

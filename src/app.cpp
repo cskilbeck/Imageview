@@ -1,17 +1,25 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
-// show settings if relaunched as admin (command line thing?)
 // settings / keyboard shortcuts dialog
 // localization
 // file type association / handler thing
 // show message if file load is slow
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
 // flip/rotate? losslessly?
-// command line parameters
+//
+// command line parameters ?
 // -log_level
 // -log_to_file=filename
 // -log_to_console
-// get d3d, cache, scanner, settings, dragdrop into another file
+//
+// get these into another file:
+//      d3d
+//      d2d
+//      cache
+//      scanner
+//      settings
+//      dragdrop
+//
 //////////////////////////////////////////////////////////////////////
 // TO FIX
 //
@@ -331,8 +339,8 @@ namespace imageview::app
     uint64 cache_in_use{ 0 };
     std::mutex cache_mutex;
 
-    // for IUnknown
-    long refcount;
+    // how many times WM_SHOWWINDOW
+    int window_show_count{ 0 };
 
     // the window handle
     HWND window{ null };
@@ -573,6 +581,13 @@ namespace imageview::app
         current_message = message;
         message_timestamp = m_timer.wall_time();
         message_fade_time = fade_time;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void clear_message()
+    {
+        current_message.clear();
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1921,7 +1936,7 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
-    void clear_mouse_buttons(int button)
+    void clear_mouse_button(int button)
     {
         int mask = 1 << (int)button;
         mouse_grab &= ~mask;
@@ -2362,7 +2377,7 @@ namespace imageview::app
 
     void on_mouse_button_up(point_s pos, uint button)
     {
-        clear_mouse_buttons(button);
+        clear_mouse_button(button);
 
         // if RMB released within double-click time and haven't
         // moved it much since they pressed it, show popup menu
@@ -2394,7 +2409,7 @@ namespace imageview::app
                     setup_menu_accelerators(popup_menu);
 
                     popup_menu_active = true;
-                    set_message("", 0);    // TODO (chs): clear_message()
+                    clear_message();
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
                     m_timer.reset();
                     popup_menu_active = false;
@@ -2405,7 +2420,7 @@ namespace imageview::app
         else if(button == settings.zoom_button) {
 
             ShowCursor(TRUE);
-            clear_mouse_buttons(settings.drag_button);    // in case they pressed the drag button while zooming
+            clear_mouse_button(settings.drag_button);    // in case they pressed the drag button while zooming
 
         } else if(button == settings.select_button) {
 
@@ -3362,8 +3377,12 @@ namespace imageview::app
             }
         } break;
 
+        case ID_FILE_SETTINGS_EXPLORER: {
+            show_settings_dialog(window, IDD_DIALOG_SETTINGS_EXPLORER);
+        } break;
+
         case ID_FILE_SETTINGS: {
-            LRESULT r = show_settings_dialog(window);
+            LRESULT r = show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
             if(r == LRESULT_LAUNCH_AS_ADMIN) {
                 relaunch_as_admin = true;
                 DestroyWindow(window);
@@ -3763,6 +3782,17 @@ namespace imageview::app
         return FALSE;
     }
 
+    //////////////////////////////////////////////////////////////////////
+
+    void OnShowWindow(HWND hwnd, BOOL fShow, UINT status)
+    {
+        if(is_elevated && window_show_count == 0) {
+            PostMessage(hwnd, WM_COMMAND, ID_FILE_SETTINGS_EXPLORER, (LPARAM)hwnd);
+        }
+        window_show_count += 1;
+    }
+
+
 //#pragma warning(disable : 4100)
 #pragma warning(pop)
 
@@ -3807,6 +3837,7 @@ namespace imageview::app
             HANDLE_MSG(hwnd, WM_GETMINMAXINFO, OnGetMinMaxInfo);
             HANDLE_MSG(hwnd, WM_NCCREATE, OnNCCreate);
             HANDLE_MSG(hwnd, WM_CLOSE, OnClose);
+            HANDLE_MSG(hwnd, WM_SHOWWINDOW, OnShowWindow);
             HANDLE_MSG(hwnd, WM_NCCALCSIZE, OnNCCalcSize);
             HANDLE_MSG(hwnd, WM_ERASEBKGND, OnEraseBkgnd);
             HANDLE_MSG(hwnd, WM_PAINT, OnPaint);
