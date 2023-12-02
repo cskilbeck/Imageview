@@ -239,7 +239,7 @@
     <ClInclude Include="src\log.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\rect.h" />
-    <ClInclude Include="src\settings.h" />
+    <ClInclude Include="src\settings_fields.h" />
     <ClInclude Include="src\settings_dialog.h" />
     <ClInclude Include="src\shader_constants.h" />
     <ClInclude Include="src\thread_pool.h" />

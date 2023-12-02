@@ -102,7 +102,9 @@ namespace
 
 namespace imageview::image
 {
-    std::map<std::string, image_format> image_formats{
+    std::mutex formats_mutex;
+
+    std::map<std::string, image_format> formats{
 
         { "PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
         { "JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
@@ -144,13 +146,15 @@ namespace imageview::image
 
             LOG_INFO("HEIF support is enabled");
 
-            image::image_formats["HEIF"] = { GUID_ContainerFormatHeif,
-                                             GUID_WICPixelFormat32bppBGRA,
-                                             format_flags{ with_alpha | use_name } };
+            auto iflock{ std::lock_guard(formats_mutex) };
 
-            image::image_formats["HEIC"] = { GUID_ContainerFormatHeif,
-                                             GUID_WICPixelFormat32bppBGRA,
-                                             format_flags{ with_alpha } };
+            image::formats["HEIF"] = { GUID_ContainerFormatHeif,
+                                       GUID_WICPixelFormat32bppBGRA,
+                                       format_flags{ with_alpha | use_name } };
+
+            image::formats["HEIC"] = { GUID_ContainerFormatHeif,
+                                       GUID_WICPixelFormat32bppBGRA,
+                                       format_flags{ with_alpha } };
         }
 
         return S_OK;
@@ -277,6 +281,8 @@ namespace imageview::image
 
     HRESULT decode(image_file *file)
     {
+        LOG_DEBUG("DECODE {}", file->filename);
+
         byte const *bytes = file->bytes.data();
         size_t file_size = file->bytes.size();
 
@@ -483,9 +489,14 @@ namespace imageview::image
 
         make_uppercase(extension);
 
-        auto found = image::image_formats.find(extension);
+        decltype(image::formats.begin()) found;
 
-        if(found == image::image_formats.end()) {
+        {
+            auto iflock{ std::lock_guard(formats_mutex) };
+            found = image::formats.find(extension);
+        }
+
+        if(found == image::formats.end()) {
             return HRESULT_FROM_WIN32(ERROR_UNSUPPORTED_TYPE);
         }
 

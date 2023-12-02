@@ -1,5 +1,5 @@
 #if !defined(DECL_SETTING)
-#error Please define DECL_SETTING before including settings.h
+#error Please define DECL_SETTING before including settings_fields.h
 #endif
 
 // don't warn about structure padding in this section

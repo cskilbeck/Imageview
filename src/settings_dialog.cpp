@@ -20,21 +20,22 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    enum elevation_t
+    enum tab_flags_t
     {
         dont_care = 0,
         hide_if_elevated = 1,
-        hide_if_not_elevated = 2
+        hide_if_not_elevated = 2,
+        ignore_size = 4,
     };
 
     struct settings_tab_t
     {
-        LPSTR resource_id;
+        LPCSTR resource_id;
         DLGPROC handler;
-        elevation_t requires_elevation;
+        int flags;
     };
 
-    INT_PTR settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR main_settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
     INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
     INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
     INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -43,16 +44,16 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     settings_tab_t tabs[] = {
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_MAIN), settings_handler, elevation_t::dont_care },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, elevation_t::dont_care },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, elevation_t::hide_if_not_elevated },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, elevation_t::hide_if_elevated },
-        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_ABOUT), about_handler, elevation_t::dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_MAIN), main_settings_handler, dont_care | ignore_size },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_HOTKEYS), hotkeys_handler, dont_care },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_EXPLORER), explorer_handler, hide_if_not_elevated },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_RELAUNCH), relaunch_handler, hide_if_elevated },
+        { MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS_ABOUT), about_handler, dont_care },
     };
 
     //////////////////////////////////////////////////////////////////////
 
-    INT_PTR settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
+    INT_PTR main_settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam)
     {
         UNREFERENCED_PARAMETER(dlg);
         UNREFERENCED_PARAMETER(msg);
@@ -275,11 +276,11 @@ namespace
 
             auto &tab = tabs[i];
 
-            if(tab.requires_elevation == hide_if_not_elevated && !app::is_elevated) {
+            if((tab.flags & hide_if_not_elevated) != 0 && !app::is_elevated) {
                 continue;
             }
 
-            if(tab.requires_elevation == hide_if_elevated && app::is_elevated) {
+            if((tab.flags & hide_if_elevated) != 0 && app::is_elevated) {
                 continue;
             }
 
@@ -306,10 +307,12 @@ namespace
 
             SetWindowSubclass(page_dlg, child_proc, 0, 0);
 
-            rect tab_rect;
-            GetWindowRect(page_dlg, &tab_rect);
-            biggest_tab_dialog.right = std::max(biggest_tab_dialog.right, tab_rect.w());
-            biggest_tab_dialog.bottom = std::max(biggest_tab_dialog.bottom, tab_rect.h());
+            if((tab.flags & ignore_size) == 0) {
+                rect tab_rect;
+                GetWindowRect(page_dlg, &tab_rect);
+                biggest_tab_dialog.right = std::max(biggest_tab_dialog.right, tab_rect.w());
+                biggest_tab_dialog.bottom = std::max(biggest_tab_dialog.bottom, tab_rect.h());
+            }
 
             tab_pages.push_back(page_dlg);
         }

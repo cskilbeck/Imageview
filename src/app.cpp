@@ -6,18 +6,24 @@
 // file type association / handler thing
 // show message if file load is slow
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
-// handle SRGB / premultiplied alpha correctly in image decoder
 // flip/rotate? losslessly?
 // command line parameters
 // -log_level
 // -log_to_file=filename
 // -log_to_console
-// get d3d, cache, scanner into another file
+// get d3d, cache, scanner, settings, dragdrop into another file
 //////////////////////////////////////////////////////////////////////
 // TO FIX
+//
+// colorspace wrong in png or heif (they're different, either way)
+// colorspace error when decoding heif
+// handle SRGB / premultiplied alpha correctly in image decoder
+//
 // the cache
 // all the leaks
 // error handling/reporting
+//
+// folder scanning broken after on_command_line from external
 
 #include "pch.h"
 #include <dcomp.h>
@@ -71,7 +77,8 @@ namespace
 
     enum scanner_thread_user_message_t : uint
     {
-        WM_SCAN_FOLDER = WM_USER    // please scan a folder (lparam -> path)
+        WM_SCAN_FOLDER = WM_USER,              // please scan a folder (lparam -> path)
+        WM_CHECK_HEIF_SUPPORT = WM_USER + 1    // please check HEIF support (lparam -> bool result)
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -506,7 +513,7 @@ namespace imageview::app
     {
         // use a header so we can implement the serializer more easily
 #define DECL_SETTING(type, name, ...) type name{ __VA_ARGS__ };
-#include "settings.h"
+#include "settings_fields.h"
 
         HRESULT save();
         HRESULT load();
@@ -608,6 +615,8 @@ namespace imageview::app
     {
         thread_pool.create_thread(
             [](image::image_file *fl) {
+
+                LOG_CONTEXT("file_loader");
 
                 // load the file synchronously to this thread
                 fl->hresult = file::load(fl->filename, fl->bytes, quit_event);
@@ -899,7 +908,7 @@ namespace imageview::app
 #undef DECL_SETTING
 #define DECL_SETTING(type, name, ...) \
     CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
-#include "settings.h"
+#include "settings_fields.h"
 
         return S_OK;
     }
@@ -1687,6 +1696,8 @@ namespace imageview::app
 
     HRESULT do_folder_scan(char const *folder_path)
     {
+        LOG_CONTEXT("do_folder_scan");
+
         std::string path;
 
         CHK_HR(file::get_path(folder_path, path));
@@ -1697,8 +1708,12 @@ namespace imageview::app
 
         std::vector<std::string> extensions;
 
-        for(auto const &f : image::image_formats) {
-            extensions.push_back(f.first);
+        {
+            auto iflock{ std::lock_guard(image::formats_mutex) };
+
+            for(auto const &f : image::formats) {
+                extensions.push_back(f.first);
+            }
         }
 
         file::scan_folder_sort_field sort_field = file::scan_folder_sort_field::name;
@@ -1742,6 +1757,8 @@ namespace imageview::app
 
     void scanner_function()
     {
+        LOG_CONTEXT("folder_scanner");
+
         bool quit = false;
         MSG msg;
 
@@ -1754,6 +1771,11 @@ namespace imageview::app
             case WAIT_OBJECT_0 + 1:
                 if(GetMessage(&msg, null, 0, 0) != 0) {
                     switch(msg.message) {
+
+                    case WM_CHECK_HEIF_SUPPORT:
+                        image::check_heif_support();
+                        break;
+
                     case WM_SCAN_FOLDER:
                         do_folder_scan(reinterpret_cast<char const *>(msg.lParam));
                         break;
@@ -1839,10 +1861,8 @@ namespace imageview::app
     // show it if it was the most recently requested image
     // maintain cache
 
-    void on_file_load_complete(LPARAM lparam)
+    void on_file_load_complete(image::image_file *f)
     {
-        image::image_file *f = reinterpret_cast<image::image_file *>(lparam);
-
         LOG_DEBUG("LOADED {}", f->filename);
 
         if(FAILED(f->hresult)) {
@@ -2121,7 +2141,6 @@ namespace imageview::app
             c = LoadCursor(null, IDC_ARROW);
         }
         current_mouse_cursor = c;
-        SetCursor(c);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2303,15 +2322,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_SETCURSOR
-
-    bool on_setcursor()
-    {
-        set_mouse_cursor(current_mouse_cursor);
-        return true;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // WM_[L/M/R]BUTTONDOWN]
 
     void on_mouse_button_down(point_s pos, uint button)
@@ -2461,67 +2471,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_MOUSEMOVE
-
-    void on_mouse_move(point_s pos)
-    {
-        if(!get_mouse_buttons(settings.zoom_button)) {
-            cur_mouse_pos = pos;
-        }
-
-        if(snap_mode == snap_mode_t::axis) {
-
-            switch(snap_axis) {
-
-            case shift_snap_axis_t::none: {
-                int xd = cur_mouse_pos.x - shift_mouse_pos.x;
-                int yd = cur_mouse_pos.y - shift_mouse_pos.y;
-                float distance = dpi_scale(sqrtf((float)(xd * xd + yd * yd)));
-                if(distance > axis_snap_radius) {
-                    snap_axis = (std::abs(xd) > std::abs(yd)) ? shift_snap_axis_t::y : shift_snap_axis_t::x;
-                }
-            } break;
-
-            case shift_snap_axis_t::x:
-                cur_mouse_pos.x = shift_mouse_pos.x;
-                break;
-            case shift_snap_axis_t::y:
-                cur_mouse_pos.y = shift_mouse_pos.y;
-                break;
-            }
-        }
-
-        for(int i = 0; i < btn_count; ++i) {
-            if(get_mouse_buttons(i)) {
-                mouse_offset[i] = add_point(mouse_offset[i], sub_point(cur_mouse_pos, mouse_pos[i]));
-                mouse_pos[i] = cur_mouse_pos;
-            }
-        }
-
-        if(selecting) {
-            vec2 diff = vec2(sub_point(mouse_click[settings.select_button], pos));
-            float len = vec2::length(diff);
-            if(len > settings.select_start_distance) {
-                select_active = true;
-            }
-        }
-
-        if(!get_mouse_buttons(settings.select_button)) {
-            check_selection_hover(vec2(pos));
-        } else if(selection_hover == selection_hover_t::sel_hover_outside) {
-            set_mouse_cursor(null);
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // WM_MOUSEWHEEL
-
-    void on_mouse_wheel(point_s pos, int delta)
-    {
-        do_zoom(pos, delta * 10);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // zoom to the selection allowing for labels
 
     void zoom_to_selection()
@@ -2640,131 +2589,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    void on_command(uint command)
-    {
-        switch(command) {
-
-        case ID_VIEW_FULLSCREEN:
-            toggle_fullscreen();
-            break;
-
-        case ID_PASTE:
-            on_paste();
-            break;
-
-        case ID_COPY:
-            on_copy();
-            break;
-
-        case ID_ZOOM_RESET:
-            reset_zoom(settings.zoom_mode);
-            break;
-
-        case ID_ZOOM_CENTER:
-            center_in_window();
-            break;
-
-        case ID_SELECT_CROP:
-            crop_to_selection();
-            break;
-
-        case ID_SELECT_ALL:
-            select_all();
-            break;
-
-        case ID_SELECT_NONE:
-            select_active = false;
-            break;
-
-        case ID_VIEW_ALPHA:
-            settings.grid_enabled = !settings.grid_enabled;
-            break;
-
-        case ID_VIEW_FIXEDGRID:
-            settings.fixed_grid = !settings.fixed_grid;
-            break;
-
-        case ID_VIEW_GRIDSIZE:
-            settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
-            break;
-
-        case ID_VIEW_SETBACKGROUNDCOLOR: {
-            uint32 bg_color = color_to_uint32(settings.background_color);
-            if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
-                settings.background_color = uint32_to_color(bg_color);
-            }
-        } break;
-
-        case ID_VIEW_SETBORDERCOLOR: {
-            uint32 border_color = color_to_uint32(settings.border_color);
-            if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
-                settings.border_color = uint32_to_color(border_color);
-            }
-        } break;
-
-        case ID_ZOOM_1:
-            settings.zoom_mode = zoom_mode_t::one_to_one;
-            reset_zoom(settings.zoom_mode);
-            break;
-
-        case ID_ZOOM_FIT:
-            settings.zoom_mode = zoom_mode_t::fit_to_window;
-            reset_zoom(settings.zoom_mode);
-            break;
-
-        case ID_ZOOM_SHRINKTOFIT:
-            settings.zoom_mode = zoom_mode_t::shrink_to_fit;
-            reset_zoom(settings.zoom_mode);
-            break;
-
-        case ID_ZOOM_SELECTION:
-            zoom_to_selection();
-            break;
-
-        case ID_FILE_PREV:
-            move_file_cursor(-1);
-            break;
-
-        case ID_FILE_NEXT:
-            move_file_cursor(1);
-            break;
-
-        case ID_FILE_OPEN: {
-            std::string selected_filename;
-            if(SUCCEEDED(dialog::open_file(window, selected_filename))) {
-                load_image(selected_filename);
-            }
-        } break;
-
-        case ID_FILE_SAVE: {
-
-            std::string filename;
-            if(SUCCEEDED(dialog::save_file(window, filename))) {
-
-                image::image_t const &img = current_file->img;
-                HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
-                if(FAILED(hr)) {
-                    MessageBoxA(window, windows_error_message(hr).c_str(), "Can't save file", MB_ICONEXCLAMATION);
-                } else {
-                    set_message(std::format("Saved {}", filename), 5);
-                }
-            }
-        } break;
-
-        case ID_FILE_SETTINGS: {
-            LRESULT r = show_settings_dialog(window);
-            if(r == LRESULT_LAUNCH_AS_ADMIN) {
-                relaunch_as_admin = true;
-                DestroyWindow(window);
-            }
-        } break;
-
-        case ID_EXIT:
-            DestroyWindow(window);
-            break;
-        }
-    }
 
     //////////////////////////////////////////////////////////////////////
 
@@ -3352,21 +3176,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_CLOSING
-
-    HRESULT on_closing()
-    {
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(wp);
-        GetWindowPlacement(window, &wp);
-        rect const &rc = wp.rcNormalPosition;
-        LOG_DEBUG("ON_CLOSING: {} {}", rc.to_string(), wp.showCmd == SW_SHOWMAXIMIZED ? "max" : "normal");
-        settings.window_placement = wp;
-        CoUninitialize();
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // WM_ACTIVATEAPP
 
     void on_activated()
@@ -3383,28 +3192,11 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // App is being power-suspended (or minimized).
-
-    void on_suspending()
-    {
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // App is being power-resumed (or returning from minimize).
 
     void on_resuming()
     {
         m_timer.reset();
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // WM_SIZE
-
-    HRESULT on_window_size_changed(int width, int height)
-    {
-        UNREFERENCED_PARAMETER(width);
-        UNREFERENCED_PARAMETER(height);
-        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3451,20 +3243,559 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
+    // adding UNREFERENCED_PARAMETER for every one of these warnings
+    // in all the message handlers would be unwieldy, not worth it
 
-    LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+#pragma warning(push)
+#pragma warning(disable : 4100)
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+
+        case ID_VIEW_FULLSCREEN:
+            toggle_fullscreen();
+            break;
+
+        case ID_PASTE:
+            on_paste();
+            break;
+
+        case ID_COPY:
+            on_copy();
+            break;
+
+        case ID_ZOOM_RESET:
+            reset_zoom(settings.zoom_mode);
+            break;
+
+        case ID_ZOOM_CENTER:
+            center_in_window();
+            break;
+
+        case ID_SELECT_CROP:
+            crop_to_selection();
+            break;
+
+        case ID_SELECT_ALL:
+            select_all();
+            break;
+
+        case ID_SELECT_NONE:
+            select_active = false;
+            break;
+
+        case ID_VIEW_ALPHA:
+            settings.grid_enabled = !settings.grid_enabled;
+            break;
+
+        case ID_VIEW_FIXEDGRID:
+            settings.fixed_grid = !settings.fixed_grid;
+            break;
+
+        case ID_VIEW_GRIDSIZE:
+            settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
+            break;
+
+        case ID_VIEW_SETBACKGROUNDCOLOR: {
+            uint32 bg_color = color_to_uint32(settings.background_color);
+            if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
+                settings.background_color = uint32_to_color(bg_color);
+            }
+        } break;
+
+        case ID_VIEW_SETBORDERCOLOR: {
+            uint32 border_color = color_to_uint32(settings.border_color);
+            if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
+                settings.border_color = uint32_to_color(border_color);
+            }
+        } break;
+
+        case ID_ZOOM_1:
+            settings.zoom_mode = zoom_mode_t::one_to_one;
+            reset_zoom(settings.zoom_mode);
+            break;
+
+        case ID_ZOOM_FIT:
+            settings.zoom_mode = zoom_mode_t::fit_to_window;
+            reset_zoom(settings.zoom_mode);
+            break;
+
+        case ID_ZOOM_SHRINKTOFIT:
+            settings.zoom_mode = zoom_mode_t::shrink_to_fit;
+            reset_zoom(settings.zoom_mode);
+            break;
+
+        case ID_ZOOM_SELECTION:
+            zoom_to_selection();
+            break;
+
+        case ID_FILE_PREV:
+            move_file_cursor(-1);
+            break;
+
+        case ID_FILE_NEXT:
+            move_file_cursor(1);
+            break;
+
+        case ID_FILE_OPEN: {
+            std::string selected_filename;
+            if(SUCCEEDED(dialog::open_file(window, selected_filename))) {
+                load_image(selected_filename);
+            }
+        } break;
+
+        case ID_FILE_SAVE: {
+
+            std::string filename;
+            if(SUCCEEDED(dialog::save_file(window, filename))) {
+
+                image::image_t const &img = current_file->img;
+                HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
+                if(FAILED(hr)) {
+                    MessageBoxA(window, windows_error_message(hr).c_str(), "Can't save file", MB_ICONEXCLAMATION);
+                } else {
+                    set_message(std::format("Saved {}", filename), 5);
+                }
+            }
+        } break;
+
+        case ID_FILE_SETTINGS: {
+            LRESULT r = show_settings_dialog(window);
+            if(r == LRESULT_LAUNCH_AS_ADMIN) {
+                relaunch_as_admin = true;
+                DestroyWindow(window);
+            }
+        } break;
+
+        case ID_EXIT:
+            DestroyWindow(window);
+            break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnGetMinMaxInfo(HWND hwnd, LPMINMAXINFO lpMinMaxInfo)
+    {
+        lpMinMaxInfo->ptMinTrackSize = { 320, 200 };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    LRESULT OnNCCreate(HWND hwnd, LPCREATESTRUCT lpCreateStruct)
+    {
+        window = hwnd;
+
+        RAWINPUTDEVICE Rid[1];
+        Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+        Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
+        Rid[0].dwFlags = RIDEV_INPUTSINK;
+        Rid[0].hwndTarget = hwnd;
+        RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+
+        if(!settings.first_run && !settings.fullscreen) {
+            rect const &rc = settings.window_placement.rcNormalPosition;
+            LOG_DEBUG("INITIALLY: {} ({})", rc.to_string(), settings.window_placement.showCmd);
+            WINDOWPLACEMENT hidden = settings.window_placement;
+            hidden.flags = 0;
+            hidden.showCmd = SW_HIDE;
+            SetWindowPlacement(window, &hidden);
+        }
+
+        SetEvent(window_created_event);
+
+        file_dropper.InitializeDragDropHelper(window);
+
+        // if there was no file load requested on the command line
+        // and auto-paste is on, try to paste an image from the clipboard
+        if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
+            return on_paste();
+        }
+        set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
+        return TRUE;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnClose(HWND hwnd)
+    {
+        DestroyWindow(hwnd);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // resize backbuffer before window size actually changes to avoid
+    // flickering at the borders when resizing
+
+    // BUT minimize/maximize...
+
+    UINT OnNCCalcSize(HWND hwnd, BOOL fCalcValidRects, NCCALCSIZE_PARAMS *lpcsp)
+    {
+        // DefWindowProc modifies the NCCALCSIZE_PARAMS,
+        // after calling it, the first rect is the new client rect
+        DefWindowProc(hwnd, WM_NCCALCSIZE, fCalcValidRects, reinterpret_cast<LPARAM>(lpcsp));
+
+        rect const &new_client_rect = lpcsp->rgrc[0];
+
+        // if starting window maximized, ignore the first wm_nccalcsize, it's got bogus dimensions
+
+        if(!(frame_count == 0 && settings.window_placement.showCmd == SW_SHOWMAXIMIZED)) {
+            on_window_size_changing(new_client_rect.w(), new_client_rect.h());
+        }
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    BOOL OnEraseBkgnd(HWND hwnd, HDC hdc)
+    {
+        return TRUE;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnPaint(HWND hwnd)
+    {
+        PAINTSTRUCT ps;
+        (void)BeginPaint(hwnd, &ps);
+        EndPaint(hwnd, &ps);
+        if(s_in_sizemove) {
+            update();
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // in single instance mode, we can get sent a new command line
+    // this is how the other instance sends it to us
+
+    void OnCopyData(HWND hwnd, HWND from, PCOPYDATASTRUCT c)
+    {
+        if(c != null) {
+            switch((copydata_t)c->dwData) {
+            case copydata_t::commandline:
+                if(s_minimized) {
+                    ShowWindow(hwnd, SW_RESTORE);
+                }
+                SetForegroundWindow(hwnd);
+                SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                SwitchToThisWindow(window, true);
+                on_command_line(reinterpret_cast<char const *>(c->lpData));
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    BOOL OnSetCursor(HWND hwnd, HWND hwndCursor, UINT codeHitTest, UINT msg)
+    {
+        if(codeHitTest == HTCLIENT) {
+            SetCursor(current_mouse_cursor);
+            return TRUE;
+        }
+
+        // I thought we could just return FALSE to get this done for us?
+        // Seems not, more uncracking parameters
+        return (BOOL)DefWindowProc(hwnd, WM_SETCURSOR, (WPARAM)hwndCursor, MAKELPARAM(codeHitTest, msg));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnSize(HWND hwnd, UINT state, int cx, int cy)
+    {
+        if(state == SIZE_MINIMIZED) {
+            if(!s_minimized) {
+                s_minimized = true;
+                s_in_suspend = true;
+            }
+        } else {
+            if(s_minimized) {
+                s_minimized = false;
+                if(s_in_suspend) {
+                    on_resuming();
+                }
+                s_in_suspend = false;
+            }
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnLButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        on_mouse_button_down(pos, btn_left);
+    }
+
+    void OnRButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        on_mouse_button_down(pos, btn_right);
+    }
+
+    void OnMButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        on_mouse_button_down(pos, btn_middle);
+    }
+
+    void OnLButtonUp(HWND hwnd, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        on_mouse_button_up(pos, btn_left);
+    }
+
+    void OnRButtonUp(HWND hwnd, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        on_mouse_button_up(pos, btn_right);
+    }
+
+    void OnMButtonUp(HWND hwnd, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        on_mouse_button_up(pos, btn_middle);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnMouseMove(HWND hwnd, int x, int y, UINT keyFlags)
+    {
+        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+
+        if(!get_mouse_buttons(settings.zoom_button)) {
+            cur_mouse_pos = pos;
+        }
+
+        if(snap_mode == snap_mode_t::axis) {
+
+            switch(snap_axis) {
+
+            case shift_snap_axis_t::none: {
+                int xd = cur_mouse_pos.x - shift_mouse_pos.x;
+                int yd = cur_mouse_pos.y - shift_mouse_pos.y;
+                float distance = dpi_scale(sqrtf((float)(xd * xd + yd * yd)));
+                if(distance > axis_snap_radius) {
+                    snap_axis = (std::abs(xd) > std::abs(yd)) ? shift_snap_axis_t::y : shift_snap_axis_t::x;
+                }
+            } break;
+
+            case shift_snap_axis_t::x:
+                cur_mouse_pos.x = shift_mouse_pos.x;
+                break;
+            case shift_snap_axis_t::y:
+                cur_mouse_pos.y = shift_mouse_pos.y;
+                break;
+            }
+        }
+
+        for(int i = 0; i < btn_count; ++i) {
+            if(get_mouse_buttons(i)) {
+                mouse_offset[i] = add_point(mouse_offset[i], sub_point(cur_mouse_pos, mouse_pos[i]));
+                mouse_pos[i] = cur_mouse_pos;
+            }
+        }
+
+        if(selecting) {
+            vec2 diff = vec2(sub_point(mouse_click[settings.select_button], pos));
+            float len = vec2::length(diff);
+            if(len > settings.select_start_distance) {
+                select_active = true;
+            }
+        }
+
+        if(!get_mouse_buttons(settings.select_button)) {
+            check_selection_hover(vec2(static_cast<float>(x), static_cast<float>(y)));
+        } else if(selection_hover == selection_hover_t::sel_hover_outside) {
+            set_mouse_cursor(null);
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnMouseWheel(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+    {
+        POINT pos{ xPos, yPos };
+        ScreenToClient(hwnd, &pos);
+        do_zoom(pos, zDelta * 10 / WHEEL_DELTA);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnKeyDown(HWND hwnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
+    {
+        switch(vk) {
+
+        case VK_SHIFT:
+            if((flags & 0x4000) == 0) {
+                shift_mouse_pos = cur_mouse_pos;
+                snap_mode = snap_mode_t::axis;
+                snap_axis = shift_snap_axis_t::none;
+            }
+            break;
+
+        case VK_CONTROL:
+            snap_mode = snap_mode_t::square;
+            break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnKeyUp(HWND hwnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
+    {
+        switch(vk) {
+        case VK_SHIFT: {
+            POINT p;
+            GetCursorPos(&p);
+            ScreenToClient(window, &p);
+            snap_mode = snap_mode_t::none;
+            OnMouseMove(hwnd, p.x, p.y, 0);
+        } break;
+        case VK_CONTROL:
+            snap_mode = snap_mode_t::none;
+            break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnActivateApp(HWND hwnd, BOOL fActivate, DWORD dwThreadId)
+    {
+        if(fActivate) {
+            on_activated();
+        } else {
+            on_deactivated();
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnDestroy(HWND hwnd)
+    {
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(wp);
+        GetWindowPlacement(window, &wp);
+        rect const &rc = wp.rcNormalPosition;
+        LOG_DEBUG("ON_CLOSING: {} {}", rc.to_string(), wp.showCmd == SW_SHOWMAXIMIZED ? "max" : "normal");
+        settings.window_placement = wp;
+        PostQuitMessage(0);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    DWORD OnMenuChar(HWND hwnd, UINT ch, UINT flags, HMENU hmenu)
+    {
+        return MAKELRESULT(0, MNC_CLOSE);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnDpiChanged(HWND hwnd, UINT xdpi, UINT ydpi, rect const *new_rect)
+    {
+        if(!ignore_dpi_for_a_moment) {
+
+            uint new_dpi = xdpi;
+
+            current_rect.w = (current_rect.w * new_dpi) / dpi;
+            current_rect.h = (current_rect.h * new_dpi) / dpi;
+
+            dpi = static_cast<float>(new_dpi);
+
+            create_text_formats();
+
+            MoveWindow(window, new_rect->x(), new_rect->y(), new_rect->w(), new_rect->h(), true);
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnInput(HWND hwnd, HRAWINPUT input)
+    {
+        UINT dwSize = sizeof(RAWINPUT);
+        static BYTE lpb[sizeof(RAWINPUT)];
+        GetRawInputData(input, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+        RAWINPUT *raw = (RAWINPUT *)lpb;
+        if(raw->header.dwType == RIM_TYPEMOUSE && get_mouse_buttons(settings.zoom_button) && !popup_menu_active) {
+            int delta_y = static_cast<int>(raw->data.mouse.lLastY);
+            do_zoom(mouse_click[settings.zoom_button], std::max(-4, std::min(-delta_y, 4)));
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnEnterSizeMove(HWND hwnd)
+    {
+        s_in_sizemove = true;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void OnExitSizeMove(HWND hwnd)
+    {
+        s_in_sizemove = false;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // NOTE: new_setting only valid if setting == PBT_POWERSETTINGCHANGE
+
+    UINT OnPowerBroadcast(HWND hwnd, UINT setting, PPOWERBROADCAST_SETTING new_setting)
+    {
+        switch(setting) {
+
+        case PBT_APMQUERYSUSPEND:
+            s_in_suspend = true;
+            return TRUE;
+
+        case PBT_APMRESUMESUSPEND:
+            if(!s_minimized) {
+                if(s_in_suspend) {
+                    on_resuming();
+                }
+                s_in_suspend = false;
+            }
+            return TRUE;
+        }
+        return FALSE;
+    }
+
+//#pragma warning(disable : 4100)
+#pragma warning(pop)
+
+    //////////////////////////////////////////////////////////////////////
+    // These are missing from windowsx.h
+
+#define HANDLE_WM_DPICHANGED(hwnd, wParam, lParam, fn) \
+    ((fn)((hwnd), (UINT)LOWORD(wParam), (UINT)HIWORD(wParam), (rect const *)(lParam)), 0L)
+
+#define HANDLE_WM_INPUT(hwnd, wParam, lParam, fn) ((fn)((hwnd), (HRAWINPUT)(lParam)), 0L)
+
+#define HANDLE_WM_ENTERSIZEMOVE(hwnd, wParam, lParam, fn) ((fn)((hwnd)), 0L)
+
+#define HANDLE_WM_EXITSIZEMOVE(hwnd, wParam, lParam, fn) ((fn)((hwnd)), 0L)
+
+#define HANDLE_WM_POWERBROADCAST(hwnd, wParam, lParam, fn) \
+    ((fn)((hwnd), (UINT)(wParam), (PPOWERBROADCAST_SETTING)(lParam)))
+
+    //////////////////////////////////////////////////////////////////////
+
+    LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
 #if defined(_DEBUG)
         switch(message) {
         case WM_INPUT:
-        case WM_SETCURSOR:
+        // case WM_SETCURSOR:
+        // case WM_NCHITTEST:
         case WM_NCMOUSEMOVE:
         case WM_MOUSEMOVE:
-        case WM_NCHITTEST:
         case WM_ENTERIDLE:
             break;
         default:
-            LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wparam, lparam);
+            LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
             break;
         }
 #endif
@@ -3472,384 +3803,52 @@ namespace imageview::app
         switch(message) {
 
             //////////////////////////////////////////////////////////////////////
-            // 1st message is always WM_GETMINMAXINFO
 
-        case WM_GETMINMAXINFO:
-            if(lparam != 0) {
-                reinterpret_cast<MINMAXINFO *>(lparam)->ptMinTrackSize = { 320, 200 };
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-            // 2nd message is always WM_NCCREATE
-
-        case WM_NCCREATE: {
-
-            LRESULT r = DefWindowProc(hwnd, message, wparam, lparam);
-
-            window = hwnd;
-
-            RAWINPUTDEVICE Rid[1];
-            Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-            Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
-            Rid[0].dwFlags = RIDEV_INPUTSINK;
-            Rid[0].hwndTarget = hwnd;
-            RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
-
-            if(!settings.first_run && !settings.fullscreen) {
-                rect const &rc = settings.window_placement.rcNormalPosition;
-                LOG_DEBUG("INITIALLY: {} ({})", rc.to_string(), settings.window_placement.showCmd);
-                WINDOWPLACEMENT hidden = settings.window_placement;
-                hidden.flags = 0;
-                hidden.showCmd = SW_HIDE;
-                SetWindowPlacement(window, &hidden);
-            }
-
-            get_is_process_elevated(is_elevated);
-
-            SetEvent(window_created_event);
-
-            file_dropper.InitializeDragDropHelper(window);
-
-            // if there was no file load requested on the command line
-            // and auto-paste is on, try to paste an image from the clipboard
-            if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
-                return on_paste();
-            }
-            set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
-            return r;
-        }
-
-        case WM_CREATE:
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_CLOSE:
-            LOG_DEBUG("CLOSE!");
-            DestroyWindow(hwnd);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-            // resize backbuffer before window size actually changes to avoid
-            // flickering at the borders when resizing
-
-            // BUT minimize/maximize...
-
-        case WM_NCCALCSIZE: {
-            DefWindowProc(hwnd, message, wparam, lparam);
-            NCCALCSIZE_PARAMS *params = reinterpret_cast<LPNCCALCSIZE_PARAMS>(lparam);
-            rect const &new_client_rect = params->rgrc[0];
-
-            // if starting window maximized, ignore the first
-            // wm_nccalcsize, it's got bogus dimensions
-
-            if(frame_count != 0 || settings.window_placement.showCmd != SW_SHOWMAXIMIZED) {
-                on_window_size_changing(new_client_rect.w(), new_client_rect.h());
-            }
-            return 0;
-        }
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_ERASEBKGND:
-            return 1;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_PAINT:
-            PAINTSTRUCT ps;
-            (void)BeginPaint(hwnd, &ps);
-            EndPaint(hwnd, &ps);
-            if(s_in_sizemove) {
-                update();
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-            // in single instance mode, we can get sent a new command line
-
-        case WM_COPYDATA: {
-            COPYDATASTRUCT *c = reinterpret_cast<COPYDATASTRUCT *>(lparam);
-            if(c != null) {
-                switch((copydata_t)c->dwData) {
-                case copydata_t::commandline:
-                    if(s_minimized) {
-                        ShowWindow(hwnd, SW_RESTORE);
-                    }
-                    SetForegroundWindow(hwnd);
-                    SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                    SwitchToThisWindow(window, true);
-                    on_command_line(reinterpret_cast<char const *>(c->lpData));
-                    break;
-                default:
-                    break;
-                }
-            }
-        } break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_SHOWWINDOW:
-            if(wparam) {
-                SetCursor(LoadCursor(null, IDC_ARROW));
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_SETCURSOR:
-            if(LOWORD(lparam) != HTCLIENT || !on_setcursor()) {
-                return DefWindowProc(hwnd, message, wparam, lparam);
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_DPICHANGED:
-            if(!ignore_dpi_for_a_moment) {
-
-                uint new_dpi = LOWORD(wparam);
-                rect const *new_rect = reinterpret_cast<rect const *>(lparam);
-
-                current_rect.w = (current_rect.w * new_dpi) / dpi;
-                current_rect.h = (current_rect.h * new_dpi) / dpi;
-
-                dpi = (float)new_dpi;
-
-                create_text_formats();
-
-                MoveWindow(window, new_rect->x(), new_rect->y(), new_rect->w(), new_rect->h(), true);
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_SIZE:
-            if(wparam == SIZE_MINIMIZED) {
-                if(!s_minimized) {
-                    s_minimized = true;
-                    if(!s_in_suspend) {
-                        on_suspending();
-                    }
-                    s_in_suspend = true;
-                }
-            } else {
-                if(s_minimized) {
-                    s_minimized = false;
-                    if(s_in_suspend) {
-                        on_resuming();
-                    }
-                    s_in_suspend = false;
-                }
-                rect rc;
-                GetClientRect(hwnd, &rc);
-                on_window_size_changed(rc.w(), rc.h());
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_LBUTTONDOWN:
-            on_mouse_button_down(MAKEPOINTS(lparam), btn_left);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_RBUTTONDOWN:
-            on_mouse_button_down(MAKEPOINTS(lparam), btn_right);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_MBUTTONDOWN:
-            on_mouse_button_down(MAKEPOINTS(lparam), btn_middle);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_LBUTTONUP:
-            on_mouse_button_up(MAKEPOINTS(lparam), btn_left);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_RBUTTONUP:
-            on_mouse_button_up(MAKEPOINTS(lparam), btn_right);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_MBUTTONUP:
-            on_mouse_button_up(MAKEPOINTS(lparam), btn_middle);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_MOUSEMOVE:
-            on_mouse_move(MAKEPOINTS(lparam));
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_MOUSEWHEEL: {
-            POINT pos{ get_x(lparam), get_y(lparam) };
-            ScreenToClient(hwnd, &pos);
-            on_mouse_wheel(pos, get_y(wparam) / WHEEL_DELTA);
-        } break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_INPUT: {
-            UINT dwSize = sizeof(RAWINPUT);
-            static BYTE lpb[sizeof(RAWINPUT)];
-            GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
-            RAWINPUT *raw = (RAWINPUT *)lpb;
-            if(raw->header.dwType == RIM_TYPEMOUSE && get_mouse_buttons(settings.zoom_button) && !popup_menu_active) {
-                int delta_y = static_cast<int>(raw->data.mouse.lLastY);
-                do_zoom(mouse_click[settings.zoom_button], std::max(-4, std::min(-delta_y, 4)));
-            }
-        } break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_COMMAND:
-            on_command(LOWORD(wparam));
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_KEYDOWN: {
-            int vk_key = static_cast<int>(wparam);
-            uint f = HIWORD(lparam);
-            bool repeat = (f & KF_REPEAT) == KF_REPEAT;    // previous key-state flag, 1 on autorepeat
-
-            switch(vk_key) {
-
-            case VK_SHIFT:
-                if(!repeat) {
-                    shift_mouse_pos = cur_mouse_pos;
-                    snap_mode = snap_mode_t::axis;
-                    snap_axis = shift_snap_axis_t::none;
-                }
-                break;
-
-            case VK_CONTROL:
-                snap_mode = snap_mode_t::square;
-                break;
-            }
-        } break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_KEYUP: {
-            switch(wparam) {
-            case VK_SHIFT: {
-                POINT p;
-                GetCursorPos(&p);
-                ScreenToClient(window, &p);
-                snap_mode = snap_mode_t::none;
-                on_mouse_move(p);
-            } break;
-            case VK_CONTROL:
-                snap_mode = snap_mode_t::none;
-                break;
-            }
-        } break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_ENTERSIZEMOVE:
-            s_in_sizemove = true;
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_EXITSIZEMOVE:
-            s_in_sizemove = false;
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_ACTIVATEAPP:
-            if(wparam) {
-                on_activated();
-            } else {
-                on_deactivated();
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_POWERBROADCAST:
-
-            switch(wparam) {
-
-            case PBT_APMQUERYSUSPEND:
-                if(!s_in_suspend) {
-                    on_suspending();
-                }
-                s_in_suspend = true;
-                return TRUE;
-
-            case PBT_APMRESUMESUSPEND:
-                if(!s_minimized) {
-                    if(s_in_suspend) {
-                        on_resuming();
-                    }
-                    s_in_suspend = false;
-                }
-                return TRUE;
-            }
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_DESTROY:
-            on_closing();
-            PostQuitMessage(0);
-            break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_SYSKEYDOWN: {
-            uint flags = HIWORD(lparam);
-            bool key_up = (flags & KF_UP) == KF_UP;                // transition-state flag, 1 on keyup
-            bool repeat = (flags & KF_REPEAT) == KF_REPEAT;        // previous key-state flag, 1 on autorepeat
-            bool alt_down = (flags & KF_ALTDOWN) == KF_ALTDOWN;    // ALT key was pressed
-
-            if(!key_up && !repeat && alt_down) {
-                switch(wparam) {
-                case VK_RETURN:
-                    toggle_fullscreen();
-                    break;
-                case VK_F4:
-                    DestroyWindow(hwnd);
-                }
-            }
-        } break;
-
-            //////////////////////////////////////////////////////////////////////
-
-        case WM_MENUCHAR:
-            return MAKELRESULT(0, MNC_CLOSE);
+            HANDLE_MSG(hwnd, WM_GETMINMAXINFO, OnGetMinMaxInfo);
+            HANDLE_MSG(hwnd, WM_NCCREATE, OnNCCreate);
+            HANDLE_MSG(hwnd, WM_CLOSE, OnClose);
+            HANDLE_MSG(hwnd, WM_NCCALCSIZE, OnNCCalcSize);
+            HANDLE_MSG(hwnd, WM_ERASEBKGND, OnEraseBkgnd);
+            HANDLE_MSG(hwnd, WM_PAINT, OnPaint);
+            HANDLE_MSG(hwnd, WM_COPYDATA, OnCopyData);
+            HANDLE_MSG(hwnd, WM_SETCURSOR, OnSetCursor);
+            HANDLE_MSG(hwnd, WM_SIZE, OnSize);
+            HANDLE_MSG(hwnd, WM_LBUTTONDOWN, OnLButtonDown);
+            HANDLE_MSG(hwnd, WM_RBUTTONDOWN, OnRButtonDown);
+            HANDLE_MSG(hwnd, WM_MBUTTONDOWN, OnMButtonDown);
+            HANDLE_MSG(hwnd, WM_LBUTTONUP, OnLButtonUp);
+            HANDLE_MSG(hwnd, WM_RBUTTONUP, OnRButtonUp);
+            HANDLE_MSG(hwnd, WM_MBUTTONUP, OnMButtonUp);
+            HANDLE_MSG(hwnd, WM_MOUSEMOVE, OnMouseMove);
+            HANDLE_MSG(hwnd, WM_MOUSEWHEEL, OnMouseWheel);
+            HANDLE_MSG(hwnd, WM_KEYDOWN, OnKeyDown);
+            HANDLE_MSG(hwnd, WM_KEYUP, OnKeyUp);
+            HANDLE_MSG(hwnd, WM_COMMAND, OnCommand);
+            HANDLE_MSG(hwnd, WM_ACTIVATEAPP, OnActivateApp);
+            HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);
+            HANDLE_MSG(hwnd, WM_MENUCHAR, OnMenuChar);
+            HANDLE_MSG(hwnd, WM_DPICHANGED, OnDpiChanged);
+            HANDLE_MSG(hwnd, WM_INPUT, OnInput);
+            HANDLE_MSG(hwnd, WM_ENTERSIZEMOVE, OnEnterSizeMove);
+            HANDLE_MSG(hwnd, WM_EXITSIZEMOVE, OnExitSizeMove);
+            HANDLE_MSG(hwnd, WM_POWERBROADCAST, OnPowerBroadcast);
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_FILE_LOAD_COMPLETE:
-            on_file_load_complete(lparam);
+            on_file_load_complete(reinterpret_cast<image::image_file *>(lParam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         case WM_FOLDER_SCAN_COMPLETE:
-            on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lparam));
+            on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
         default:
-            return DefWindowProc(hwnd, message, wparam, lparam);
+            return DefWindowProc(hwnd, message, wParam, lParam);
         }
 
         return 0;
@@ -3871,6 +3870,8 @@ namespace imageview::app
         // com
 
         CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
+
+        CHK_HR(get_is_process_elevated(is_elevated));
 
         // remember default settings for 'reset settings to default' feature in settings dialog
         default_settings = settings;
@@ -3895,15 +3896,21 @@ namespace imageview::app
                 // send the existing instance the command line (which might be
                 // a filename to load)
 
-                COPYDATASTRUCT c;
-                c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
-                c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
-                c.dwData = static_cast<DWORD>(copydata_t::commandline);
-                SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
+                if(!cmd_line.empty()) {
+                    COPYDATASTRUCT c;
+                    c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
+                    c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
+                    c.dwData = static_cast<DWORD>(copydata_t::commandline);
+                    SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
+                }
 
-                // some confusion about whether this is legit but
-                // BringWindowToFront doesn't work for top level windows
+                // Some confusion about whether this is legit but
+                // BringWindowToFront doesn't work for top level windows.
+
+                // The target instance also calls this, maybe one of them will work?
+
                 SwitchToThisWindow(existing_window, TRUE);
+
                 return S_OK;
             }
         }
@@ -3928,9 +3935,9 @@ namespace imageview::app
 
         CHK_HR(thread_pool.create_thread_with_message_pump(&scanner_thread_id, []() { scanner_function(); }));
 
-        CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, []() { file_loader_function(); }));
+        PostThreadMessage(scanner_thread_id, WM_CHECK_HEIF_SUPPORT, 0, 0);
 
-        // check if HEIF image support is enabled (it's not always there by default)
+        CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, []() { file_loader_function(); }));
 
         // tee up a loadimage if specified on the command line
 

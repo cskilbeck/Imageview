@@ -58,13 +58,14 @@
 #define ID_SELECT_CROP                  40043
 #define ID_SHOW_SETTINGS                40069
 #define ID_VIEW_SETBORDERCOLOR          40075
+#define ID_ACCELERATOR40078             40078
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        123
-#define _APS_NEXT_COMMAND_VALUE         40078
+#define _APS_NEXT_RESOURCE_VALUE        124
+#define _APS_NEXT_COMMAND_VALUE         40080
 #define _APS_NEXT_CONTROL_VALUE         1010
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

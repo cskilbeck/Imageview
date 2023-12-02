@@ -93,7 +93,8 @@ namespace imageview::image
         }
     };
 
-    extern std::map<std::string, image_format> image_formats;
+    extern std::map<std::string, image_format> formats;
+    extern std::mutex formats_mutex;
 
     //////////////////////////////////////////////////////////////////////
 

@@ -52,6 +52,7 @@
 
 #define NOMINMAX
 #include <Windows.h>
+#include <windowsx.h>
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <hidusage.h>
