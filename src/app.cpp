@@ -4021,7 +4021,13 @@ namespace imageview::app
         // if relaunching as admin, do it last thing
 
         if(relaunch_as_admin) {
-            ShellExecuteA(null, "runas", get_app_filename().c_str(), 0, 0, SW_SHOWNORMAL);
+            std::wstring args;
+            int argc;
+            LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+            for(int i = 1; i < argc; ++i) {
+                args = args + argv[i];
+            }
+            ShellExecuteW(null, L"runas", argv[0], args.c_str(), 0, SW_SHOWNORMAL);
         }
         return 0;
     }
