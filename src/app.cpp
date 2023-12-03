@@ -3,9 +3,7 @@
 // settings / keyboard shortcuts dialog
 // localization
 // file type association / handler thing
-// show message if file load is slow
-// draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
-// flip/rotate? losslessly?
+// settings dialog in a thread so apply is instant (send new settings to main thread as a window message)
 //
 // command line parameters ?
 // -log_level
@@ -19,6 +17,11 @@
 //      scanner
 //      dragdrop
 //
+// MAYBE
+// draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
+// show message or progress indicator if file load is slow?
+// flip/rotate? losslessly?
+//
 //////////////////////////////////////////////////////////////////////
 // TO FIX
 //
@@ -30,7 +33,7 @@
 // all the leaks
 // error handling/reporting
 //
-// folder scanning broken after on_command_line from external
+// folder scanning broken after on_command_line from external?
 
 #include "pch.h"
 #include <dcomp.h>
@@ -600,9 +603,11 @@ namespace imageview::app
                         uint64 img_size;
                         if(SUCCEEDED(get_image_file_size(this_file, &img_size))) {
 
-                            if(img_size < settings.cache_size) {
+                            size_t cache_size = settings.cache_size_mb * 1048576;
 
-                                while(cache_in_use + img_size > settings.cache_size) {
+                            if(img_size < cache_size) {
+
+                                while(cache_in_use + img_size > cache_size) {
 
                                     image::image_file *loser = null;
                                     uint loser_diff = 0;
@@ -629,7 +634,7 @@ namespace imageview::app
                                 }
                             }
 
-                            if((cache_in_use + img_size) <= settings.cache_size) {
+                            if((cache_in_use + img_size) <= cache_size) {
 
                                 LOG_DEBUG("Caching {} at {}", this_file, y);
                                 image::image_file *cache_file = new image::image_file();
@@ -1790,9 +1795,9 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
-    void clear_mouse_button(int button)
+    void clear_mouse_button(mouse_button_t button)
     {
-        int mask = 1 << (int)button;
+        int mask = 1 << static_cast<int>(button);
         mouse_grab &= ~mask;
         if(mouse_grab == 0) {
             ReleaseCapture();
@@ -2194,7 +2199,7 @@ namespace imageview::app
 
         set_mouse_button(button);
 
-        if(button == settings.select_button) {
+        if(button == static_cast<uint>(settings.select_button)) {
 
             if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
 
@@ -2210,7 +2215,7 @@ namespace imageview::app
                 select_active = false;
             }
 
-        } else if(button == settings.zoom_button && !popup_menu_active) {
+        } else if(button == static_cast<uint>(settings.zoom_button) && !popup_menu_active) {
 
             ShowCursor(FALSE);
         }
@@ -2221,12 +2226,13 @@ namespace imageview::app
 
     void on_mouse_button_up(point_s pos, uint button)
     {
-        clear_mouse_button(button);
+        mouse_button_t btn = static_cast<mouse_button_t>(button);
+        clear_mouse_button(btn);
 
         // if RMB released within double-click time and haven't
         // moved it much since they pressed it, show popup menu
 
-        if(button == settings.drag_button) {
+        if(btn == settings.drag_button) {
 
             uint64 since = GetTickCount64() - mouse_click_timestamp[settings.drag_button];
 
@@ -2261,12 +2267,12 @@ namespace imageview::app
             }
         }
 
-        else if(button == settings.zoom_button) {
+        else if(btn == settings.zoom_button) {
 
             ShowCursor(TRUE);
             clear_mouse_button(settings.drag_button);    // in case they pressed the drag button while zooming
 
-        } else if(button == settings.select_button) {
+        } else if(btn == settings.select_button) {
 
             drag_selection = false;
 
@@ -3010,7 +3016,6 @@ namespace imageview::app
                     if(d.y < 0) {
                         s.y = -s.y;
                     }
-
                     select_current = add_point(s, select_anchor);
                 }
             }
@@ -3020,7 +3025,13 @@ namespace imageview::app
         // delay showing window until file is loaded (or 1/4 second, whichever comes first)
 
         if(frame_count > 0 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
-            SetWindowPlacement(window, &settings.window_placement);
+
+            if(settings.first_run) {
+                SetWindowPos(window, null, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW);
+                settings.first_run = false;
+            } else {
+                SetWindowPlacement(window, &settings.window_placement);
+            }
         }
 
         if(rendertarget_view.Get() != null) {
@@ -3252,11 +3263,6 @@ namespace imageview::app
 
             if(FAILED(create_resources())) {
                 // Hmmm
-            }
-
-            if(!settings.fullscreen) {
-
-                settings.first_run = false;
             }
 
             // recenter the 'middle' texel on the new size

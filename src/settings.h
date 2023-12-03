@@ -1,6 +1,26 @@
 #pragma once
 
-enum class fullscreen_startup_option : uint
+// YUCK
+// different setting types for different setting types
+// setup_controls adds dialog controls for the setting
+// update_controls sets the controls based on the current value
+
+//////////////////////////////////////////////////////////////////////
+// for declaring the fields in the struct
+
+#define DECL_SETTING_BOOL(name, string_id, default_value) bool name{ default_value };
+
+#define DECL_SETTING_COLOR(name, string_id, default_r, default_g, default_b, default_a) \
+    vec4 name{ default_r, default_g, default_b, default_a };
+
+#define DECL_SETTING_ENUM(enum_type, name, string_id, default_value) enum_type name{ default_value };
+
+#define DECL_SETTING_RANGED(ranged_type, name, string_id, default_value, min_value, max_value) \
+    ranged_type name{ default_value };
+
+#define DECL_SETTING_INTERNAL(setting_type, name, ...) setting_type name{ __VA_ARGS__ };
+
+enum fullscreen_startup_option : uint
 {
     start_windowed,      // start up windowed
     start_fullscreen,    // start up fullscreen
@@ -8,27 +28,38 @@ enum class fullscreen_startup_option : uint
 };
 
 // whether to remember the window position or not
-enum class window_position_option : uint
+enum window_position_option : uint
 {
     window_pos_remember,    // restore last window position
     window_pos_default      // reset window position to default each time
 };
 
 // how to show the filename overlay
-enum class show_filename_option : uint
+enum show_filename_option : uint
 {
-    always,
-    briefly,
-    never
+    show_filename_always,
+    show_filename_briefly,
+    show_filename_never
 };
 
 // what to do about exif rotation/flip data
-enum class exif_option : uint
+enum exif_option : uint
 {
-    ignore,    // always ignore it
-    apply,     // always apply it
-    prompt     // prompt if it's anything other than default 0 rotation
+    exif_option_ignore,    // always ignore it
+    exif_option_apply,     // always apply it
+    exif_option_prompt     // prompt if it's anything other than default 0 rotation
 };
+
+// what should zoom be at startup
+enum startup_zoom_mode : uint
+{
+    startup_zoom_one_to_one,
+    startup_zoom_fit_to_window,
+    startup_zoom_shrink_to_fit,
+    startup_zoom_remember
+};
+
+//////////////////////////////////////////////////////////////////////
 
 // what should reset_zoom do
 enum class zoom_mode_t : uint
@@ -38,15 +69,16 @@ enum class zoom_mode_t : uint
     shrink_to_fit
 };
 
-//////////////////////////////////////////////////////////////////////
-// mouse buttons
-
 enum mouse_button_t : int
 {
     btn_left = 0,
     btn_middle = 1,
     btn_right = 2,
     btn_count = 3
+};
+
+struct setting_descriptor_t
+{
 };
 
 // settings get serialized/deserialized to/from the registry
