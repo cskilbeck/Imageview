@@ -1565,7 +1565,7 @@ namespace imageview::app
 
     HRESULT do_folder_scan(char const *folder_path)
     {
-        LOG_CONTEXT("do_folder_scan");
+        LOG_CONTEXT("folder_scan");
 
         std::string path;
 
@@ -1626,7 +1626,7 @@ namespace imageview::app
 
     void scanner_function()
     {
-        LOG_CONTEXT("folder_scanner");
+        LOG_CONTEXT("folder_scan");
 
         bool quit = false;
         MSG msg;

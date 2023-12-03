@@ -2,7 +2,7 @@
 
 #include "pch.h"
 
-LOG_CONTEXT("settings_dialog");
+LOG_CONTEXT("settings_dlg");
 
 //////////////////////////////////////////////////////////////////////
 
@@ -295,6 +295,7 @@ namespace
                 return;
             }
             LOG_INFO("Copied 'About' text to clipboard");
+            SetWindowTextA(GetDlgItem(hwnd, IDC_BUTTON_ABOUT_COPY), "Copied");    //@localize
 
         } break;
         }
@@ -302,15 +303,29 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    int CALLBACK listview_compare(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
+    std::string get_item_text(HWND listview, LPARAM item)
     {
-        HWND listview = reinterpret_cast<HWND>(lParamSort);
-        char a[256];
-        char b[256];
-        ListView_GetItemText(listview, lParam1, 0, a, _countof(a));
-        ListView_GetItemText(listview, lParam2, 0, b, _countof(b));
-        return _strcmpi(a, b);
+        LVITEMA lvi;
+        memset(&lvi, 0, sizeof(lvi));
+        lvi.mask = LVIF_TEXT;
+
+        std::string s;
+
+        LRESULT len = 32;
+        LRESULT got;
+
+        do {
+            len *= 2;
+            s.resize(len);
+            lvi.cchTextMax = static_cast<int>(len);
+            lvi.pszText = s.data();
+            got = SendMessageA(listview, LVM_GETITEMTEXT, static_cast<WPARAM>(item), reinterpret_cast<LPARAM>(&lvi));
+        } while(got >= len - 1);
+
+        return s.substr(0, got);
     }
+
+    //////////////////////////////////////////////////////////////////////
 
     BOOL on_init_hotkeys_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
@@ -336,29 +351,40 @@ namespace
 
         std::set<uint> got_hotkey;
 
-        int index = 0;
+        // get all the hotkeys descriptions in order
+
+        std::map<std::string, uint> descriptions;
+
         for(auto const &a : hotkeys::hotkey_text) {
+            std::string action_text = localize(a.first);
+            descriptions[action_text] = a.first;
+        }
+
+        // populate the listview
+
+        int index = 0;
+        for(auto const &a : descriptions) {
 
             // there should be a string corresponding to the command id
-            std::string action_text = localize(a.first);
-            std::string key_text = a.second;
+            std::string action_text = localize(a.second);
+            std::string key_text;
+            if(hotkeys::get_hotkey_text(a.second, key_text) == S_OK) {
+                LVITEMA item;
+                memset(&item, 0, sizeof(item));
+                item.mask = LVIF_TEXT;
+                item.iItem = index;
+                item.iSubItem = 0;
+                item.pszText = action_text.data();
+                ListView_InsertItem(listview, &item);
+                index += 1;
 
-            LVITEMA item;
-            memset(&item, 0, sizeof(item));
-            item.mask = LVIF_TEXT | LVIF_PARAM;
-            item.iItem = index;
-            item.iSubItem = 0;
-            item.pszText = action_text.data();
-            item.lParam = index;
-            ListView_InsertItem(listview, &item);
-            index += 1;
-
-            item.mask = LVIF_TEXT;
-            item.iSubItem = 1;
-            item.pszText = key_text.data();
-            ListView_SetItem(listview, &item);
+                item.mask = LVIF_TEXT;
+                item.iSubItem = 1;
+                item.pszText = key_text.data();
+                ListView_SetItem(listview, &item);
+            }
         }
-        ListView_SortItems(listview, listview_compare, reinterpret_cast<LPARAM>(listview));
+
         return false;
     }
 
