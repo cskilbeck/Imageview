@@ -29,9 +29,6 @@ namespace imageview
 
     HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
 
-    HRESULT get_accelerator_hotkey_text(uint id, std::vector<ACCEL> const &accel_table, HKL layout, std::string &text);
-    HRESULT copy_accelerator_table(HACCEL h, std::vector<ACCEL> &table);
-
     HRESULT get_is_process_elevated(bool &is_elevated);
     float get_window_dpi(HWND w);
     std::string const &localize(uint64 id);

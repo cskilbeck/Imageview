@@ -74,7 +74,6 @@ namespace
             LOG_ERROR("!? Tab {} is out of range (there are {} tabs)", tab, active_tabs.size());
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
-        LOG_DEBUG("HIDE {}, SHOW {}", current_page, tab);
         if(current_page != -1) {
             ShowWindow(active_tabs[current_page]->hwnd, SW_HIDE);
         }
@@ -245,6 +244,16 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    int CALLBACK listview_compare(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
+    {
+        HWND listview = reinterpret_cast<HWND>(lParamSort);
+        char a[256];
+        char b[256];
+        ListView_GetItemText(listview, lParam1, 0, a, _countof(a));
+        ListView_GetItemText(listview, lParam2, 0, b, _countof(b));
+        return _strcmpi(a, b);
+    }
+
     BOOL on_init_hotkeys_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
@@ -267,40 +276,31 @@ namespace
         ListView_SetExtendedListViewStyle(listview, LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT | LVS_EX_FLATSB);
         ListView_SetView(listview, LV_VIEW_DETAILS);
 
-        HACCEL accelerator_table = LoadAccelerators(GetModuleHandle(null), MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK));
-
-        std::vector<ACCEL> accelerators;
-        copy_accelerator_table(accelerator_table, accelerators);
-
-        HKL layout = GetKeyboardLayout(GetCurrentThreadId());
-
-        LVITEMA item;
-        memset(&item, 0, sizeof(item));
-        item.mask = LVIF_TEXT;
+        std::set<uint> got_hotkey;
 
         int index = 0;
-        for(auto const &a : accelerators) {
+        for(auto const &a : hotkeys::hotkey_text) {
 
             // there should be a string corresponding to the command id
-            std::string action_text = localize(a.cmd);
+            std::string action_text = localize(a.first);
+            std::string key_text = a.second;
 
-            std::string key_text;
-            get_accelerator_hotkey_text(a.cmd, accelerators, layout, key_text);
+            LVITEMA item;
+            memset(&item, 0, sizeof(item));
+            item.mask = LVIF_TEXT | LVIF_PARAM;
+            item.iItem = index;
+            item.iSubItem = 0;
+            item.pszText = action_text.data();
+            item.lParam = index;
+            ListView_InsertItem(listview, &item);
+            index += 1;
 
-            if(!(action_text.empty() || key_text.empty())) {
-
-                LOG_DEBUG("{}: {}", action_text, key_text);
-
-                item.iItem = index++;
-                item.iSubItem = 0;
-                item.pszText = action_text.data();
-                ListView_InsertItem(listview, &item);
-
-                item.iSubItem = 1;
-                item.pszText = key_text.data();
-                ListView_SetItem(listview, &item);
-            }
+            item.mask = LVIF_TEXT;
+            item.iSubItem = 1;
+            item.pszText = key_text.data();
+            ListView_SetItem(listview, &item);
         }
+        ListView_SortItems(listview, listview_compare, reinterpret_cast<LPARAM>(listview));
         return false;
     }
 
@@ -478,7 +478,7 @@ namespace
         }
     }
 
-    //#pragma warning(disable : 4100)
+//#pragma warning(disable : 4100)
 #pragma warning(pop)
 
     //////////////////////////////////////////////////////////////////////

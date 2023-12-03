@@ -122,7 +122,7 @@ DECL_SETTING(WINDOWPLACEMENT, window_placement, sizeof(WINDOWPLACEMENT));
 
 // last fullscreen rect
 
-DECL_SETTING(rect, fullscreen_rect, 0, 0, 0, 0);
+DECL_SETTING(imageview::rect, fullscreen_rect, 0, 0, 0, 0);
 
 // show either just filename or full path in window titlebar
 

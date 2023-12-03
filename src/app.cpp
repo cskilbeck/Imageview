@@ -61,17 +61,6 @@ LOG_CONTEXT("app");
 namespace
 {
     //////////////////////////////////////////////////////////////////////
-    // mouse buttons
-
-    enum mouse_button_t : int
-    {
-        btn_left = 0,
-        btn_middle = 1,
-        btn_right = 2,
-        btn_count = 3
-    };
-
-    //////////////////////////////////////////////////////////////////////
     // WM_USER messages for main window
 
     enum user_message_t : uint
@@ -155,44 +144,6 @@ namespace imageview::app
         sel_hover_top = 4,
         sel_hover_bottom = 8,
         sel_hover_outside = 0x80000000
-    };
-
-    // what should reset_zoom do
-    enum class zoom_mode_t : uint
-    {
-        one_to_one,
-        fit_to_window,
-        shrink_to_fit
-    };
-
-    enum class fullscreen_startup_option : uint
-    {
-        start_windowed,      // start up windowed
-        start_fullscreen,    // start up fullscreen
-        start_remember    // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
-    };
-
-    // whether to remember the window position or not
-    enum class window_position_option : uint
-    {
-        window_pos_remember,    // restore last window position
-        window_pos_default      // reset window position to default each time
-    };
-
-    // how to show the filename overlay
-    enum class show_filename_option : uint
-    {
-        always,
-        briefly,
-        never
-    };
-
-    // what to do about exif rotation/flip data
-    enum class exif_option : uint
-    {
-        ignore,    // always ignore it
-        apply,     // always apply it
-        prompt     // prompt if it's anything other than default 0 rotation
     };
 
     enum class shift_snap_axis_t
@@ -292,8 +243,6 @@ namespace imageview::app
     bool is_elevated{ false };
 
     ComPtr<ID3D11Debug> d3d_debug;
-
-    HACCEL accelerators{ null };
 
     FileDropper file_dropper;
 
@@ -515,36 +464,6 @@ namespace imageview::app
     int frame_count{ 0 };
 
     DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
-
-    // settings get serialized/deserialized to/from the registry
-    struct settings_t
-    {
-        // use a header so we can implement the serializer more easily
-#define DECL_SETTING(type, name, ...) type name{ __VA_ARGS__ };
-#include "settings_fields.h"
-
-        HRESULT save();
-        HRESULT load();
-
-        // where in the registry to put the settings. this does not need to be localized... right?
-        static char constexpr settings_key_name[] = "Software\\ImageView";
-
-        enum class serialize_action
-        {
-            save,
-            load
-        };
-
-        HRESULT serialize(serialize_action action, char const *save_key_name);
-
-        // write or read a settings field to or from the registry - helper for serialize()
-        HRESULT serialize_setting(
-            settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size);
-    };
-
-    settings_t settings;
-
-    settings_t default_settings;
 
     // file/image cache admin
 
@@ -877,71 +796,6 @@ namespace imageview::app
     template <typename T> T dpi_unscale(T x)
     {
         return (T)((x * 96.0f) / dpi);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // save or load a setting
-
-    HRESULT settings_t::serialize_setting(
-        settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size)
-    {
-        switch(action) {
-
-        case settings_t::serialize_action::save: {
-            HKEY key;
-            CHK_HR(RegCreateKeyExA(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_WRITE, null, &key, null));
-            DEFER(RegCloseKey(key));
-            CHK_HR(RegSetValueExA(key, name, 0, REG_BINARY, var, size));
-        } break;
-
-        case settings_t::serialize_action::load: {
-            HKEY key;
-            CHK_HR(
-                RegCreateKeyExA(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_READ | KEY_QUERY_VALUE, null, &key, null));
-            DEFER(RegCloseKey(key));
-            DWORD cbsize = 0;
-            if(FAILED(RegQueryValueExA(key, name, null, null, null, &cbsize)) || cbsize != size) {
-                return S_FALSE;
-            }
-            CHK_HR(RegGetValue(
-                HKEY_CURRENT_USER, key_name, name, RRF_RT_REG_BINARY, null, reinterpret_cast<DWORD *>(var), &cbsize));
-        } break;
-        }
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // save or load all the settings
-
-    HRESULT settings_t::serialize(serialize_action action, char const *save_key_name)
-    {
-        if(save_key_name == null) {
-            return E_INVALIDARG;
-        }
-
-#undef DECL_SETTING
-#define DECL_SETTING(type, name, ...) \
-    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
-#include "settings_fields.h"
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // load the settings
-
-    HRESULT settings_t::load()
-    {
-        return serialize(serialize_action::load, settings_key_name);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // save the settings
-
-    HRESULT settings_t::save()
-    {
-        return serialize(serialize_action::save, settings_key_name);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2215,24 +2069,46 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
+    // WM_[L/M/R]BUTTONDOWN]
 
-    HRESULT load_accelerators()
+    void on_mouse_button_down(point_s pos, uint button)
     {
-        CHK_NULL(accelerators = LoadAccelerators(GetModuleHandle(null), MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
-        return S_OK;
+        assert(button < btn_count);
+
+        mouse_click_timestamp[button] = GetTickCount64();
+        mouse_click[button] = pos;
+        mouse_pos[button] = pos;
+        memset(mouse_offset + button, 0, sizeof(point_s));
+
+        set_mouse_button(button);
+
+        if(button == settings.select_button) {
+
+            if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
+
+                // texel they were on when they grabbed the selection
+                drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
+                drag_selection = true;
+            }
+
+            if(!drag_selection) {
+
+                select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
+                select_current = select_anchor;
+                select_active = false;
+            }
+
+        } else if(button == settings.zoom_button && !popup_menu_active) {
+
+            ShowCursor(FALSE);
+        }
     }
 
     //////////////////////////////////////////////////////////////////////
-    // Setup the shortcut key labels in a menu based in the accelerators
+    // Setup the shortcut key labels in the popup menu based on the accelerators
 
     HRESULT setup_menu_accelerators(HMENU menu)
     {
-        HKL keyboard_layout = GetKeyboardLayout(GetCurrentThreadId());
-        CHK_NULL(keyboard_layout);
-
-        std::vector<ACCEL> accel_table;
-        CHK_HR(copy_accelerator_table(accelerators, accel_table));
-
         // admin for enabling/disabling menu items based on app state
 
         auto got_selection = []() -> uint { return current_file != null && select_active ? 0 : MFS_DISABLED; };
@@ -2284,6 +2160,7 @@ namespace imageview::app
             for(int i = 0; i < item_count; ++i) {
 
                 MENUITEMINFOA mii;
+                memset(&mii, 0, sizeof(mii));
                 mii.cbSize = sizeof(mii);
                 mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
 
@@ -2294,37 +2171,40 @@ namespace imageview::app
                         menu_stack.push(mii.hSubMenu);
                     }
 
-                    // else setup the menu item string
+                    // else setup the menu item
                     else if(mii.fType == MFT_STRING) {
 
+                        // get the menu item text
+                        mii.fMask = MIIM_STRING;
+                        mii.dwItemData = 0;
+                        mii.dwTypeData = null;
+                        mii.cch = 0;
+                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        mii.cch += 1;
                         std::string text;
-                        text.resize(static_cast<size_t>(mii.cbSize) + 1);
-                        mii.fMask = MIIM_STRING | MIIM_STATE;
+                        text.resize(mii.cch);
+                        mii.fMask = MIIM_STRING;
                         mii.dwItemData = 0;
                         mii.dwTypeData = text.data();
-                        mii.cch = static_cast<uint>(text.size());
-
                         CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        text.pop_back();
+                        text = text.substr(0, text.find('\t'));    // truncate if there's already a tab
 
-                        mii.fState = 0;
+                        // append hotkeys to string
+                        std::string key_label;
+                        if(hotkeys::get_hotkey_text(mii.wID, key_label) == S_OK) {
+                            text = std::format("{}\t{}", text, key_label);
+                        }
 
+                        // callback sets enabled/disabled
+                        mii.fState = MF_ENABLED;    // which is 0
                         auto process_fn = menu_process_table.find(mii.wID);
                         if(process_fn != menu_process_table.end()) {
                             mii.fState |= process_fn->second();
                         }
 
-                        // truncate if there's already a tab
-                        text = text.substr(0, text.find('\t'));
-
-                        // get string for hotkeys
-
-                        std::string key_label;
-
-                        CHK_HR(get_accelerator_hotkey_text(mii.wID, accel_table, keyboard_layout, key_label));
-
-                        text = std::format("{}\t{}", text, key_label);
-
-                        // set the menu item text and state
+                        // set the text and state
+                        mii.fMask = MIIM_STRING | MIIM_STATE;
                         mii.dwTypeData = text.data();
                         mii.cch = static_cast<uint>(text.size());
 
@@ -2334,42 +2214,6 @@ namespace imageview::app
             }
         }
         return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // WM_[L/M/R]BUTTONDOWN]
-
-    void on_mouse_button_down(point_s pos, uint button)
-    {
-        assert(button < btn_count);
-
-        mouse_click_timestamp[button] = GetTickCount64();
-        mouse_click[button] = pos;
-        mouse_pos[button] = pos;
-        memset(mouse_offset + button, 0, sizeof(point_s));
-
-        set_mouse_button(button);
-
-        if(button == settings.select_button) {
-
-            if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
-
-                // texel they were on when they grabbed the selection
-                drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
-                drag_selection = true;
-            }
-
-            if(!drag_selection) {
-
-                select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
-                select_current = select_anchor;
-                select_active = false;
-            }
-
-        } else if(button == settings.zoom_button && !popup_menu_active) {
-
-            ShowCursor(FALSE);
-        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3815,7 +3659,7 @@ namespace imageview::app
 
     LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
-#if defined(_DEBUG)
+#if defined(_DEBUG) && 0
         switch(message) {
         case WM_INPUT:
         // case WM_SETCURSOR:
@@ -3889,7 +3733,6 @@ namespace imageview::app
 
     HRESULT main()
     {
-        LOG_DEBUG(L"HELLO?");
         // check for required CPU support (for DirectXMath SIMD)
 
         if(!XMVerifyCPUSupport()) {
@@ -4017,13 +3860,13 @@ namespace imageview::app
 
         // pump messages
 
-        CHK_HR(load_accelerators());
+        CHK_HR(hotkeys::load());
 
         MSG msg{ 0 };
 
         do {
             if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
-                if(!TranslateAccelerator(window, accelerators, &msg)) {
+                if(!TranslateAccelerator(window, hotkeys::accelerators, &msg)) {
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }

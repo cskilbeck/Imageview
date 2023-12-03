@@ -132,5 +132,7 @@ using Microsoft::WRL::ComPtr;
 #include "timer.h"
 #include "thread_pool.h"
 #include "image.h"
+#include "settings.h"
+#include "hotkeys.h"
 #include "settings_dialog.h"
 #include "app.h"

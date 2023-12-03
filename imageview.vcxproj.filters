@@ -76,6 +76,12 @@
     <ClInclude Include="src\rect.h">
       <Filter>4_include</Filter>
     </ClInclude>
+    <ClInclude Include="src\hotkeys.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\settings.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -112,6 +118,12 @@
       <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\settings_dialog.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hotkeys.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\settings.cpp">
       <Filter>3_src</Filter>
     </ClCompile>
   </ItemGroup>
