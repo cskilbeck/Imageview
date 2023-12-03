@@ -12,6 +12,7 @@
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "uuid.lib")
 #pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "UxTheme.lib")
 #pragma comment(lib, "Mfplat.lib")
 #pragma comment(lib, "WinHTTP.lib")
 #pragma comment(lib, "Comctl32.lib")
