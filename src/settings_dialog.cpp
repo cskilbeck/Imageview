@@ -238,8 +238,66 @@ namespace
         SendMessage(about, EM_SETREADONLY, 1, 0);
         std::string version{ "Version?" };
         get_app_version(version);
-        SetWindowTextA(about, std::format("ImageView\r\nVersion {}\r\nBuilt {}", version, __TIMESTAMP__).c_str());
+        SetWindowTextA(about,
+                       std::format("ImageView V{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
+                                   version,
+                                   __TIMESTAMP__,
+                                   app::is_elevated,
+                                   app::system_memory_gb)
+                           .c_str());
         return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void on_command_about_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+
+        case IDC_BUTTON_ABOUT_COPY: {
+            HWND edit_control = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
+
+            SetLastError(0);
+            int len = GetWindowTextLengthA(edit_control);
+            if(len == 0) {
+                LOG_ERROR("Can't GetWindowTextLength for clipboard: {}", windows_error_message());
+                return;
+            }
+            HANDLE handle = GlobalAlloc(GHND | GMEM_SHARE, static_cast<size_t>(len) + 1);
+            if(handle == null) {
+                LOG_ERROR("Can't alloc {} for clipboard: {}", len, windows_error_message());
+                return;
+            }
+            char *buffer = reinterpret_cast<char *>(GlobalLock(handle));
+            if(buffer == null) {
+                LOG_ERROR("Can't lock buffer clipboard: {}", windows_error_message());
+                return;
+            }
+
+            if(GetWindowTextA(edit_control, buffer, len + 1) == 0) {
+                LOG_ERROR("Can't GetWindowText for clipboard: {}", windows_error_message());
+                return;
+            }
+
+            if(!OpenClipboard(null)) {
+                LOG_ERROR("Can't open clipboard: {}", windows_error_message());
+                return;
+            }
+            DEFER(CloseClipboard());
+
+            if(!EmptyClipboard()) {
+                LOG_ERROR("Can't empty clipboard: {}", windows_error_message());
+                return;
+            }
+
+            if(!SetClipboardData(CF_TEXT, handle)) {
+                LOG_ERROR("Can't SetClipboardData clipboard: {}", windows_error_message());
+                return;
+            }
+            LOG_INFO("Copied 'About' text to clipboard");
+
+        } break;
+        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -534,6 +592,7 @@ namespace
             HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color);
             HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color);
             HANDLE_MSG(dlg, WM_INITDIALOG, on_init_about_handler);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_about_handler);
         }
         return 0;
     }

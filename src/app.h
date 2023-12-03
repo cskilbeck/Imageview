@@ -12,6 +12,11 @@ namespace imageview::app
     extern bool is_elevated;
 
     //////////////////////////////////////////////////////////////////////
+    // how much ram
+
+    extern uint64 system_memory_gb;
+
+    //////////////////////////////////////////////////////////////////////
     // return this from settings dialog to relaunch as admin
 
     static constexpr LRESULT LRESULT_LAUNCH_AS_ADMIN = 0x29034893;

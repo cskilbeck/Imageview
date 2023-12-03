@@ -17,7 +17,6 @@
 //      d2d
 //      cache
 //      scanner
-//      settings
 //      dragdrop
 //
 //////////////////////////////////////////////////////////////////////
@@ -241,6 +240,7 @@ namespace imageview::app
     LPCSTR window_class = "ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
     bool is_elevated{ false };
+    uint64 system_memory_gb;
 
     ComPtr<ID3D11Debug> d3d_debug;
 
@@ -1951,6 +1951,118 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
+    // Setup the shortcut key labels in the popup menu based on the accelerators
+
+    HRESULT setup_menu_accelerators(HMENU menu)
+    {
+        // admin for enabling/disabling menu items based on app state
+
+        auto got_selection = []() -> uint { return current_file != null && select_active ? 0 : MFS_DISABLED; };
+
+        auto got_image = []() -> uint { return current_file != null ? 0 : MFS_DISABLED; };
+
+        auto check_alpha = []() -> uint { return settings.grid_enabled ? MFS_CHECKED : 0; };
+
+        auto check_fullscreen = []() -> uint { return settings.fullscreen ? MFS_CHECKED : 0; };
+
+        auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
+
+        // clang-format off
+        std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
+            { ID_COPY, got_selection },
+            { ID_SELECT_ALL, got_image },
+            { ID_SELECT_NONE, got_image },
+            { ID_SELECT_CROP, got_selection },
+            { ID_FILE_SAVE, got_image },
+            { ID_FILE_NEXT, got_image },
+            { ID_FILE_PREV, got_image },
+            { ID_VIEW_ALPHA, check_alpha },
+            { ID_VIEW_FULLSCREEN, check_fullscreen },
+            { ID_VIEW_FIXEDGRID, check_fixedgrid },
+            { ID_ZOOM_1, got_image },
+            { ID_ZOOM_ALL, got_image },
+            { ID_ZOOM_CENTER, got_image },
+            { ID_ZOOM_FIT, got_image },
+            { ID_ZOOM_SHRINKTOFIT, got_image },
+            { ID_ZOOM_ORIGINAL, got_image },
+            { ID_ZOOM_RESET, got_image },
+            { ID_ZOOM_SELECTION, got_image },
+        };
+        // clang-format on
+
+        // scan the menu to enable/disable, add/remove checks and add hotkey info
+
+        std::stack<HMENU> menu_stack;
+
+        menu_stack.push(menu);
+
+        while(!menu_stack.empty()) {
+
+            HMENU cur_menu = menu_stack.top();
+            menu_stack.pop();
+
+            int item_count = GetMenuItemCount(cur_menu);
+
+            for(int i = 0; i < item_count; ++i) {
+
+                MENUITEMINFOA mii;
+                memset(&mii, 0, sizeof(mii));
+                mii.cbSize = sizeof(mii);
+                mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
+
+                if(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii)) {
+
+                    // if it's a sub menu, just push it
+                    if(mii.hSubMenu != null) {
+                        menu_stack.push(mii.hSubMenu);
+                    }
+
+                    // else setup the menu item
+                    else if(mii.fType == MFT_STRING) {
+
+                        // get the menu item text
+                        mii.fMask = MIIM_STRING;
+                        mii.dwItemData = 0;
+                        mii.dwTypeData = null;
+                        mii.cch = 0;
+                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        mii.cch += 1;
+                        std::string text;
+                        text.resize(mii.cch);
+                        mii.fMask = MIIM_STRING;
+                        mii.dwItemData = 0;
+                        mii.dwTypeData = text.data();
+                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        text.pop_back();
+                        text = text.substr(0, text.find('\t'));    // truncate if there's already a tab
+
+                        // append hotkeys to string
+                        std::string key_label;
+                        if(hotkeys::get_hotkey_text(mii.wID, key_label) == S_OK) {
+                            text = std::format("{}\t{}", text, key_label);
+                        }
+
+                        // callback sets enabled/disabled
+                        mii.fState = MF_ENABLED;    // which is 0
+                        auto process_fn = menu_process_table.find(mii.wID);
+                        if(process_fn != menu_process_table.end()) {
+                            mii.fState |= process_fn->second();
+                        }
+
+                        // set the text and state
+                        mii.fMask = MIIM_STRING | MIIM_STATE;
+                        mii.dwTypeData = text.data();
+                        mii.cch = static_cast<uint>(text.size());
+
+                        CHK_BOOL(SetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                    }
+                }
+            }
+        }
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // toggle between normal window and fake fullscreen
 
     void toggle_fullscreen()
@@ -2102,118 +2214,6 @@ namespace imageview::app
 
             ShowCursor(FALSE);
         }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // Setup the shortcut key labels in the popup menu based on the accelerators
-
-    HRESULT setup_menu_accelerators(HMENU menu)
-    {
-        // admin for enabling/disabling menu items based on app state
-
-        auto got_selection = []() -> uint { return current_file != null && select_active ? 0 : MFS_DISABLED; };
-
-        auto got_image = []() -> uint { return current_file != null ? 0 : MFS_DISABLED; };
-
-        auto check_alpha = []() -> uint { return settings.grid_enabled ? MFS_CHECKED : 0; };
-
-        auto check_fullscreen = []() -> uint { return settings.fullscreen ? MFS_CHECKED : 0; };
-
-        auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
-
-        // clang-format off
-        std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
-            { ID_COPY, got_selection },
-            { ID_SELECT_ALL, got_image },
-            { ID_SELECT_NONE, got_image },
-            { ID_SELECT_CROP, got_selection },
-            { ID_FILE_SAVE, got_image },
-            { ID_FILE_NEXT, got_image },
-            { ID_FILE_PREV, got_image },
-            { ID_VIEW_ALPHA, check_alpha },
-            { ID_VIEW_FULLSCREEN, check_fullscreen },
-            { ID_VIEW_FIXEDGRID, check_fixedgrid },
-            { ID_ZOOM_1, got_image },
-            { ID_ZOOM_ALL, got_image },
-            { ID_ZOOM_CENTER, got_image },
-            { ID_ZOOM_FIT, got_image },
-            { ID_ZOOM_SHRINKTOFIT, got_image },
-            { ID_ZOOM_ORIGINAL, got_image },
-            { ID_ZOOM_RESET, got_image },
-            { ID_ZOOM_SELECTION, got_image },
-        };
-        // clang-format on
-
-        // scan the menu to enable/disable, add/remove checks and add hotkey info
-
-        std::stack<HMENU> menu_stack;
-
-        menu_stack.push(menu);
-
-        while(!menu_stack.empty()) {
-
-            HMENU cur_menu = menu_stack.top();
-            menu_stack.pop();
-
-            int item_count = GetMenuItemCount(cur_menu);
-
-            for(int i = 0; i < item_count; ++i) {
-
-                MENUITEMINFOA mii;
-                memset(&mii, 0, sizeof(mii));
-                mii.cbSize = sizeof(mii);
-                mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
-
-                if(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii)) {
-
-                    // if it's a sub menu, just push it
-                    if(mii.hSubMenu != null) {
-                        menu_stack.push(mii.hSubMenu);
-                    }
-
-                    // else setup the menu item
-                    else if(mii.fType == MFT_STRING) {
-
-                        // get the menu item text
-                        mii.fMask = MIIM_STRING;
-                        mii.dwItemData = 0;
-                        mii.dwTypeData = null;
-                        mii.cch = 0;
-                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
-                        mii.cch += 1;
-                        std::string text;
-                        text.resize(mii.cch);
-                        mii.fMask = MIIM_STRING;
-                        mii.dwItemData = 0;
-                        mii.dwTypeData = text.data();
-                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
-                        text.pop_back();
-                        text = text.substr(0, text.find('\t'));    // truncate if there's already a tab
-
-                        // append hotkeys to string
-                        std::string key_label;
-                        if(hotkeys::get_hotkey_text(mii.wID, key_label) == S_OK) {
-                            text = std::format("{}\t{}", text, key_label);
-                        }
-
-                        // callback sets enabled/disabled
-                        mii.fState = MF_ENABLED;    // which is 0
-                        auto process_fn = menu_process_table.find(mii.wID);
-                        if(process_fn != menu_process_table.end()) {
-                            mii.fState |= process_fn->second();
-                        }
-
-                        // set the text and state
-                        mii.fMask = MIIM_STRING | MIIM_STATE;
-                        mii.dwTypeData = text.data();
-                        mii.cch = static_cast<uint>(text.size());
-
-                        CHK_BOOL(SetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
-                    }
-                }
-            }
-        }
-        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2446,8 +2446,6 @@ namespace imageview::app
             drag_selection = false;
         }
     }
-
-    //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
 
@@ -3035,73 +3033,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // WM_ACTIVATEAPP
-
-    void on_activated()
-    {
-        snap_mode = snap_mode_t::none;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // WM_ACTIVATEAPP
-
-    void on_deactivated()
-    {
-        mouse_grab = 0;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // App is being power-resumed (or returning from minimize).
-
-    void on_resuming()
-    {
-        m_timer.reset();
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // WM_NCCALCSIZE happens before any visual update to the window so resize
-    // backbuffer before any drawing to avoid flicker
-
-    HRESULT on_window_size_changing(int width, int height)
-    {
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(wp);
-        GetWindowPlacement(window, &wp);
-
-        if(wp.showCmd == SW_SHOWMINIMIZED || wp.showCmd == SW_MINIMIZE) {
-            return S_OK;
-        }
-
-        window_width = std::max(width, 1);
-        window_height = std::max(height, 1);
-        CHK_HR(create_resources());
-
-        if(!settings.fullscreen) {
-
-            settings.first_run = false;
-        }
-
-        // recenter the 'middle' texel on the new size
-        // i.e. the texel in the middle of the window
-        // this is ok if [0 <= texel < texture_size]
-        // because there will actually be a texel there
-        // but not so great otherwise... hmmm
-        current_rect.x = window_width / 2.0f - (old_window_width / 2.0f - current_rect.x);
-        current_rect.y = window_height / 2.0f - (old_window_height / 2.0f - current_rect.y);
-
-        target_rect = current_rect;
-
-        old_window_width = window_width;
-        old_window_height = window_height;
-
-        if(!has_been_zoomed_or_dragged) {
-            reset_zoom(last_zoom_mode);
-            current_rect = target_rect;
-        }
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // adding UNREFERENCED_PARAMETER for every one of these warnings
     // in all the message handlers would be unwieldy, not worth it
 
@@ -3289,9 +3220,9 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // resize backbuffer before window size actually changes to avoid
-    // flickering at the borders when resizing
-
+    // WM_NCCALCSIZE happens before any visual update to the window so resize
+    // backbuffer before any drawing to avoid flicker
+    //
     // BUT minimize/maximize...
 
     UINT OnNCCalcSize(HWND hwnd, BOOL fCalcValidRects, NCCALCSIZE_PARAMS *lpcsp)
@@ -3305,7 +3236,46 @@ namespace imageview::app
         // if starting window maximized, ignore the first wm_nccalcsize, it's got bogus dimensions
 
         if(!(frame_count == 0 && settings.window_placement.showCmd == SW_SHOWMAXIMIZED)) {
-            on_window_size_changing(new_client_rect.w(), new_client_rect.h());
+
+            int width = new_client_rect.w();
+            int height = new_client_rect.h();
+            WINDOWPLACEMENT wp;
+            wp.length = sizeof(wp);
+            GetWindowPlacement(window, &wp);
+
+            if(wp.showCmd == SW_SHOWMINIMIZED || wp.showCmd == SW_MINIMIZE) {
+                return S_OK;
+            }
+
+            window_width = std::max(width, 1);
+            window_height = std::max(height, 1);
+
+            if(FAILED(create_resources())) {
+                // Hmmm
+            }
+
+            if(!settings.fullscreen) {
+
+                settings.first_run = false;
+            }
+
+            // recenter the 'middle' texel on the new size
+            // i.e. the texel in the middle of the window
+            // this is ok if [0 <= texel < texture_size]
+            // because there will actually be a texel there
+            // but not so great otherwise... hmmm
+            current_rect.x = window_width / 2.0f - (old_window_width / 2.0f - current_rect.x);
+            current_rect.y = window_height / 2.0f - (old_window_height / 2.0f - current_rect.y);
+
+            target_rect = current_rect;
+
+            old_window_width = window_width;
+            old_window_height = window_height;
+
+            if(!has_been_zoomed_or_dragged) {
+                reset_zoom(last_zoom_mode);
+                current_rect = target_rect;
+            }
         }
         return 0;
     }
@@ -3379,7 +3349,7 @@ namespace imageview::app
             if(s_minimized) {
                 s_minimized = false;
                 if(s_in_suspend) {
-                    on_resuming();
+                    m_timer.reset();
                 }
                 s_in_suspend = false;
             }
@@ -3530,9 +3500,9 @@ namespace imageview::app
     void OnActivateApp(HWND hwnd, BOOL fActivate, DWORD dwThreadId)
     {
         if(fActivate) {
-            on_activated();
+            snap_mode = snap_mode_t::none;
         } else {
-            on_deactivated();
+            mouse_grab = 0;
         }
     }
 
@@ -3617,7 +3587,7 @@ namespace imageview::app
         case PBT_APMRESUMESUSPEND:
             if(!s_minimized) {
                 if(s_in_suspend) {
-                    on_resuming();
+                    m_timer.reset();
                 }
                 s_in_suspend = false;
             }
@@ -3795,7 +3765,9 @@ namespace imageview::app
 
         CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
 
-        LOG_INFO("System has {}GB of memory", system_memory_size_kb / 1048576);
+        system_memory_gb = system_memory_size_kb / 1048576;
+
+        LOG_INFO("System has {}GB of memory", system_memory_gb);
 
         // load/create/init some things
 
