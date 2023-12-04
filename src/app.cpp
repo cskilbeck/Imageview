@@ -25,9 +25,11 @@
 //////////////////////////////////////////////////////////////////////
 // TO FIX
 //
+// alt key problem freezes window every other time you press it
 // colorspace wrong in png or heif (they're different, either way)
 // colorspace error when decoding heif
 // handle SRGB / premultiplied alpha correctly in image decoder
+// HDR (requires windows version?)
 //
 // the cache
 // all the leaks
@@ -525,6 +527,55 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
+    rect center_rect_on_default_monitor(rect const &r)
+    {
+        int sw = GetSystemMetrics(SM_CXSCREEN);
+        int sh = GetSystemMetrics(SM_CYSCREEN);
+        int ww = r.w();
+        int wh = r.h();
+        rect rc;
+        rc.left = (sw - ww) / 2;
+        rc.top = (sh - wh) / 2;
+        rc.right = rc.left + ww;
+        rc.bottom = rc.top + wh;
+        return rc;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // append helps because then we can prepend a BITMAPFILEHEADER
+    // when we're loading the clipboard and pretend it's a file
+
+    HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
+    {
+        CHK_BOOL(OpenClipboard(null));
+
+        DEFER(CloseClipboard());
+
+        HANDLE c = GetClipboardData(format);
+        if(c == null) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        void *data = GlobalLock(c);
+        if(data == null) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        DEFER(GlobalUnlock(c));
+
+        size_t size = GlobalSize(c);
+        if(size == 0) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        size_t existing = buffer.size();
+        buffer.resize(size + existing);
+        memcpy(buffer.data() + existing, data, size);
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     HRESULT get_image_file_size(std::string const &filename, uint64 *size)
     {
         if(size == null || filename.empty()) {
@@ -572,7 +623,7 @@ namespace imageview::app
                 // let the window know, either way, that the file load attempt is complete, failed or
                 // otherwise
                 WaitForSingleObject(window_created_event, INFINITE);
-                PostMessage(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
+                PostMessageA(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
             },
             loader);
     }
@@ -769,7 +820,7 @@ namespace imageview::app
             char *fullpath_buffer = new char[fullpath.size() + 1];
             memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(char));
 
-            PostThreadMessage(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
+            PostThreadMessageA(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
         }
         return S_OK;
     }
@@ -896,8 +947,7 @@ namespace imageview::app
         }
 
         BITMAPV5HEADER *bmiv5 = reinterpret_cast<BITMAPV5HEADER *>(dibv5_buffer);
-
-        memset(bmiv5, 0, sizeof(BITMAPV5HEADER));
+        mem_clear(bmiv5);
         bmiv5->bV5Size = sizeof(BITMAPV5HEADER);
         bmiv5->bV5Width = w;
         bmiv5->bV5Height = -h;
@@ -955,7 +1005,7 @@ namespace imageview::app
 
         BITMAPINFOHEADER *bmi = reinterpret_cast<BITMAPINFOHEADER *>(dib_buffer);
 
-        memset(bmi, 0, sizeof(BITMAPINFOHEADER));
+        mem_clear(bmi);
         bmi->biSize = sizeof(BITMAPINFOHEADER);
         bmi->biBitCount = 24;
         bmi->biCompression = BI_RGB;
@@ -1529,7 +1579,7 @@ namespace imageview::app
 
             BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(f.bytes.data());
             BITMAPINFOHEADER *i = reinterpret_cast<BITMAPINFOHEADER *>(b + 1);
-            memset(b, 0, sizeof(*b));
+            mem_clear(b);
             b->bfType = 'MB';
             b->bfSize = (DWORD)f.bytes.size();
             b->bfOffBits = sizeof(BITMAPINFOHEADER) + sizeof(BITMAPFILEHEADER);
@@ -1962,18 +2012,18 @@ namespace imageview::app
     {
         // admin for enabling/disabling menu items based on app state
 
-        auto got_selection = []() -> uint { return current_file != null && select_active ? 0 : MFS_DISABLED; };
+        static auto got_selection = []() -> uint { return current_file != null && select_active ? 0 : MFS_DISABLED; };
 
-        auto got_image = []() -> uint { return current_file != null ? 0 : MFS_DISABLED; };
+        static auto got_image = []() -> uint { return current_file != null ? 0 : MFS_DISABLED; };
 
-        auto check_alpha = []() -> uint { return settings.grid_enabled ? MFS_CHECKED : 0; };
+        static auto check_alpha = []() -> uint { return settings.grid_enabled ? MFS_CHECKED : 0; };
 
-        auto check_fullscreen = []() -> uint { return settings.fullscreen ? MFS_CHECKED : 0; };
+        static auto check_fullscreen = []() -> uint { return settings.fullscreen ? MFS_CHECKED : 0; };
 
-        auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
+        static auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
 
         // clang-format off
-        std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
+        static std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
             { ID_COPY, got_selection },
             { ID_SELECT_ALL, got_image },
             { ID_SELECT_NONE, got_image },
@@ -2011,7 +2061,6 @@ namespace imageview::app
             for(int i = 0; i < item_count; ++i) {
 
                 MENUITEMINFOA mii;
-                memset(&mii, 0, sizeof(mii));
                 mii.cbSize = sizeof(mii);
                 mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
 
@@ -2195,7 +2244,7 @@ namespace imageview::app
         mouse_click_timestamp[button] = GetTickCount64();
         mouse_click[button] = pos;
         mouse_pos[button] = pos;
-        memset(mouse_offset + button, 0, sizeof(point_s));
+        memset(mouse_offset, 0, sizeof(mouse_offset));
 
         set_mouse_button(button);
 
@@ -3101,16 +3150,16 @@ namespace imageview::app
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
-            uint32 bg_color = color_to_uint32(settings.background_color);
+            uint32 bg_color = color_swap_red_blue(color_to_uint32(settings.background_color));
             if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
-                settings.background_color = uint32_to_color(bg_color);
+                settings.background_color = color_from_uint32(color_swap_red_blue(bg_color));
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
-            uint32 border_color = color_to_uint32(settings.border_color);
+            uint32 border_color = color_swap_red_blue(color_to_uint32(settings.border_color));
             if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
-                settings.border_color = uint32_to_color(border_color);
+                settings.border_color = color_from_uint32(color_swap_red_blue(border_color));
             }
         } break;
 
@@ -3238,9 +3287,7 @@ namespace imageview::app
 
     UINT OnNCCalcSize(HWND hwnd, BOOL fCalcValidRects, NCCALCSIZE_PARAMS *lpcsp)
     {
-        // DefWindowProc modifies the NCCALCSIZE_PARAMS,
-        // after calling it, the first rect is the new client rect
-        DefWindowProc(hwnd, WM_NCCALCSIZE, fCalcValidRects, reinterpret_cast<LPARAM>(lpcsp));
+        FORWARD_WM_NCCALCSIZE(hwnd, fCalcValidRects, lpcsp, DefWindowProcA);
 
         rect const &new_client_rect = lpcsp->rgrc[0];
 
@@ -3336,10 +3383,7 @@ namespace imageview::app
             SetCursor(current_mouse_cursor);
             return TRUE;
         }
-
-        // I thought we could just return FALSE to get this done for us?
-        // Seems not, more uncracking parameters
-        return (BOOL)DefWindowProc(hwnd, WM_SETCURSOR, (WPARAM)hwndCursor, MAKELPARAM(codeHitTest, msg));
+        return FORWARD_WM_SETCURSOR(hwnd, hwndCursor, codeHitTest, msg, DefWindowProcA);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3516,12 +3560,7 @@ namespace imageview::app
 
     void OnDestroy(HWND hwnd)
     {
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(wp);
-        GetWindowPlacement(window, &wp);
-        rect const &rc = wp.rcNormalPosition;
-        LOG_DEBUG("ON_CLOSING: {} {}", rc.to_string(), wp.showCmd == SW_SHOWMAXIMIZED ? "max" : "normal");
-        settings.window_placement = wp;
+        GetWindowPlacement(window, &settings.window_placement);
         PostQuitMessage(0);
     }
 
@@ -3612,6 +3651,14 @@ namespace imageview::app
         window_show_count += 1;
     }
 
+    //////////////////////////////////////////////////////////////////////
+
+    void OnSysCommand(HWND hwnd, UINT cmd, int x, int y)
+    {
+        if(cmd != SC_KEYMENU || y > 0) {
+            FORWARD_WM_SYSCOMMAND(hwnd, cmd, x, y, DefWindowProcA);
+        }
+    }
 
 //#pragma warning(disable : 4100)
 #pragma warning(pop)
@@ -3683,6 +3730,7 @@ namespace imageview::app
             HANDLE_MSG(hwnd, WM_ENTERSIZEMOVE, OnEnterSizeMove);
             HANDLE_MSG(hwnd, WM_EXITSIZEMOVE, OnExitSizeMove);
             HANDLE_MSG(hwnd, WM_POWERBROADCAST, OnPowerBroadcast);
+            HANDLE_MSG(hwnd, WM_SYSCOMMAND, OnSysCommand);
 
             //////////////////////////////////////////////////////////////////////
 
@@ -3699,7 +3747,7 @@ namespace imageview::app
             //////////////////////////////////////////////////////////////////////
 
         default:
-            return DefWindowProc(hwnd, message, wParam, lParam);
+            return DefWindowProcA(hwnd, message, wParam, lParam);
         }
 
         return 0;
@@ -3730,7 +3778,14 @@ namespace imageview::app
 #if defined(_DEBUG)
         if(!is_key_down(VK_MBUTTON))
 #endif
-            settings.load();
+            if(FAILED(settings.load())) {
+                MessageBoxA(null,
+                            std::format("Failed to load settings: {}", windows_error_message()).c_str(),
+                            localize(IDS_AppName).c_str(),
+                            MB_ICONEXCLAMATION);
+            }
+
+        show_settings();
 
         std::string cmd_line{ GetCommandLineA() };
 
@@ -3840,13 +3895,14 @@ namespace imageview::app
 
         CHK_HR(hotkeys::load());
 
-        MSG msg{ 0 };
+        MSG msg;
+        mem_clear(&msg);
 
         do {
-            if(PeekMessage(&msg, null, 0, 0, PM_REMOVE)) {
-                if(!TranslateAccelerator(window, hotkeys::accelerators, &msg)) {
+            if(PeekMessageA(&msg, null, 0, 0, PM_REMOVE)) {
+                if(!TranslateAcceleratorA(window, hotkeys::accelerators, &msg)) {
                     TranslateMessage(&msg);
-                    DispatchMessage(&msg);
+                    DispatchMessageA(&msg);
                 }
             } else {
                 HRESULT hr = update();
@@ -3891,7 +3947,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
     HRESULT hr = imageview::app::main();
     if(FAILED(hr)) {
-        imageview::display_error(imageview::localize(IDS_AppName), hr);
+        imageview::display_error("main", hr);
         return 1;
     }
     return 0;

@@ -9,11 +9,14 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-namespace hotkeys
+namespace imageview::hotkeys
 {
     HACCEL accelerators{ null };
     std::vector<ACCEL> accelerator_table;
     std::map<uint, std::string> hotkey_text;
+
+    // load the accelerator table from the resource
+    // load any modifications from the registry
 
     HRESULT load()
     {

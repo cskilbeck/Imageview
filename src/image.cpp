@@ -104,6 +104,8 @@ namespace imageview::image
 {
     std::mutex formats_mutex;
 
+    // TODO(chs): get this table of image formats from WIC
+
     std::map<std::string, image_format> formats{
 
         { "PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },

@@ -303,30 +303,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    std::string get_item_text(HWND listview, LPARAM item)
-    {
-        LVITEMA lvi;
-        memset(&lvi, 0, sizeof(lvi));
-        lvi.mask = LVIF_TEXT;
-
-        std::string s;
-
-        LRESULT len = 32;
-        LRESULT got;
-
-        do {
-            len *= 2;
-            s.resize(len);
-            lvi.cchTextMax = static_cast<int>(len);
-            lvi.pszText = s.data();
-            got = SendMessageA(listview, LVM_GETITEMTEXT, static_cast<WPARAM>(item), reinterpret_cast<LPARAM>(&lvi));
-        } while(got >= len - 1);
-
-        return s.substr(0, got);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
     BOOL on_init_hotkeys_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
@@ -337,7 +313,7 @@ namespace
         int width = listview_rect.w() - GetSystemMetrics(SM_CXVSCROLL);
 
         LVCOLUMNA column;
-        memset(&column, 0, sizeof(column));
+        mem_clear(&column);
         column.mask = LVCF_TEXT | LVCF_WIDTH;
         column.fmt = LVCFMT_LEFT;
         column.cx = width * 70 / 100;
@@ -351,13 +327,12 @@ namespace
 
         std::set<uint> got_hotkey;
 
-        // get all the hotkeys descriptions in order
+        // get all the hotkey descriptions in order
 
         std::map<std::string, uint> descriptions;
 
         for(auto const &a : hotkeys::hotkey_text) {
-            std::string action_text = localize(a.first);
-            descriptions[action_text] = a.first;
+            descriptions[localize(a.first)] = a.first;
         }
 
         // populate the listview
@@ -370,7 +345,7 @@ namespace
             std::string key_text;
             if(hotkeys::get_hotkey_text(a.second, key_text) == S_OK) {
                 LVITEMA item;
-                memset(&item, 0, sizeof(item));
+                mem_clear(&item);
                 item.mask = LVIF_TEXT;
                 item.iItem = index;
                 item.iSubItem = 0;

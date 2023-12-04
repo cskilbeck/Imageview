@@ -13,28 +13,26 @@ namespace imageview
     // win32 error messages
 
     std::string windows_error_message(uint32 err = 0);
-
     HRESULT log_win32_error(DWORD err, char const *message, ...);
     HRESULT log_win32_error(char const *message, ...);
+    void display_error(std::string const &message, HRESULT hr = 0);
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format);
-
-    RECT center_rect_on_default_monitor(RECT const &r);
     uint32 color_to_uint32(vec4 color);
-    vec4 uint32_to_color(uint32 color);
+    vec4 color_from_uint32(uint32 color);
+    uint32 color_swap_red_blue(uint32 color);
 
-    std::string strip_quotes(std::string const &s);
-
-    HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
+    //////////////////////////////////////////////////////////////////////
 
     HRESULT get_is_process_elevated(bool &is_elevated);
     float get_window_dpi(HWND w);
-    std::string const &localize(uint64 id);
-
     std::string get_app_filename();
     HRESULT get_app_version(std::string &version);
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
 
     //////////////////////////////////////////////////////////////////////
 
@@ -46,6 +44,13 @@ namespace imageview
     inline int get_y(LPARAM lp)
     {
         return static_cast<int>(static_cast<short>(HIWORD(lp)));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> void mem_clear(T *o)
+    {
+        memset(o, 0, sizeof(T));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -89,13 +94,13 @@ namespace imageview
     }
 
     //////////////////////////////////////////////////////////////////////
+    // string
 
-    template <typename T> void make_uppercase(T &str)
-    {
-        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
-            return static_cast<T::value_type>(::toupper(x));
-        });
-    }
+    std::string localize(uint64 id);
+    std::string convert_wide_text_to_utf8_string(wchar const *text, size_t len);
+    std::string convert_wide_text_to_ascii_string(wchar const *text, size_t len);
+    std::wstring convert_utf8_text_to_wide_string(char const *text, size_t len);
+    std::string strip_quotes(std::string const &s);
 
     //////////////////////////////////////////////////////////////////////
 
@@ -107,11 +112,13 @@ namespace imageview
     }
 
     //////////////////////////////////////////////////////////////////////
-    // string conversion
 
-    std::string convert_wide_text_to_utf8_string(wchar const *text, size_t len);
-    std::string convert_wide_text_to_ascii_string(wchar const *text, size_t len);
-    std::wstring convert_utf8_text_to_wide_string(char const *text, size_t len);
+    template <typename T> void make_uppercase(T &str)
+    {
+        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
+            return static_cast<T::value_type>(::toupper(x));
+        });
+    }
 
     //////////////////////////////////////////////////////////////////////
 
@@ -162,15 +169,6 @@ namespace imageview
     inline std::string ascii(wchar const *s)
     {
         return convert_wide_text_to_ascii_string(s, wcslen(s));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    inline void display_error(std::string const &message, HRESULT hr)
-    {
-        std::string err = std::format("Error:\n\n{}\n\n{}", message, windows_error_message(hr));
-        MessageBoxA(null, err.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
-        log_win32_error(hr, err.c_str());
     }
 }
 

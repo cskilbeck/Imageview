@@ -1,25 +1,5 @@
 #pragma once
 
-// YUCK
-// different setting types for different setting types
-// setup_controls adds dialog controls for the setting
-// update_controls sets the controls based on the current value
-
-//////////////////////////////////////////////////////////////////////
-// for declaring the fields in the struct
-
-#define DECL_SETTING_BOOL(name, string_id, default_value) bool name{ default_value };
-
-#define DECL_SETTING_COLOR(name, string_id, default_r, default_g, default_b, default_a) \
-    vec4 name{ default_r, default_g, default_b, default_a };
-
-#define DECL_SETTING_ENUM(enum_type, name, string_id, default_value) enum_type name{ default_value };
-
-#define DECL_SETTING_RANGED(ranged_type, name, string_id, default_value, min_value, max_value) \
-    ranged_type name{ default_value };
-
-#define DECL_SETTING_INTERNAL(setting_type, name, ...) setting_type name{ __VA_ARGS__ };
-
 enum fullscreen_startup_option : uint
 {
     start_windowed,      // start up windowed
@@ -77,16 +57,24 @@ enum mouse_button_t : int
     btn_count = 3
 };
 
-struct setting_descriptor_t
-{
-};
+//////////////////////////////////////////////////////////////////////
 
-// settings get serialized/deserialized to/from the registry
 struct settings_t
 {
-    // use a header so we can implement the serializer more easily
-#define DECL_SETTING(type, name, ...) type name{ __VA_ARGS__ };
+
+#define DECL_SETTING_BOOL(name, string_id, default_value) bool name{ default_value };
+
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) vec4 name{ r, g, b, a };
+
+#define DECL_SETTING_ENUM(type, name, string_id, value) type name{ value };
+
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) type name{ value };
+
+#define DECL_SETTING_INTERNAL(type, name, ...) type name{ __VA_ARGS__ };
+
 #include "settings_fields.h"
+
+    //////////////////////////////////////////////////////////////////////
 
     HRESULT save();
     HRESULT load();
@@ -107,6 +95,11 @@ struct settings_t
         settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size);
 };
 
+//////////////////////////////////////////////////////////////////////
+// settings get serialized/deserialized to/from the registry
+
 extern settings_t settings;
 
 extern settings_t default_settings;
+
+void show_settings();

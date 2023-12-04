@@ -2,7 +2,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-namespace hotkeys
+namespace imageview::hotkeys
 {
     extern HACCEL accelerators;
     extern std::vector<ACCEL> accelerator_table;

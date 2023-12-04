@@ -27,8 +27,11 @@
 //////////////////////////////////////////////////////////////////////
 // Set USE_DIRECTOMPOSITION to 1 to use DirectComposition
 // This makes Windows 8 the required OS version
+//
+// We _could_ check OS version and load the DirectComposition stuff
+// dynamically but nah
 
-#define USE_DIRECTOMPOSITION 1
+#define USE_DIRECTOMPOSITION 0
 
 //////////////////////////////////////////////////////////////////////
 
@@ -65,6 +68,7 @@
 #include <dcomp.h>
 #include <DirectXMath.h>
 #include <DirectXColors.h>
+#include <directxpackedvector.h>
 #include <wincodec.h>
 #include <Commctrl.h>
 #include <Shlobj.h>

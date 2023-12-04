@@ -32,11 +32,20 @@ END
 STRINGTABLE
 BEGIN
     IDS_SelectFile          "Select file"
+    IDS_SETTING_TYPE_BOOL   "Boolean"
+    IDS_SETTING_TYPE_COLOR  "Color"
     IDD_DIALOG_SETTINGS_MAIN "Settings"
     IDD_DIALOG_SETTINGS_HOTKEYS "Hotkeys"
     IDD_DIALOG_SETTINGS_ABOUT "About"
     IDD_DIALOG_SETTINGS_EXPLORER "Explorer"
+    IDS_SETTING_TYPE_RANGED "Ranged"
     IDD_DIALOG_SETTINGS_RELAUNCH "Explorer"
+    IDS_SETTING_TYPE_ENUM   "Enumeration"
+    IDS_SETTING_NAME_CACHE_SIZE_MB "Cache size (MB)"
+    IDS_SETTING_NAME_BORDER_COLOR "Border color"
+    IDS_SETTING_NAME_BACKGROUND_COLOR "Background color"
+    IDS_SETTING_NAME_GRID_ENABLED "Enable grid"
+    IDS_SETTING_NAME_GRID_COLOR1 "Grid color 1"
 END
 
 STRINGTABLE
@@ -76,6 +85,35 @@ END
 STRINGTABLE
 BEGIN
     ID_VIEW_SETBORDERCOLOR  "Set border color"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_SETTING_NAME_GRID_COLOR2 "Grid color 2"
+    IDS_SETTING_NAME_GRID_SIZE "Grid size"
+    IDS_SETTING_NAME_FIXED_GRID "Fixed grid"
+    IDS_SETTING_NAME_GRID_MULTIPLIER "Grid multiplier"
+    IDS_SETTING_NAME_SELECT_FILL_COLOR "Selection overlay color"
+    IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1 "Select box outline color 1"
+    IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2 "Select box outline color 2"
+    IDS_SETTING_NAME_SELECT_BORDER_WIDTH "Select box outline width"
+    IDS_SETTING_NAME_SELECT_DASH_LENGTH "Select box dash length"
+    IDS_SETTING_NAME_CROSSHAIR_COLOR1 "Crosshair color 1"
+    IDS_SETTING_NAME_CROSSHAIR_COLOR2 "Crosshair color 2"
+    IDS_SETTING_NAME_ZOOM_BUTTON "Zoom mouse button"
+    IDS_SETTING_NAME_DRAG_BUTTON "Drag mouse button"
+    IDS_SETTING_NAME_SELECT_BUTTON "Select mouse button"
+    IDS_SETTING_NAME_REUSE_WINDOW "Reuse existing window"
+    IDS_SETTING_NAME_AUTO_PASTE "Paste clipboard at startup"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_SETTING_NAME_STARTUP_FULLSCREEN "Startup screen mode"
+    IDS_SETTING_NAME_SHOW_FULL_FILENAME "Show full filename in titlebar"
+    IDS_SETTING_NAME_SHOW_FILENAME "Show filename"
+    IDS_SETTING_NAME_EXIF_OPTION "Apply EXIF tranform on load"
+    IDS_SETTING_NAME_ZOOM_MODE "Default zoom mode"
 END
 
 #endif    // English (Neutral) resources
@@ -194,13 +232,13 @@ BEGIN
     "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL, NOINVERT
     VK_F1,          ID_FILE_SETTINGS,       VIRTKEY, NOINVERT
     "V",            ID_PASTE,               VIRTKEY, CONTROL, NOINVERT
-    "A",            ID_SELECT_ALL,          VIRTKEY, NOINVERT
     "A",            ID_SELECT_ALL,          VIRTKEY, CONTROL, NOINVERT
     "C",            ID_SELECT_CROP,         VIRTKEY, SHIFT, CONTROL, NOINVERT
     "N",            ID_SELECT_NONE,         VIRTKEY, NOINVERT
     "N",            ID_SELECT_NONE,         VIRTKEY, CONTROL, NOINVERT
     "A",            ID_VIEW_ALPHA,          VIRTKEY, NOINVERT
     "G",            ID_VIEW_FIXEDGRID,      VIRTKEY, SHIFT, CONTROL, NOINVERT
+    VK_RETURN,      ID_VIEW_FULLSCREEN,     VIRTKEY, ALT, NOINVERT
     VK_SPACE,       ID_VIEW_FULLSCREEN,     VIRTKEY, NOINVERT
     "G",            ID_VIEW_GRIDSIZE,       VIRTKEY, NOINVERT
     "B",            ID_VIEW_SETBACKGROUNDCOLOR, VIRTKEY, NOINVERT
@@ -211,7 +249,6 @@ BEGIN
     "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
-    VK_RETURN,      ID_VIEW_FULLSCREEN,     VIRTKEY, ALT, NOINVERT
 END
 
 

@@ -83,34 +83,48 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    uint32 color_to_uint32(vec4 color)
+    void display_error(std::string const &message, HRESULT hr)
     {
-        float *f = reinterpret_cast<float *>(&color);
-        int a = (int)(f[0] * 255.0f) & 0xff;
-        int b = (int)(f[1] * 255.0f) & 0xff;
-        int g = (int)(f[2] * 255.0f) & 0xff;
-        int r = (int)(f[3] * 255.0f) & 0xff;
-        return (r << 24) | (g << 16) | (b << 8) | a;
+        if(hr == 0) {
+            hr = HRESULT_FROM_WIN32(GetLastError());
+        }
+        std::string err = std::format("Error:\n\n{}\n\n{}", message, windows_error_message(hr));
+        MessageBoxA(null, err.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
+        log_win32_error(hr, err.c_str());
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    vec4 uint32_to_color(uint32 color)
+    uint32 color_to_uint32(vec4 color)
     {
-        float a = ((color >> 24) & 0xff) / 255.0f;
-        float b = ((color >> 16) & 0xff) / 255.0f;
-        float g = ((color >> 8) & 0xff) / 255.0f;
-        float r = ((color >> 0) & 0xff) / 255.0f;
-        return { r, g, b, a };
+        using namespace DirectX::PackedVector;
+        XMCOLOR col;
+        XMStoreColor(&col, color);
+        return col;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    vec4 color_from_uint32(uint32 color)
+    {
+        using namespace DirectX::PackedVector;
+        return XMLoadColor(reinterpret_cast<XMCOLOR const *>(&color));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // ARGB -> ABGR (and vice versa)
+
+    uint32 color_swap_red_blue(uint32 color)
+    {
+        return ((color & 0x00ff0000) >> 16) | ((color & 0x000000ff) << 16) | color & 0xff00ff00;
     }
 
     //////////////////////////////////////////////////////////////////////
     // get a localized string by id
 
-    std::string const &localize(uint64 id)
+    std::string localize(uint64 id)
     {
         static std::unordered_map<uint64, std::string> localized_strings;
-        static std::string const unknown;
 
         auto f = localized_strings.find(id);
 
@@ -124,7 +138,7 @@ namespace imageview
         int len = LoadStringW(GetModuleHandle(null), static_cast<uint>(id), reinterpret_cast<wchar *>(&str), 0);
 
         if(len <= 0) {
-            return unknown;
+            return std::format("UNLOCALIZED_{}", id);
         }
         return localized_strings.insert({ id, utf8(str, len) }).first->second;
     }

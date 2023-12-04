@@ -7,67 +7,171 @@ settings_t default_settings;
 //////////////////////////////////////////////////////////////////////
 // for declaring dialog handlers
 
-// extern std::list<setting_base *> dialog_controllers;
-//
-//#define DECL_SETTING_BOOL(name, string_id, default_value) \
-//    dialog_controllers.push_back(new bool_setting{ &settings::dialog_settings::name, string_id });
-//
-//#define DECL_SETTING_COLOR(name, string_id, default_r, default_g, default_b, default_a) \
-//    dialog_controllers.push_back(new color_setting{ &settings::dialog_settings::name, string_id });
-//
-//#define DECL_SETTING_ENUM(name, string_id, default_value, enum_type) \
-//    dialog_controllers.push_back(new enum_setting<enum_type>{ &settings::dialog_settings::name, string_id });
-//
-//#define DECL_SETTING_RANGED(name, string_id, default_value, type, min, max) \
-//    dialog_controllers.push_back(new ranged_setting<type>{ &settings::dialog_settings::name, string_id, min, max });
-//
-//#define DECL_SETTING_INTERNAL(setting_type, name, ...)
+struct setting_base
+{
+    // internal name of the setting
+    char const *name;
 
-// struct setting_base
-//{
-//    virtual void setup_controls() = 0;
-//    virtual void update_controls() = 0;
-//};
-//
-// template <typename T> struct setting : setting_base
-//{
-//    // the current value
-//    T *value;
-//
-//    // name of the setting (e.g. "Show Filename")
-//    uint string_id;
-//};
-//
-// struct bool_setting : setting<bool>
-//{
-//    void setup_controls() override;
-//    void update_controls() override;
-//};
-//
-// template <typename T> struct enum_setting : setting<T>
-//{
-//    void setup_controls() override;
-//    void update_controls() override;
-//
-//    std::map<uint, uint> enum_names;
-//};
-//
-// struct color_setting : setting<vec4>
-//{
-//    void setup_controls() override;
-//    void update_controls() override;
-//};
-//
-// template <typename T> struct ranged_setting : setting<T>
-//{
-//    void setup_controls() override;
-//    void update_controls() override;
-//
-//    T min_value;
-//    T max_value;
-//};
-//
+    // user friendly descriptive name for the dialog
+    uint string_id;
 
+    setting_base(char const *n, uint s) : name(n), string_id(s)
+    {
+    }
+
+    // name of the type of this setting
+    virtual uint type_string_id() = 0;
+
+    // create dialog controls for editing this setting
+    virtual void setup_controls() = 0;
+
+    // update the dialog controls with current value of this setting
+    virtual void update_controls() = 0;
+};
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T> struct setting : virtual setting_base
+{
+    setting(T *v) : value(v)
+    {
+    }
+
+    T *value;
+};
+
+//////////////////////////////////////////////////////////////////////
+
+struct bool_setting : setting<bool>
+{
+    bool_setting(char const *n, uint s, bool *b) : setting_base(n, s), setting<bool>(b)
+    {
+    }
+
+    uint type_string_id() override
+    {
+        return IDS_SETTING_TYPE_BOOL;
+    }
+
+    void setup_controls() override
+    {
+    }
+
+    void update_controls() override
+    {
+    }
+};
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T> struct enum_setting : setting<T>
+{
+    enum_setting(char const *n, uint s, T *b) : setting_base(n, s), setting<T>(b)
+    {
+    }
+
+    uint type_string_id() override
+    {
+        return IDS_SETTING_TYPE_ENUM;
+    }
+
+    void setup_controls() override
+    {
+    }
+
+    void update_controls() override
+    {
+    }
+
+    std::map<uint, uint> enum_names;
+};
+
+//////////////////////////////////////////////////////////////////////
+
+struct color_setting : setting<vec4>
+{
+    color_setting(char const *n, uint s, vec4 *b) : setting_base(n, s), setting<vec4>(b)
+    {
+    }
+
+    uint type_string_id() override
+    {
+        return IDS_SETTING_TYPE_COLOR;
+    }
+
+    void setup_controls() override
+    {
+    }
+
+    void update_controls() override
+    {
+    }
+};
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T> struct ranged_setting : setting<T>
+{
+    ranged_setting(char const *n, uint s, T *b, T minval, T maxval)
+        : setting_base(n, s), setting<T>(b), min_value(minval), max_value(maxval)
+    {
+    }
+
+    uint type_string_id() override
+    {
+        return IDS_SETTING_TYPE_RANGED;
+    }
+
+    void setup_controls() override
+    {
+    }
+
+    void update_controls() override
+    {
+    }
+
+    T min_value;
+    T max_value;
+};
+
+//////////////////////////////////////////////////////////////////////
+
+void show_settings()
+{
+    settings_t dialog_settings;
+
+    LOG_CONTEXT("SHOW");
+
+#undef DECL_SETTING_BOOL
+#undef DECL_SETTING_COLOR
+#undef DECL_SETTING_ENUM
+#undef DECL_SETTING_RANGED
+#undef DECL_SETTING_INTERNAL
+
+    std::list<setting_base *> dialog_controllers;
+
+#define DECL_SETTING_BOOL(name, string_id, value) \
+    dialog_controllers.push_back(new bool_setting(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
+    dialog_controllers.push_back(new color_setting(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_ENUM(type, name, string_id, value) \
+    dialog_controllers.push_back(new enum_setting<type>(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
+    dialog_controllers.push_back(new ranged_setting<type>(#name, string_id, &dialog_settings.name, min, max));
+
+#define DECL_SETTING_INTERNAL(setting_type, name, ...)
+
+#include "settings_fields.h"
+
+    for(auto const s : dialog_controllers) {
+        std::string desc = imageview::localize(s->string_id);
+        std::string type_desc = imageview::localize(s->type_string_id());
+        LOG_DEBUG("SETTING [{}] is a {} \"{}\"", s->name, type_desc, desc);
+    }
+}
 
 //////////////////////////////////////////////////////////////////////
 // save or load a setting
@@ -103,14 +207,11 @@ HRESULT settings_t::serialize_setting(
 //////////////////////////////////////////////////////////////////////
 // save or load all the settings
 
-HRESULT settings_t::serialize(serialize_action action, char const *save_key_name)
+HRESULT settings_t::serialize(serialize_action action, char const *key)
 {
-    if(save_key_name == null) {
+    if(key == null) {
         return E_INVALIDARG;
     }
-
-    //////////////////////////////////////////////////////////////////////
-    // for declaring serializers
 
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_COLOR
@@ -118,20 +219,18 @@ HRESULT settings_t::serialize(serialize_action action, char const *save_key_name
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define DECL_SETTING_BOOL(name, string_id, default_value) \
-    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+#define SERIALIZE_SETTING(name) \
+    CHK_HR(serialize_setting(action, key, #name, reinterpret_cast<byte *>(&name), static_cast<DWORD>(sizeof(name))))
 
-#define DECL_SETTING_COLOR(name, string_id, default_r, default_g, default_b, default_a) \
-    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+#define DECL_SETTING_BOOL(name, string_id, value) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_ENUM(enum_type, name, string_id, default_value) \
-    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_RANGED(ranged_type, name, string_id, default_value, min, max) \
-    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+#define DECL_SETTING_ENUM(type, name, string_id, value) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_INTERNAL(setting_type, name, ...) \
-    CHK_HR(serialize_setting(action, save_key_name, #name, reinterpret_cast<byte *>(&name), (DWORD)sizeof(name)))
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) SERIALIZE_SETTING(name)
+
+#define DECL_SETTING_INTERNAL(type, name, ...) SERIALIZE_SETTING(name)
 
 #include "settings_fields.h"
 
