@@ -87,6 +87,8 @@ namespace
 #pragma warning(push)
 #pragma warning(disable : 4100)
 
+    //////////////////////////////////////////////////////////////////////
+
     void update_scroll_info(HWND hWnd)
     {
         rect rc;
@@ -99,6 +101,8 @@ namespace
         si.nTrackPos = 0;
         si.nMin = 0;
 
+        // no horizontal scroll
+
         // si.nMax = rc.w();
         // si.nPage = tab_rect.w();
         // SetScrollInfo(hWnd, SB_HORZ, &si, FALSE);
@@ -108,96 +112,86 @@ namespace
         SetScrollInfo(hWnd, SB_VERT, &si, FALSE);
     }
 
-    int get_scroll_pos(HWND hwnd, int bar, UINT code)
+    //////////////////////////////////////////////////////////////////////
+
+    int new_scroll_pos(HWND hwnd, int bar, UINT code)
     {
-        SCROLLINFO si = {};
+        SCROLLINFO si;
         si.cbSize = sizeof(SCROLLINFO);
         si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS;
         GetScrollInfo(hwnd, bar, &si);
 
-        const int minPos = si.nMin;
-        const int maxPos = si.nMax - (si.nPage - 1);
-
-        int result = -1;
+        int const max_pos = si.nMax - (si.nPage - 1);
+        int const page = static_cast<int>(si.nPage);
+        int const line = page * 10 / 100;
 
         switch(code) {
-        case SB_LINEUP /*SB_LINELEFT*/:
-            result = std::max(si.nPos - 1, minPos);
-            break;
+        case SB_LINEUP:
+            return std::max(si.nPos - line, si.nMin);
 
-        case SB_LINEDOWN /*SB_LINERIGHT*/:
-            result = std::min(si.nPos + 1, maxPos);
-            break;
+        case SB_LINEDOWN:
+            return std::min(si.nPos + line, max_pos);
 
-        case SB_PAGEUP /*SB_PAGELEFT*/:
-            result = std::max(si.nPos - (int)si.nPage, minPos);
-            break;
+        case SB_PAGEUP:
+            return std::max(si.nPos - page, si.nMin);
 
-        case SB_PAGEDOWN /*SB_PAGERIGHT*/:
-            result = std::min(si.nPos + (int)si.nPage, maxPos);
-            break;
-
-        case SB_THUMBPOSITION:
-            // do nothing
-            break;
+        case SB_PAGEDOWN:
+            return std::min(si.nPos + page, max_pos);
 
         case SB_THUMBTRACK:
-            result = si.nTrackPos;
-            break;
+            return si.nTrackPos;
 
-        case SB_TOP /*SB_LEFT*/:
-            result = minPos;
-            break;
+        case SB_TOP:
+            return si.nMin;
 
-        case SB_BOTTOM /*SB_RIGHT*/:
-            result = maxPos;
-            break;
-
-        case SB_ENDSCROLL:
-            // do nothing
-            break;
+        case SB_BOTTOM:
+            return max_pos;
         }
-
-        return result;
+        return si.nPos;
     }
 
-    void scroll_client(HWND hwnd, int bar, int pos)
+    //////////////////////////////////////////////////////////////////////
+
+    void update_main_window_pos(HWND hwnd, int bar, int pos)
     {
-        static int s_prevx = 1;
-        static int s_prevy = 1;
+        static int prev_pos[SB_CTL] = { 1, 1 };
 
-        int cx = 0;
-        int cy = 0;
-
-        int &delta = (bar == SB_HORZ ? cx : cy);
-        int &prev = (bar == SB_HORZ ? s_prevx : s_prevy);
-
-        delta = prev - pos;
-        prev = pos;
-
-        if(cx || cy) {
-            ScrollWindow(hwnd, cx, cy, NULL, NULL);
+        int move[SB_CTL] = { 0, 0 };
+        move[bar] = prev_pos[bar] - pos;
+        prev_pos[bar] = pos;
+        if(move[bar] != 0) {
+            ScrollWindow(hwnd, move[SB_HORZ], move[SB_VERT], NULL, NULL);
         }
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void do_scroll(HWND hwnd, int bar, int lines)
+    {
+        SCROLLINFO si;
+        si.cbSize = sizeof(SCROLLINFO);
+        si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS;
+        GetScrollInfo(hwnd, bar, &si);
+        int max_pos = si.nMax - (si.nPage - 1);
+        int page = static_cast<int>(si.nPage);
+        int line = page * 10 / 100;
+        int new_pos = std::clamp(si.nPos + line * lines, si.nMin, max_pos);
+        SetScrollPos(hwnd, bar, new_pos, TRUE);
+        update_main_window_pos(hwnd, bar, new_pos);
+    }
+
+    //////////////////////////////////////////////////////////////////////
 
     void on_scroll(HWND hwnd, int bar, UINT code)
     {
-        const int scrollPos = get_scroll_pos(hwnd, bar, code);
-
-        if(scrollPos == -1) {
-            return;
-        }
-
-        SetScrollPos(hwnd, bar, scrollPos, TRUE);
-        scroll_client(hwnd, bar, scrollPos);
+        int new_pos = new_scroll_pos(hwnd, bar, code);
+        SetScrollPos(hwnd, bar, new_pos, TRUE);
+        update_main_window_pos(hwnd, bar, new_pos);
     }
 
-    void on_hscroll(HWND hwnd, HWND hwndCtl, UINT code, int pos)
-    {
-        on_scroll(hwnd, SB_HORZ, code);
-    }
+    //////////////////////////////////////////////////////////////////////
 
-    void on_vscroll(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    void on_vscroll_main_handler(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
         on_scroll(hwnd, SB_VERT, code);
     }
@@ -404,58 +398,8 @@ namespace
     }
 
     std::list<setting_base *> dialog_controllers;
+
     settings_t dialog_settings;
-
-    void create_settings_dialogs(HWND dlg)
-    {
-        if(dialog_controllers.empty()) {
-
-#undef DECL_SETTING_BOOL
-#undef DECL_SETTING_COLOR
-#undef DECL_SETTING_ENUM
-#undef DECL_SETTING_RANGED
-#undef DECL_SETTING_INTERNAL
-
-#define DECL_SETTING_BOOL(name, string_id, value) \
-    dialog_controllers.push_back(new bool_setting(#name, string_id, &dialog_settings.name));
-
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
-    dialog_controllers.push_back(new color_setting(#name, string_id, &dialog_settings.name));
-
-#define DECL_SETTING_ENUM(type, name, string_id, value) \
-    dialog_controllers.push_back(new enum_setting<type>(#name, string_id, &dialog_settings.name));
-
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
-    dialog_controllers.push_back(new ranged_setting<type>(#name, string_id, &dialog_settings.name, min, max));
-
-#define DECL_SETTING_INTERNAL(setting_type, name, ...)
-
-#include "settings_fields.h"
-        }
-
-        int height = 0;
-
-        rect main_rect;
-        GetClientRect(dlg, &main_rect);
-        int inner_width = main_rect.right - GetSystemMetrics(SM_CXVSCROLL);
-
-        for(auto const s : dialog_controllers) {
-            HWND a = CreateDialogParamA(GetModuleHandle(null),
-                                        MAKEINTRESOURCE(s->dialog_id()),
-                                        dlg,
-                                        setting_handler,
-                                        reinterpret_cast<LPARAM>(s));
-            rect r;
-            GetWindowRect(a, &r);
-            SetWindowPos(a, null, 0, height, inner_width, r.h(), SWP_NOZORDER | SWP_SHOWWINDOW);
-            std::string desc = imageview::localize(s->string_id);
-            std::string type_desc = imageview::localize(s->type_string_id());
-            LOG_DEBUG("SETTING [{}] is a {} \"{}\"", s->name, type_desc, desc);
-            height += r.h();
-        }
-        SetWindowPos(dlg, null, 0, 0, main_rect.w(), height, SWP_NOZORDER | SWP_NOMOVE);
-        update_scroll_info(dlg);
-    }
 
     //////////////////////////////////////////////////////////////////////
 
@@ -487,7 +431,8 @@ namespace
         std::string version{ "Version?" };
         get_app_version(version);
         SetWindowTextA(about,
-                       std::format("ImageView V{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
+                       std::format("{}\r\nv{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
+                                   localize(IDS_AppName),
                                    version,
                                    __TIMESTAMP__,
                                    app::is_elevated,
@@ -502,6 +447,8 @@ namespace
     {
         switch(id) {
 
+            // copy 'about' text to clipboard
+
         case IDC_BUTTON_ABOUT_COPY: {
             HWND edit_control = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
 
@@ -513,12 +460,12 @@ namespace
             }
             HANDLE handle = GlobalAlloc(GHND | GMEM_SHARE, static_cast<size_t>(len) + 1);
             if(handle == null) {
-                LOG_ERROR("Can't alloc {} for clipboard: {}", len, windows_error_message());
+                LOG_ERROR("Can't GlobalAlloc {} for clipboard: {}", len, windows_error_message());
                 return;
             }
             char *buffer = reinterpret_cast<char *>(GlobalLock(handle));
             if(buffer == null) {
-                LOG_ERROR("Can't lock buffer clipboard: {}", windows_error_message());
+                LOG_ERROR("Can't GlobalLock clipboard buffer: {}", windows_error_message());
                 return;
             }
 
@@ -528,13 +475,13 @@ namespace
             }
 
             if(!OpenClipboard(null)) {
-                LOG_ERROR("Can't open clipboard: {}", windows_error_message());
+                LOG_ERROR("Can't OpenClipboard: {}", windows_error_message());
                 return;
             }
             DEFER(CloseClipboard());
 
             if(!EmptyClipboard()) {
-                LOG_ERROR("Can't empty clipboard: {}", windows_error_message());
+                LOG_ERROR("Can't EmptyClipboard: {}", windows_error_message());
                 return;
             }
 
@@ -553,7 +500,53 @@ namespace
 
     BOOL on_initdialog_main_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        create_settings_dialogs(hwnd);
+        if(dialog_controllers.empty()) {
+
+#undef DECL_SETTING_BOOL
+#undef DECL_SETTING_COLOR
+#undef DECL_SETTING_ENUM
+#undef DECL_SETTING_RANGED
+#undef DECL_SETTING_INTERNAL
+
+#define DECL_SETTING_BOOL(name, string_id, value) \
+    dialog_controllers.push_back(new bool_setting(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
+    dialog_controllers.push_back(new color_setting(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_ENUM(type, name, string_id, value) \
+    dialog_controllers.push_back(new enum_setting<type>(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
+    dialog_controllers.push_back(new ranged_setting<type>(#name, string_id, &dialog_settings.name, min, max));
+
+#define DECL_SETTING_INTERNAL(setting_type, name, ...)
+
+#include "settings_fields.h"
+        }
+
+        int height = 0;
+
+        rect main_rect;
+        GetClientRect(hwnd, &main_rect);
+        int inner_width = main_rect.right - GetSystemMetrics(SM_CXVSCROLL);
+
+        for(auto const s : dialog_controllers) {
+            HWND a = CreateDialogParamA(GetModuleHandle(null),
+                                        MAKEINTRESOURCE(s->dialog_id()),
+                                        hwnd,
+                                        setting_handler,
+                                        reinterpret_cast<LPARAM>(s));
+            rect r;
+            GetWindowRect(a, &r);
+            SetWindowPos(a, null, 0, height, inner_width, r.h(), SWP_NOZORDER | SWP_SHOWWINDOW);
+            std::string desc = imageview::localize(s->string_id);
+            std::string type_desc = imageview::localize(s->type_string_id());
+            LOG_DEBUG("SETTING [{}] is a {} \"{}\"", s->name, type_desc, desc);
+            height += r.h();
+        }
+        SetWindowPos(hwnd, null, 0, 0, main_rect.w(), height, SWP_NOZORDER | SWP_NOMOVE);
+        update_scroll_info(hwnd);
         return 0;
     }
 
@@ -792,8 +785,18 @@ namespace
         }
     }
 
+    //////////////////////////////////////////////////////////////////////
+
+    void on_mousewheel_main_handler(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+    {
+        do_scroll(hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
 //#pragma warning(disable : 4100)
 #pragma warning(pop)
+
 
     //////////////////////////////////////////////////////////////////////
 
@@ -804,8 +807,9 @@ namespace
             HANDLE_MSG(hWnd, WM_CTLCOLORSTATIC, on_ctl_color);
             HANDLE_MSG(hWnd, WM_CTLCOLORBTN, on_ctl_color);
             HANDLE_MSG(hWnd, WM_CTLCOLOREDIT, on_ctl_color);
-            HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll);
+            HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_main_handler);
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_main_handler);
+            HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_main_handler);
         }
         return 0;
     }
@@ -892,6 +896,10 @@ namespace imageview
     LRESULT show_settings_dialog(HWND parent, uint tab_id)
     {
         current_page = -1;
+
+        // snapshot current settings
+        dialog_settings = settings;
+
         return DialogBoxParamA(
             GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler, tab_id);
     }

@@ -243,8 +243,7 @@ namespace imageview::logger
             L::debug_write(L::format_line(time_buffer, level, context, msg, args...).c_str());
         }
     }
-
-}    // namespace logger
+}
 
 //////////////////////////////////////////////////////////////////////
 
