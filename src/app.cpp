@@ -3785,8 +3785,6 @@ namespace imageview::app
                             MB_ICONEXCLAMATION);
             }
 
-        show_settings();
-
         std::string cmd_line{ GetCommandLineA() };
 
         // if single window mode

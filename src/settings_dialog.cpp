@@ -98,9 +98,10 @@ namespace
         si.nPos = 0;
         si.nTrackPos = 0;
         si.nMin = 0;
-        si.nMax = rc.w();
-        si.nPage = tab_rect.w();
-        SetScrollInfo(hWnd, SB_HORZ, &si, FALSE);
+
+        // si.nMax = rc.w();
+        // si.nPage = tab_rect.w();
+        // SetScrollInfo(hWnd, SB_HORZ, &si, FALSE);
 
         si.nMax = rc.h();
         si.nPage = tab_rect.h();
@@ -202,11 +203,258 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // for declaring dialog handlers
+
+    struct setting_base
+    {
+        // internal name of the setting
+        char const *name;
+
+        // user friendly descriptive name for the dialog
+        uint string_id;
+
+        setting_base(char const *n, uint s) : name(n), string_id(s)
+        {
+        }
+
+        std::string get_text() const
+        {
+            return localize(string_id);
+        }
+
+        virtual uint text_item_id() const = 0;
+
+        // name of the type of this setting
+        virtual uint type_string_id() = 0;
+
+        // create dialog controls for editing this setting
+        virtual void setup_controls(HWND hwnd)
+        {
+            SetWindowTextA(GetDlgItem(hwnd, text_item_id()), get_text().c_str());
+        }
+
+        // update the dialog controls with current value of this setting
+        virtual void update_controls(HWND) = 0;
+
+        // which dialog resource for this type of setting
+        virtual uint dialog_id() const = 0;
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> struct setting : virtual setting_base
+    {
+        setting(T *v) : value(v)
+        {
+        }
+
+        T *value;
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    struct bool_setting : setting<bool>
+    {
+        bool_setting(char const *n, uint s, bool *b) : setting_base(n, s), setting<bool>(b)
+        {
+        }
+
+        uint type_string_id() override
+        {
+            return IDS_SETTING_TYPE_BOOL;
+        }
+
+        uint dialog_id() const override
+        {
+            return IDD_DIALOG_SETTING_BOOL;
+        }
+
+        virtual uint text_item_id() const override
+        {
+            return IDC_CHECK_SETTING_BOOL;
+        }
+
+        void update_controls(HWND) override
+        {
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> struct enum_setting : setting<T>
+    {
+        enum_setting(char const *n, uint s, T *b) : setting_base(n, s), setting<T>(b)
+        {
+        }
+
+        uint type_string_id() override
+        {
+            return IDS_SETTING_TYPE_ENUM;
+        }
+
+        uint dialog_id() const override
+        {
+            return IDD_DIALOG_SETTING_ENUM;
+        }
+
+        virtual uint text_item_id() const override
+        {
+            return IDC_STATIC_SETTING_ENUM;
+        }
+
+        void update_controls(HWND) override
+        {
+        }
+
+        std::map<uint, uint> enum_names;
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    struct color_setting : setting<vec4>
+    {
+        color_setting(char const *n, uint s, vec4 *b) : setting_base(n, s), setting<vec4>(b)
+        {
+        }
+
+        uint type_string_id() override
+        {
+            return IDS_SETTING_TYPE_COLOR;
+        }
+
+        uint dialog_id() const override
+        {
+            return IDD_DIALOG_SETTING_COLOR;
+        }
+
+        virtual uint text_item_id() const override
+        {
+            return IDC_STATIC_SETTING_COLOR;
+        }
+
+        void update_controls(HWND) override
+        {
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> struct ranged_setting : setting<T>
+    {
+        ranged_setting(char const *n, uint s, T *b, T minval, T maxval)
+            : setting_base(n, s), setting<T>(b), min_value(minval), max_value(maxval)
+        {
+        }
+
+        uint type_string_id() override
+        {
+            return IDS_SETTING_TYPE_RANGED;
+        }
+
+        uint dialog_id() const override
+        {
+            return IDD_DIALOG_SETTING_RANGED;
+        }
+
+        virtual uint text_item_id() const override
+        {
+            return IDC_STATIC_SETTING_RANGED;
+        }
+
+        void update_controls(HWND) override
+        {
+        }
+
+        T min_value;
+        T max_value;
+    };
+
+    //////////////////////////////////////////////////////////////////////
     // dialogs which are in tab pages have white backgrounds
 
     HBRUSH on_ctl_color(HWND hwnd, HDC hdc, HWND hwndChild, int type)
     {
         return GetSysColorBrush(COLOR_WINDOW);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
+        setting_base *setting = reinterpret_cast<setting_base *>(lParam);
+        setting->setup_controls(hwnd);
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    INT_PTR setting_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting_handler);
+        }
+
+        return 0;
+    }
+
+    std::list<setting_base *> dialog_controllers;
+    settings_t dialog_settings;
+
+    void create_settings_dialogs(HWND dlg)
+    {
+        if(dialog_controllers.empty()) {
+
+#undef DECL_SETTING_BOOL
+#undef DECL_SETTING_COLOR
+#undef DECL_SETTING_ENUM
+#undef DECL_SETTING_RANGED
+#undef DECL_SETTING_INTERNAL
+
+#define DECL_SETTING_BOOL(name, string_id, value) \
+    dialog_controllers.push_back(new bool_setting(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
+    dialog_controllers.push_back(new color_setting(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_ENUM(type, name, string_id, value) \
+    dialog_controllers.push_back(new enum_setting<type>(#name, string_id, &dialog_settings.name));
+
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
+    dialog_controllers.push_back(new ranged_setting<type>(#name, string_id, &dialog_settings.name, min, max));
+
+#define DECL_SETTING_INTERNAL(setting_type, name, ...)
+
+#include "settings_fields.h"
+        }
+
+        int height = 0;
+
+        rect main_rect;
+        GetClientRect(dlg, &main_rect);
+        int inner_width = main_rect.right - GetSystemMetrics(SM_CXVSCROLL);
+
+        for(auto const s : dialog_controllers) {
+            HWND a = CreateDialogParamA(GetModuleHandle(null),
+                                        MAKEINTRESOURCE(s->dialog_id()),
+                                        dlg,
+                                        setting_handler,
+                                        reinterpret_cast<LPARAM>(s));
+            rect r;
+            GetWindowRect(a, &r);
+            SetWindowPos(a, null, 0, height, inner_width, r.h(), SWP_NOZORDER | SWP_SHOWWINDOW);
+            std::string desc = imageview::localize(s->string_id);
+            std::string type_desc = imageview::localize(s->type_string_id());
+            LOG_DEBUG("SETTING [{}] is a {} \"{}\"", s->name, type_desc, desc);
+            height += r.h();
+        }
+        SetWindowPos(dlg, null, 0, 0, main_rect.w(), height, SWP_NOZORDER | SWP_NOMOVE);
+        update_scroll_info(dlg);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -299,6 +547,14 @@ namespace
 
         } break;
         }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    BOOL on_initdialog_main_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
+        create_settings_dialogs(hwnd);
+        return 0;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -423,9 +679,10 @@ namespace
                 continue;
             }
 
+            std::string tab_text = localize((uint64)tab.resource_id);
             TCITEMA tci;
             tci.mask = TCIF_TEXT;
-            tci.pszText = const_cast<char *>(localize((uint64)tab.resource_id).c_str());
+            tci.pszText = const_cast<char *>(tab_text.c_str());
             TabCtrl_InsertItem(tab_ctrl, index, &tci);
             tab.index = index;
             index += 1;
@@ -468,8 +725,6 @@ namespace
             CHK_NULL(page_dlg = CreateDialogIndirectA(GetModuleHandle(nullptr), dlg_template, hwnd, tab.handler));
 
             SetWindowPos(page_dlg, HWND_TOP, tab_rect.x(), tab_rect.y(), tab_rect.w(), tab_rect.h(), 0);
-
-            // update_scroll_info(page_dlg);
 
             tab.hwnd = page_dlg;
         }
@@ -549,8 +804,8 @@ namespace
             HANDLE_MSG(hWnd, WM_CTLCOLORSTATIC, on_ctl_color);
             HANDLE_MSG(hWnd, WM_CTLCOLORBTN, on_ctl_color);
             HANDLE_MSG(hWnd, WM_CTLCOLOREDIT, on_ctl_color);
-            HANDLE_MSG(hWnd, WM_HSCROLL, on_hscroll);
             HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll);
+            HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_main_handler);
         }
         return 0;
     }

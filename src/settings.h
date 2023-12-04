@@ -101,5 +101,3 @@ struct settings_t
 extern settings_t settings;
 
 extern settings_t default_settings;
-
-void show_settings();
