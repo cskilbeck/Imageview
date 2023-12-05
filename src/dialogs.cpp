@@ -15,7 +15,7 @@ namespace
         bool is_default;
     };
 
-    struct GUIDComparer
+    struct GUID_compare
     {
         bool operator()(const GUID &Left, const GUID &Right) const
         {
@@ -23,7 +23,7 @@ namespace
         }
     };
 
-    std::map<GUID, filterspec, GUIDComparer> slots;
+    std::map<GUID, filterspec, GUID_compare> slots;
     std::vector<COMDLG_FILTERSPEC> filter_specs;
     uint num_filter_specs;
 
@@ -120,7 +120,7 @@ namespace imageview::dialog
         CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
         CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
         CHK_HR(pfd->SetFileTypeIndex(num_filter_specs));
-        CHK_HR(pfd->SetOkButtonLabel(L"View"));
+        CHK_HR(pfd->SetOkButtonLabel(unicode(localize(IDS_OPEN_FILE_OK_BUTTON)).c_str()));
         CHK_HR(pfd->SetTitle(unicode(title).c_str()));
         CHK_HR(pfd->Show(window));
         CHK_HR(pfd->GetResult(&psiResult));
@@ -170,15 +170,16 @@ namespace imageview::dialog
     {
         static COLORREF custom_colors[16];
 
-        CHOOSECOLORA cc{ 0 };
+        std::wstring unicode_title = unicode(title);
+        CHOOSECOLORW cc{ 0 };
         cc.lStructSize = sizeof(cc);
         cc.hwndOwner = window;
         cc.lpCustColors = (LPDWORD)custom_colors;
-        cc.lCustData = reinterpret_cast<LPARAM>(title);
+        cc.lCustData = reinterpret_cast<LPARAM>(unicode_title.c_str());
         cc.rgbResult = color;
         cc.Flags = CC_FULLOPEN | CC_RGBINIT | CC_ANYCOLOR | CC_ENABLEHOOK;
         cc.lpfnHook = select_color_dialog_hook_proc;
-        if(!ChooseColorA(&cc)) {
+        if(!ChooseColorW(&cc)) {
             return E_ABORT;
         }
         color = cc.rgbResult;

@@ -135,6 +135,30 @@ BEGIN
     IDS_ENUM_ZOOM_MODE_SHRINK_TO_FIT "Shrink to fit"
     IDS_ENUM_ZOOM_MODE_ONE_TO_ONE "1:1"
     IDS_ENUM_ZOOM_MODE_REMEMBER "Remember"
+    IDS_FATAL_ERROR         "Fatal error, exiting"
+    IDS_CANT_LOAD_FILE      "Can't load file"
+    IDS_UNKNOWN_FILE_TYPE   "Unknown file type"
+    IDS_RESET_SETTINGS      "Reset settings to defaults!?"
+    IDS_CANT_SAVE_FILE      "Can't save file"
+    IDS_FAILED_TO_LOAD_SETTINGS "Failed to load settings"
+    IDS_SAVED_FILE          "Saved"
+    IDS_COPIED              "Copied"
+    IDS_KEYNAME_LEFT        "Left"
+    IDS_KEYNAME_RIGHT       "Right"
+    IDS_KEYNAME_UP          "Up"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_KEYNAME_DOWN        "Down"
+    IDS_KEYNAME_COMMA       "Comma"
+    IDS_KEYNAME_PERIOD      "Period"
+    IDS_KEYNAME_PAGEUP      "Page Up"
+    IDS_KEYNAME_PAGEDOWN    "Page Down"
+    IDS_KEYNAME_CTRL        "Ctrl"
+    IDS_KEYNAME_SHIFT       "Shift"
+    IDS_KEYNAME_ALT         "Alt"
+    IDS_OPEN_FILE_OK_BUTTON "View"
 END
 
 #endif    // English (Neutral) resources

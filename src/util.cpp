@@ -83,13 +83,20 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
+    int message_box(HWND hwnd, std::string const &text, std::string const &title, uint buttons)
+    {
+        return MessageBoxW(hwnd, unicode(text).c_str(), unicode(title).c_str(), buttons);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     void display_error(std::string const &message, HRESULT hr)
     {
         if(hr == 0) {
             hr = HRESULT_FROM_WIN32(GetLastError());
         }
         std::string err = std::format("Error:\n\n{}\n\n{}", message, windows_error_message(hr));
-        MessageBoxA(null, err.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
+        message_box(null, err.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
         log_win32_error(hr, err.c_str());
     }
 

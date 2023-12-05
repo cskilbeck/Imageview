@@ -53,39 +53,39 @@ namespace imageview::hotkeys
             }
 
             char key_name_buffer[256];
-            char const *key_name;
+            std::string key_name;
             switch(a.key) {
             case VK_LEFT:
-                key_name = "Left";
+                key_name = localize(IDS_KEYNAME_LEFT);
                 break;
             case VK_RIGHT:
-                key_name = "Right";
+                key_name = localize(IDS_KEYNAME_RIGHT);
                 break;
             case VK_UP:
-                key_name = "Up";
+                key_name = localize(IDS_KEYNAME_UP);
                 break;
             case VK_DOWN:
-                key_name = "Down";
+                key_name = localize(IDS_KEYNAME_DOWN);
                 break;
             case VK_PRIOR:
-                key_name = "Page Up";
+                key_name = localize(IDS_KEYNAME_PAGEUP);
                 break;
             case VK_NEXT:
-                key_name = "Page Down";
+                key_name = localize(IDS_KEYNAME_PAGEDOWN);
                 break;
             case VK_OEM_COMMA:
             case ',':
-                key_name = "Comma";
+                key_name = localize(IDS_KEYNAME_COMMA);
                 break;
             case VK_OEM_PERIOD:
             case '.':
-                key_name = "Period";
+                key_name = localize(IDS_KEYNAME_PERIOD);
                 break;
 
             default:
                 uint scan_code = MapVirtualKeyEx(a.key, MAPVK_VK_TO_VSC, keyboard_layout);
                 GetKeyNameTextA((scan_code & 0x7f) << 16, key_name_buffer, _countof(key_name_buffer));
-                key_name = key_name_buffer;
+                key_name = std::string(key_name_buffer);
                 break;
             }
 
@@ -93,7 +93,7 @@ namespace imageview::hotkeys
 
             std::string key_label;
 
-            auto append = [&](std::string &a, char const *b) {
+            auto append = [&](std::string &a, std::string const &b) {
                 if(!a.empty()) {
                     a.append("-");
                 }
@@ -101,13 +101,13 @@ namespace imageview::hotkeys
             };
 
             if(a.fVirt & FCONTROL) {
-                append(key_label, "Ctrl");
+                append(key_label, localize(IDS_KEYNAME_CTRL));
             }
             if(a.fVirt & FSHIFT) {
-                append(key_label, "Shift");
+                append(key_label, localize(IDS_KEYNAME_SHIFT));
             }
             if(a.fVirt & FALT) {
-                append(key_label, "Alt");
+                append(key_label, localize(IDS_KEYNAME_ALT));
             }
             append(key_label, key_name);
 

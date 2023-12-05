@@ -69,6 +69,26 @@
 #define IDS_ENUM_ZOOM_MODE_SHRINK_TO_FIT 162
 #define IDS_ENUM_ZOOM_MODE_ONE_TO_ONE   163
 #define IDS_ENUM_ZOOM_MODE_REMEMBER     164
+#define IDS_FATAL_ERROR                 165
+#define IDS_CANT_LOAD_FILE              166
+#define IDS_UNKNOWN_FILE_TYPE           167
+#define IDS_RESET_SETTINGS              168
+#define IDS_CANT_SAVE_FILE              169
+#define IDS_FAILED_TO_LOAD_SETTINGS     170
+#define IDS_SAVED_FILE                  171
+#define IDS_COPIED                      172
+#define IDS_KEYNAME_LEFT                173
+#define IDS_KEYNAME_RIGHT               174
+#define IDS_KEYNAME_UP                  175
+#define IDS_KEYNAME_DOWN                176
+#define IDS_KEYNAME_COMMA               177
+#define IDS_KEYNAME_PERIOD              178
+#define IDS_KEYNAME_PAGEUP              179
+#define IDS_KEYNAME_PAGEDOWN            180
+#define IDS_KEYNAME_CTRL                181
+#define IDS_KEYNAME_SHIFT               182
+#define IDS_KEYNAME_ALT                 183
+#define IDS_OPEN_FILE_OK_BUTTON         184
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002
@@ -123,7 +143,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        162
+#define _APS_NEXT_RESOURCE_VALUE        171
 #define _APS_NEXT_COMMAND_VALUE         40080
 #define _APS_NEXT_CONTROL_VALUE         1018
 #define _APS_NEXT_SYMED_VALUE           102

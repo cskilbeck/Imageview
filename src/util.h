@@ -10,12 +10,13 @@ namespace imageview
 #endif
 
     //////////////////////////////////////////////////////////////////////
-    // win32 error messages
+    // error reporting
 
     std::string windows_error_message(uint32 err = 0);
     HRESULT log_win32_error(DWORD err, char const *message, ...);
     HRESULT log_win32_error(char const *message, ...);
     void display_error(std::string const &message, HRESULT hr = 0);
+    int message_box(HWND hwnd, std::string const &text, std::string const &title, uint buttons);
 
     //////////////////////////////////////////////////////////////////////
 

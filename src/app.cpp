@@ -518,11 +518,8 @@ namespace imageview::app
 
     void error_message_box(std::string const &msg, HRESULT hr)
     {
-        std::string message = windows_error_message(hr);
-        MessageBoxA(null,
-                    std::format("FATAL ERROR\r\n{}\r\r\r\n{}", msg, message).c_str(),
-                    localize(IDS_AppName).c_str(),
-                    MB_ICONEXCLAMATION);
+        std::string err = windows_error_message(hr);
+        message_box(null, std::format("{}\r\n{}", msg, err), localize(IDS_AppName), MB_ICONEXCLAMATION);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -727,7 +724,7 @@ namespace imageview::app
             std::string err_str = windows_error_message(load_hr);
             std::string name;
             CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format("Can't load {} - {}", name, err_str), 3);
+            set_message(std::format("{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3);
             return load_hr;
         }
         files_loaded += 1;
@@ -832,7 +829,7 @@ namespace imageview::app
         if(!file::exists(filepath)) {
             std::string msg(filepath);
             msg = msg.substr(0, msg.find_first_of("\r\n\t"));
-            set_message(std::format("Can't load {}", msg), 2.0f);
+            set_message(std::format("{} {}", localize(IDS_CANT_LOAD_FILE), msg), 2.0f);
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);
@@ -1052,7 +1049,7 @@ namespace imageview::app
 
         // done
 
-        set_message(std::format("Copied {}x{}", w, h), 3);
+        set_message(std::format("{} {}x{}", localize(IDS_COPIED), w, h), 3);
 
         return S_OK;
     }
@@ -1532,13 +1529,13 @@ namespace imageview::app
 
             // "Component not found" isn't meaningful for unknown file type, override it
             if(hr == WINCODEC_ERR_COMPONENTNOTFOUND) {
-                err_str = "Unknown file type";
+                err_str = localize(IDS_UNKNOWN_FILE_TYPE);
             } else {
                 err_str = windows_error_message(hr);
             }
 
             CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format("Can't load {} - {}", name, err_str), 3.0f);
+            set_message(std::format("{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3.0f);
         }
         return hr;
     }
@@ -2506,7 +2503,7 @@ namespace imageview::app
 
     void reset_settings()
     {
-        if(MessageBoxA(window, "Reset settings to defaults!?", localize(IDS_AppName).c_str(), MB_YESNO) == IDYES) {
+        if(message_box(window, localize(IDS_RESET_SETTINGS), localize(IDS_AppName), MB_YESNO) == IDYES) {
 
             bool old_fullscreen = settings.fullscreen;
             WINDOWPLACEMENT old_windowplacement = settings.window_placement;
@@ -3205,9 +3202,9 @@ namespace imageview::app
                 image::image_t const &img = current_file->img;
                 HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
-                    MessageBoxA(window, windows_error_message(hr).c_str(), "Can't save file", MB_ICONEXCLAMATION);
+                    message_box(window, windows_error_message(hr), localize(IDS_CANT_SAVE_FILE), MB_ICONEXCLAMATION);
                 } else {
-                    set_message(std::format("Saved {}", filename), 5);
+                    set_message(std::format("{} {}", localize(IDS_SAVED_FILE), filename), 5);
                 }
             }
         } break;
@@ -3761,7 +3758,7 @@ namespace imageview::app
 
         if(!XMVerifyCPUSupport()) {
             std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
-            MessageBoxA(null, message.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
+            message_box(null, message, localize(IDS_AppName), MB_ICONEXCLAMATION);
             return 0;
         }
 
@@ -3779,9 +3776,9 @@ namespace imageview::app
         if(!is_key_down(VK_MBUTTON))
 #endif
             if(FAILED(settings.load())) {
-                MessageBoxA(null,
-                            std::format("Failed to load settings: {}", windows_error_message()).c_str(),
-                            localize(IDS_AppName).c_str(),
+                message_box(null,
+                            std::format("{}\r\n{}", localize(IDS_FAILED_TO_LOAD_SETTINGS), windows_error_message()),
+                            localize(IDS_AppName),
                             MB_ICONEXCLAMATION);
             }
 
@@ -3905,7 +3902,7 @@ namespace imageview::app
             } else {
                 HRESULT hr = update();
                 if(FAILED(hr)) {
-                    error_message_box("Fatal error, exiting", hr);
+                    error_message_box(localize(IDS_FATAL_ERROR), hr);
                     ExitProcess(0);
                 }
             }
