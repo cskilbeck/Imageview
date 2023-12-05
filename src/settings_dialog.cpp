@@ -199,166 +199,112 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // for declaring dialog handlers
 
-    struct setting_base
+    struct setting
     {
+        setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler)
+            : name(n), string_id(s), dialog_id(dlg_id), text_item_id(text_id), dlg_handler(handler)
+        {
+        }
+
         // internal name of the setting
         char const *name;
 
         // user friendly descriptive name for the dialog
         uint string_id;
 
-        setting_base(char const *n, uint s) : name(n), string_id(s)
+        // create dialog from this resource id
+        uint dialog_id;
+
+        // which control contains the descriptive text
+        uint text_item_id;
+
+        DLGPROC dlg_handler;
+
+        virtual void on_command(HWND)
         {
         }
 
-        std::string get_text() const
-        {
-            return localize(string_id);
-        }
-
-        virtual uint text_item_id() const = 0;
-
-        // name of the type of this setting
-        virtual uint type_string_id() = 0;
-
-        // create dialog controls for editing this setting
+        // set name text and update controls for editing this setting
         virtual void setup_controls(HWND hwnd)
         {
-            SetWindowTextA(GetDlgItem(hwnd, text_item_id()), get_text().c_str());
+            SetWindowTextA(GetDlgItem(hwnd, text_item_id), localize(string_id).c_str());
+            update_controls(hwnd);
         }
 
         // update the dialog controls with current value of this setting
-        virtual void update_controls(HWND) = 0;
-
-        // which dialog resource for this type of setting
-        virtual uint dialog_id() const = 0;
+        virtual void update_controls(HWND)
+        {
+        }
     };
 
     //////////////////////////////////////////////////////////////////////
 
-    template <typename T> struct setting : virtual setting_base
+    struct bool_setting : setting
     {
-        setting(T *v) : value(v)
+        bool_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, bool *b)
+            : setting(n, s, dlg_id, text_id, handler), value(b)
+        {
+        }
+
+        void update_controls(HWND hwnd) override
+        {
+            Button_SetCheck(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), *value ? BST_CHECKED : BST_UNCHECKED);
+        }
+
+        bool *value;
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> struct enum_setting : setting
+    {
+        enum_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, T *b)
+            : setting(n, s, dlg_id, text_id, handler), value(b)
+        {
+        }
+
+        void update_controls(HWND) override
         {
         }
 
         T *value;
-    };
-
-    //////////////////////////////////////////////////////////////////////
-
-    struct bool_setting : setting<bool>
-    {
-        bool_setting(char const *n, uint s, bool *b) : setting_base(n, s), setting<bool>(b)
-        {
-        }
-
-        uint type_string_id() override
-        {
-            return IDS_SETTING_TYPE_BOOL;
-        }
-
-        uint dialog_id() const override
-        {
-            return IDD_DIALOG_SETTING_BOOL;
-        }
-
-        virtual uint text_item_id() const override
-        {
-            return IDC_CHECK_SETTING_BOOL;
-        }
-
-        void update_controls(HWND) override
-        {
-        }
-    };
-
-    //////////////////////////////////////////////////////////////////////
-
-    template <typename T> struct enum_setting : setting<T>
-    {
-        enum_setting(char const *n, uint s, T *b) : setting_base(n, s), setting<T>(b)
-        {
-        }
-
-        uint type_string_id() override
-        {
-            return IDS_SETTING_TYPE_ENUM;
-        }
-
-        uint dialog_id() const override
-        {
-            return IDD_DIALOG_SETTING_ENUM;
-        }
-
-        virtual uint text_item_id() const override
-        {
-            return IDC_STATIC_SETTING_ENUM;
-        }
-
-        void update_controls(HWND) override
-        {
-        }
-
         std::map<uint, uint> enum_names;
     };
 
     //////////////////////////////////////////////////////////////////////
 
-    struct color_setting : setting<vec4>
+    struct color_setting : setting
     {
-        color_setting(char const *n, uint s, vec4 *b) : setting_base(n, s), setting<vec4>(b)
+        color_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, vec4 *b)
+            : setting(n, s, dlg_id, text_id, handler), value(b)
         {
         }
 
-        uint type_string_id() override
+        void update_controls(HWND hwnd) override
         {
-            return IDS_SETTING_TYPE_COLOR;
+            uint32 color = color_swap_red_blue(color_to_uint32(*value));
+            std::string hex = std::format("{:06x}", color & 0xffffff);
+            make_uppercase(hex);
+            SetWindowTextA(GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR), hex.c_str());
         }
 
-        uint dialog_id() const override
-        {
-            return IDD_DIALOG_SETTING_COLOR;
-        }
-
-        virtual uint text_item_id() const override
-        {
-            return IDC_STATIC_SETTING_COLOR;
-        }
-
-        void update_controls(HWND) override
-        {
-        }
+        vec4 *value;
     };
 
     //////////////////////////////////////////////////////////////////////
 
-    template <typename T> struct ranged_setting : setting<T>
+    template <typename T> struct ranged_setting : setting
     {
-        ranged_setting(char const *n, uint s, T *b, T minval, T maxval)
-            : setting_base(n, s), setting<T>(b), min_value(minval), max_value(maxval)
+        ranged_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, T *b, T minval, T maxval)
+            : setting(n, s, dlg_id, text_id, handler), value(b), min_value(minval), max_value(maxval)
         {
         }
 
-        uint type_string_id() override
-        {
-            return IDS_SETTING_TYPE_RANGED;
-        }
-
-        uint dialog_id() const override
-        {
-            return IDD_DIALOG_SETTING_RANGED;
-        }
-
-        virtual uint text_item_id() const override
-        {
-            return IDC_STATIC_SETTING_RANGED;
-        }
-
-        void update_controls(HWND) override
+        void update_controls(HWND hwnd) override
         {
         }
 
+        T *value;
         T min_value;
         T max_value;
     };
@@ -373,31 +319,91 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    void on_drawitem_setting_color(HWND hwnd, const DRAWITEMSTRUCT *lpDrawItem)
+    {
+        if(lpDrawItem->CtlID == IDC_BUTTON_SETTING_COLOR) {
+
+            color_setting *setting = reinterpret_cast<color_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+
+            uint color = color_to_uint32(*setting->value) & 0xffffff;
+            SetDCBrushColor(lpDrawItem->hDC, color);
+
+            SelectObject(lpDrawItem->hDC, GetStockObject(DC_BRUSH));
+
+            Rectangle(lpDrawItem->hDC,
+                      lpDrawItem->rcItem.left,
+                      lpDrawItem->rcItem.top,
+                      lpDrawItem->rcItem.right,
+                      lpDrawItem->rcItem.bottom);
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void on_command_setting_color(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        color_setting *setting = reinterpret_cast<color_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+
+        switch(id) {
+
+        case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
+
+            std::string name = localize(setting->string_id);
+            std::string title = std::format("Set color for {}", name);    //@localize
+            uint new_color = color_to_uint32(*setting->value);
+            if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
+                *setting->value = color_from_uint32(new_color);
+                setting->update_controls(hwnd);
+                InvalidateRect(hwnd, null, true);
+            }
+        } break;
+
+        case IDC_EDIT_SETTING_COLOR: {
+
+            switch(codeNotify) {
+
+            case EN_CHANGE: {
+
+                HWND edit_control = GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR);
+                int len = GetWindowTextLengthA(edit_control);
+                if(len > 0) {
+                    std::string txt;
+                    txt.resize(len + 1llu);
+                    GetWindowTextA(edit_control, txt.data(), len + 1);
+                    txt.pop_back();
+                    uint32 new_color{};
+                    if(SUCCEEDED(color_from_string(txt, new_color))) {
+                        *setting->value = color_from_uint32(new_color);
+                        InvalidateRect(hwnd, null, true);
+                    }
+                }
+            } break;
+            }
+        } break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
-        setting_base *setting = reinterpret_cast<setting_base *>(lParam);
-        setting->setup_controls(hwnd);
+        setting *s = reinterpret_cast<setting *>(lParam);
+        s->setup_controls(hwnd);
         return 0;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    INT_PTR setting_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    void on_command_setting_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color);
-            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color);
-            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color);
-            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color);
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting_handler);
-        }
-
-        return 0;
+        setting *s = reinterpret_cast<setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+        s->on_command(hwnd);
     }
 
-    std::list<setting_base *> dialog_controllers;
+    //////////////////////////////////////////////////////////////////////
+
+    std::list<setting *> dialog_controllers;
 
     settings_t dialog_settings;
 
@@ -498,9 +504,40 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    INT_PTR setting_base_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting_handler);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_handler);
+        }
+
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    INT_PTR setting_color_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+            HANDLE_MSG(dlg, WM_DRAWITEM, on_drawitem_setting_color);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_color);
+        }
+        return setting_base_handler(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     BOOL on_initdialog_main_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         if(dialog_controllers.empty()) {
+
+            // snapshot current settings
+            dialog_settings = settings;
 
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_COLOR
@@ -508,17 +545,39 @@ namespace
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define DECL_SETTING_BOOL(name, string_id, value) \
-    dialog_controllers.push_back(new bool_setting(#name, string_id, &dialog_settings.name));
+#define DECL_SETTING_BOOL(name, string_id, value)                          \
+    dialog_controllers.push_back(new bool_setting(#name,                   \
+                                                  string_id,               \
+                                                  IDD_DIALOG_SETTING_BOOL, \
+                                                  IDC_CHECK_SETTING_BOOL,  \
+                                                  setting_base_handler,    \
+                                                  &dialog_settings.name));
 
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
-    dialog_controllers.push_back(new color_setting(#name, string_id, &dialog_settings.name));
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a)                      \
+    dialog_controllers.push_back(new color_setting(#name,                    \
+                                                   string_id,                \
+                                                   IDD_DIALOG_SETTING_COLOR, \
+                                                   IDC_STATIC_SETTING_COLOR, \
+                                                   setting_color_handler,    \
+                                                   &dialog_settings.name));
 
-#define DECL_SETTING_ENUM(type, name, string_id, value) \
-    dialog_controllers.push_back(new enum_setting<type>(#name, string_id, &dialog_settings.name));
+#define DECL_SETTING_ENUM(type, name, string_id, value)                          \
+    dialog_controllers.push_back(new enum_setting<type>(#name,                   \
+                                                        string_id,               \
+                                                        IDD_DIALOG_SETTING_ENUM, \
+                                                        IDC_STATIC_SETTING_ENUM, \
+                                                        setting_base_handler,    \
+                                                        &dialog_settings.name));
 
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
-    dialog_controllers.push_back(new ranged_setting<type>(#name, string_id, &dialog_settings.name, min, max));
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max)                  \
+    dialog_controllers.push_back(new ranged_setting<type>(#name,                     \
+                                                          string_id,                 \
+                                                          IDD_DIALOG_SETTING_RANGED, \
+                                                          IDC_STATIC_SETTING_RANGED, \
+                                                          setting_base_handler,      \
+                                                          &dialog_settings.name,     \
+                                                          min,                       \
+                                                          max));
 
 #define DECL_SETTING_INTERNAL(setting_type, name, ...)
 
@@ -533,16 +592,13 @@ namespace
 
         for(auto const s : dialog_controllers) {
             HWND a = CreateDialogParamA(GetModuleHandle(null),
-                                        MAKEINTRESOURCE(s->dialog_id()),
+                                        MAKEINTRESOURCE(s->dialog_id),
                                         hwnd,
-                                        setting_handler,
+                                        s->dlg_handler,
                                         reinterpret_cast<LPARAM>(s));
             rect r;
             GetWindowRect(a, &r);
             SetWindowPos(a, null, 0, height, inner_width, r.h(), SWP_NOZORDER | SWP_SHOWWINDOW);
-            std::string desc = imageview::localize(s->string_id);
-            std::string type_desc = imageview::localize(s->type_string_id());
-            LOG_DEBUG("SETTING [{}] is a {} \"{}\"", s->name, type_desc, desc);
             height += r.h();
         }
         SetWindowPos(hwnd, null, 0, 0, main_rect.w(), height, SWP_NOZORDER | SWP_NOMOVE);
@@ -574,8 +630,6 @@ namespace
         ListView_SetExtendedListViewStyle(listview, LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT | LVS_EX_FLATSB);
         ListView_SetView(listview, LV_VIEW_DETAILS);
 
-        std::set<uint> got_hotkey;
-
         // get all the hotkey descriptions in order
 
         std::map<std::string, uint> descriptions;
@@ -590,7 +644,7 @@ namespace
         for(auto const &a : descriptions) {
 
             // there should be a string corresponding to the command id
-            std::string action_text = localize(a.second);
+            std::string action_text = a.first;
             std::string key_text;
             if(hotkeys::get_hotkey_text(a.second, key_text) == S_OK) {
                 LVITEMA item;
@@ -896,9 +950,6 @@ namespace imageview
     LRESULT show_settings_dialog(HWND parent, uint tab_id)
     {
         current_page = -1;
-
-        // snapshot current settings
-        dialog_settings = settings;
 
         return DialogBoxParamA(
             GetModuleHandle(null), MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, settings_dialog_handler, tab_id);

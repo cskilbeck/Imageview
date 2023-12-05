@@ -37,8 +37,7 @@ namespace imageview::logger
             // util::console_set_ansi_enabled(true);
             return true;
         }
-
-    }    // namespace
+    }
 
     //////////////////////////////////////////////////////////////////////
 

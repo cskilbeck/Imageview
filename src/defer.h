@@ -49,7 +49,8 @@ namespace imageview::defer
     } deferrer;
 }
 
-#define DEFER_TOKENPASTE(x, y) x##y
-#define DEFER_TOKENPASTE2(x, y) DEFER_TOKENPASTE(x, y)
+#define _DEFER_TOKENPASTE(x, y) x##y
+#define _DEFER_TOKENPASTE2(x, y) _DEFER_TOKENPASTE(x, y)
+
 #define SCOPED imageview::defer::deferrer <<
-#define DEFER(X) auto DEFER_TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = imageview::defer::deferrer << [=] { X; }
+#define DEFER(X) auto _DEFER_TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = imageview::defer::deferrer << [=] { X; }

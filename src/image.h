@@ -17,7 +17,7 @@ namespace imageview::image
 
         size_t size() const
         {
-            return row_pitch * height;
+            return static_cast<size_t>(row_pitch) * height;
         }
     };
 

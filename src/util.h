@@ -6,7 +6,7 @@ namespace imageview
     // get the name of a WM_ windows message
 
 #if defined(_DEBUG)
-    char const *get_wm_name(uint32 uMsg);
+    std::string get_wm_name(uint32 uMsg);
 #endif
 
     //////////////////////////////////////////////////////////////////////
@@ -22,6 +22,7 @@ namespace imageview
     uint32 color_to_uint32(vec4 color);
     vec4 color_from_uint32(uint32 color);
     uint32 color_swap_red_blue(uint32 color);
+    HRESULT color_from_string(std::string const &text, uint32 &color);
 
     //////////////////////////////////////////////////////////////////////
 

@@ -100,15 +100,16 @@ namespace imageview
         using namespace DirectX::PackedVector;
         XMCOLOR col;
         XMStoreColor(&col, color);
-        return col;
+        return color_swap_red_blue(col);
     }
 
     //////////////////////////////////////////////////////////////////////
 
     vec4 color_from_uint32(uint32 color)
     {
+        uint32 swapped = color_swap_red_blue(color);
         using namespace DirectX::PackedVector;
-        return XMLoadColor(reinterpret_cast<XMCOLOR const *>(&color));
+        return XMLoadColor(reinterpret_cast<XMCOLOR const *>(&swapped));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -117,6 +118,37 @@ namespace imageview
     uint32 color_swap_red_blue(uint32 color)
     {
         return ((color & 0x00ff0000) >> 16) | ((color & 0x000000ff) << 16) | color & 0xff00ff00;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // AARRGGBB or RRGGBB (in which case AA is set of 0xFF)
+
+    HRESULT color_from_string(std::string const &text, uint32 &color)
+    {
+        uint32 new_color = 0;
+
+        if(text.size() == 6) {
+            new_color = 0xff;
+
+        } else if(text.size() != 8) {
+            return E_INVALIDARG;
+        }
+
+        for(auto c : text) {
+            new_color <<= 4;
+            if(c >= '0' && c <= '9') {
+                new_color |= c - '0';
+            } else {
+                c = static_cast<char>(tolower(c));
+                if(c >= 'a' && c <= 'f') {
+                    new_color |= (c - 'a') + 10;
+                } else {
+                    return E_INVALIDARG;
+                }
+            }
+        }
+        color = color_swap_red_blue(new_color);
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////

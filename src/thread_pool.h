@@ -58,13 +58,17 @@ namespace imageview
 
                 [this, function](HANDLE ev, Args... args) {
 
+                    // calling PeekMessage causes a message queue to be created for this thread
                     MSG msg;
                     PeekMessage(&msg, (HWND)-1, 0, 0, PM_NOREMOVE);
 
+                    // set the message_q_created event after creating the message queue
                     SetEvent(ev);
 
+                    // do the actual thing
                     function(args...);
 
+                    // notify main thread that we're done
                     decrement_thread_count();
                 },
                 msg_q_created,
@@ -73,6 +77,7 @@ namespace imageview
             uint id;
             CHK_BOOL(id = GetThreadId(thread.native_handle()));
 
+            // wait for the thread to create its message queue
             if(WaitForSingleObject(msg_q_created, INFINITE) != WAIT_OBJECT_0) {
                 return HRESULT_FROM_WIN32(GetLastError());
             }

@@ -2,12 +2,11 @@
 
 #define TRACE_ID(iD) \
     case iD:         \
-        return #iD
+        return std::string{ #iD };
 
 namespace imageview
 {
-
-    char const *get_wm_name(uint32 uMsg)
+    std::string get_wm_name(uint32 uMsg)
     {
         switch(uMsg) {
             TRACE_ID(WM_NULL);
@@ -250,7 +249,7 @@ namespace imageview
 #endif /* WINVER >= 0x0600 */
 
         default:
-            return "WM_UNKNOWN???";
+            return std::format("WM_UNKNOWN_{}", uMsg);
         }
     }
 }
