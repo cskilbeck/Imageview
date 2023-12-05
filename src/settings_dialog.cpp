@@ -8,6 +8,59 @@ LOG_CONTEXT("settings_dlg");
 
 namespace
 {
+    // big sigh - these are for mapping enums to strings for the combo boxes
+
+    using enum_id_map = std::map<uint, uint>;
+
+    // fullscreen_startup_option
+
+    enum_id_map enum_fullscreen_startup_map = {
+        { fullscreen_startup_option::start_fullscreen, IDS_ENUM_FULLSCREEN_STARTUP_FULLSCREEN },
+        { fullscreen_startup_option::start_windowed, IDS_ENUM_FULLSCREEN_STARTUP_WINDOWED },
+        { fullscreen_startup_option::start_remember, IDS_ENUM_FULLSCREEN_STARTUP_REMEMBER },
+    };
+
+    // mouse_button
+
+    enum_id_map enum_mouse_buttons_map = {
+        { mouse_button_t::btn_left, IDS_ENUM_MOUSE_BUTTON_LEFT },
+        { mouse_button_t::btn_right, IDS_ENUM_MOUSE_BUTTON_RIGHT },
+        { mouse_button_t::btn_middle, IDS_ENUM_MOUSE_BUTTON_MIDDLE },
+    };
+
+    // show_filename_option
+
+    enum_id_map enum_show_filename_map = {
+        { show_filename_option::show_filename_always, IDS_ENUM_SHOW_FILENAME_ALWAYS },
+        { show_filename_option::show_filename_briefly, IDS_ENUM_SHOW_FILENAME_BRIEFLY },
+        { show_filename_option::show_filename_never, IDS_ENUM_SHOW_FILENAME_NEVER },
+    };
+
+    // exif_option
+
+    enum_id_map enum_exif_map = {
+        { exif_option::exif_option_apply, IDS_ENUM_EXIF_APPLY },
+        { exif_option::exif_option_ignore, IDS_ENUM_EXIF_IGNORE },
+        { exif_option::exif_option_prompt, IDS_ENUM_EXIF_PROMPT },
+    };
+
+    // zoom_mode
+
+    enum_id_map enum_zoom_mode_map = {
+        { zoom_mode_t::shrink_to_fit, IDS_ENUM_ZOOM_MODE_SHRINK_TO_FIT },
+        { zoom_mode_t::fit_to_window, IDS_ENUM_ZOOM_MODE_FIT_TO_WINDOW },
+        { zoom_mode_t::one_to_one, IDS_ENUM_ZOOM_MODE_ONE_TO_ONE },
+    };
+
+    // startup_zoom_mode
+
+    enum_id_map enum_startup_zoom_mode_map = {
+        { startup_zoom_mode_option::startup_zoom_shrink_to_fit, IDS_ENUM_ZOOM_MODE_SHRINK_TO_FIT },
+        { startup_zoom_mode_option::startup_zoom_fit_to_window, IDS_ENUM_ZOOM_MODE_FIT_TO_WINDOW },
+        { startup_zoom_mode_option::startup_zoom_one_to_one, IDS_ENUM_ZOOM_MODE_ONE_TO_ONE },
+        { startup_zoom_mode_option::startup_zoom_remember, IDS_ENUM_ZOOM_MODE_REMEMBER },
+    };
+
     using namespace imageview;
 
     //////////////////////////////////////////////////////////////////////
@@ -38,7 +91,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    INT_PTR main_settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR main_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
     INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
     INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
     INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -47,7 +100,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     settings_tab_t tabs[] = {
-        { IDD_DIALOG_SETTINGS_MAIN, main_settings_handler, dont_care },
+        { IDD_DIALOG_SETTINGS_MAIN, main_handler, dont_care },
         { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_handler, dont_care },
         { IDD_DIALOG_SETTINGS_EXPLORER, explorer_handler, hide_if_not_elevated },
         { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_handler, hide_if_elevated },
@@ -89,7 +142,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void update_scroll_info(HWND hWnd)
+    void update_scroll_info(HWND hWnd, bool horizontal, bool vertical)
     {
         rect rc;
         GetClientRect(hWnd, &rc);
@@ -101,15 +154,17 @@ namespace
         si.nTrackPos = 0;
         si.nMin = 0;
 
-        // no horizontal scroll
+        if(horizontal) {
+            si.nMax = rc.w();
+            si.nPage = tab_rect.w();
+            SetScrollInfo(hWnd, SB_HORZ, &si, FALSE);
+        }
 
-        // si.nMax = rc.w();
-        // si.nPage = tab_rect.w();
-        // SetScrollInfo(hWnd, SB_HORZ, &si, FALSE);
-
-        si.nMax = rc.h();
-        si.nPage = tab_rect.h();
-        SetScrollInfo(hWnd, SB_VERT, &si, FALSE);
+        if(vertical) {
+            si.nMax = rc.h();
+            si.nPage = tab_rect.h();
+            SetScrollInfo(hWnd, SB_VERT, &si, FALSE);
+        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -151,83 +206,37 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    void update_main_window_pos(HWND hwnd, int bar, int pos)
-    {
-        static int prev_pos[SB_CTL] = { 1, 1 };
-
-        int move[SB_CTL] = { 0, 0 };
-        move[bar] = prev_pos[bar] - pos;
-        prev_pos[bar] = pos;
-        if(move[bar] != 0) {
-            ScrollWindow(hwnd, move[SB_HORZ], move[SB_VERT], NULL, NULL);
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void do_scroll(HWND hwnd, int bar, int lines)
-    {
-        SCROLLINFO si;
-        si.cbSize = sizeof(SCROLLINFO);
-        si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS;
-        GetScrollInfo(hwnd, bar, &si);
-        int max_pos = si.nMax - (si.nPage - 1);
-        int page = static_cast<int>(si.nPage);
-        int line = page * 10 / 100;
-        int new_pos = std::clamp(si.nPos + line * lines, si.nMin, max_pos);
-        SetScrollPos(hwnd, bar, new_pos, TRUE);
-        update_main_window_pos(hwnd, bar, new_pos);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void on_scroll(HWND hwnd, int bar, UINT code)
-    {
-        int new_pos = new_scroll_pos(hwnd, bar, code);
-        SetScrollPos(hwnd, bar, new_pos, TRUE);
-        update_main_window_pos(hwnd, bar, new_pos);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void on_vscroll_main_handler(HWND hwnd, HWND hwndCtl, UINT code, int pos)
-    {
-        on_scroll(hwnd, SB_VERT, code);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // for declaring dialog handlers
 
     struct setting
     {
         setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler)
-            : name(n), string_id(s), dialog_id(dlg_id), text_item_id(text_id), dlg_handler(handler)
+            : internal_name(n)
+            , string_resource_id(s)
+            , dialog_resource_id(dlg_id)
+            , text_item_ctl_id(text_id)
+            , dlg_handler(handler)
         {
         }
 
         // internal name of the setting
-        char const *name;
+        char const *internal_name;
 
         // user friendly descriptive name for the dialog
-        uint string_id;
+        uint string_resource_id;
 
         // create dialog from this resource id
-        uint dialog_id;
+        uint dialog_resource_id;
 
         // which control contains the descriptive text
-        uint text_item_id;
+        uint text_item_ctl_id;
 
         DLGPROC dlg_handler;
-
-        virtual void on_command(HWND)
-        {
-        }
 
         // set name text and update controls for editing this setting
         virtual void setup_controls(HWND hwnd)
         {
-            SetWindowTextA(GetDlgItem(hwnd, text_item_id), localize(string_id).c_str());
+            SetWindowTextA(GetDlgItem(hwnd, text_item_ctl_id), localize(string_resource_id).c_str());
             update_controls(hwnd);
         }
 
@@ -256,19 +265,41 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    template <typename T> struct enum_setting : setting
+    struct enum_setting : setting
     {
-        enum_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, T *b)
-            : setting(n, s, dlg_id, text_id, handler), value(b)
+        enum_setting(
+            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, enum_id_map const &names, uint *b)
+            : setting(n, s, dlg_id, text_id, handler), enum_names(names), value(b)
         {
         }
 
-        void update_controls(HWND) override
+        void setup_controls(HWND hwnd) override
         {
+            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+            int index = 0;
+            for(auto const &name : enum_names) {
+                ComboBox_AddString(combo_box, localize(name.second).c_str());
+                ComboBox_SetItemData(combo_box, index, name.first);
+                index += 1;
+            }
+            setting::setup_controls(hwnd);
         }
 
-        T *value;
-        std::map<uint, uint> enum_names;
+        void update_controls(HWND hwnd) override
+        {
+            int index = 0;
+            for(auto const &name : enum_names) {
+                if(name.first == *value) {
+                    HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+                    ComboBox_SetCurSel(combo_box, index);
+                    break;
+                }
+                index += 1;
+            }
+        }
+
+        uint *value;
+        std::map<uint, uint> const &enum_names;    // map<enum_value, string_id>
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -326,6 +357,7 @@ namespace
             color_setting *setting = reinterpret_cast<color_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
 
             uint color = color_to_uint32(*setting->value) & 0xffffff;
+
             SetDCBrushColor(lpDrawItem->hDC, color);
 
             SelectObject(lpDrawItem->hDC, GetStockObject(DC_BRUSH));
@@ -348,7 +380,7 @@ namespace
 
         case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
 
-            std::string name = localize(setting->string_id);
+            std::string name = localize(setting->string_resource_id);
             std::string title = std::format("Set color for {}", name);    //@localize
             uint new_color = color_to_uint32(*setting->value);
             if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
@@ -385,27 +417,18 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
-        setting *s = reinterpret_cast<setting *>(lParam);
-        s->setup_controls(hwnd);
-        return 0;
+        switch(id) {
+        case IDC_COMBO_SETTING_ENUM: {
+            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+            int sel = ComboBox_GetCurSel(combo_box);
+            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
+            enum_setting *setting = reinterpret_cast<enum_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+            *setting->value = v;
+        } break;
+        }
     }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void on_command_setting_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        setting *s = reinterpret_cast<setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
-        s->on_command(hwnd);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    std::list<setting *> dialog_controllers;
-
-    settings_t dialog_settings;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -421,31 +444,19 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    LRESULT CALLBACK suppress_cursor(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        HideCaret(dlg);
-        return DefSubclassProc(dlg, msg, wparam, lparam);
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
+        setting *s = reinterpret_cast<setting *>(lParam);
+        s->setup_controls(hwnd);
+        return 0;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    BOOL on_init_about_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
-    {
-        HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
-        SetWindowSubclass(about, suppress_cursor, 0, 0);
-        SendMessage(about, EM_SETREADONLY, 1, 0);
-        std::string version{ "Version?" };
-        get_app_version(version);
-        SetWindowTextA(about,
-                       std::format("{}\r\nv{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
-                                   localize(IDS_AppName),
-                                   version,
-                                   __TIMESTAMP__,
-                                   app::is_elevated,
-                                   app::system_memory_gb)
-                           .c_str());
-        return 0;
-    }
+    std::list<setting *> dialog_controllers;
+
+    settings_t dialog_settings;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -504,6 +515,54 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    void on_command_settings_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+
+        case app::LRESULT_LAUNCH_AS_ADMIN:
+            EndDialog(hwnd, app::LRESULT_LAUNCH_AS_ADMIN);
+            break;
+
+        case IDOK:
+            EndDialog(hwnd, 0);
+            break;
+
+        case IDCANCEL:
+            EndDialog(hwnd, 0);
+            break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    LRESULT CALLBACK suppress_cursor(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    {
+        HideCaret(dlg);
+        return DefSubclassProc(dlg, msg, wparam, lparam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    BOOL on_init_about_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
+        HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
+        SetWindowSubclass(about, suppress_cursor, 0, 0);
+        SendMessage(about, EM_SETREADONLY, 1, 0);
+        std::string version{ "Version?" };
+        get_app_version(version);
+        SetWindowTextA(about,
+                       std::format("{}\r\nv{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
+                                   localize(IDS_AppName),
+                                   version,
+                                   __TIMESTAMP__,
+                                   app::is_elevated,
+                                   app::system_memory_gb)
+                           .c_str());
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     INT_PTR setting_base_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
@@ -513,10 +572,19 @@ namespace
             HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color);
             HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color);
             HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting_handler);
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_handler);
         }
 
         return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    INT_PTR setting_enum_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_enum);
+        }
+        return setting_base_handler(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -528,6 +596,52 @@ namespace
             HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_color);
         }
         return setting_base_handler(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void update_main_window_pos(HWND hwnd, int bar, int pos)
+    {
+        static int prev_pos[SB_CTL] = { 1, 1 };
+
+        int move[SB_CTL] = { 0, 0 };
+        move[bar] = prev_pos[bar] - pos;
+        prev_pos[bar] = pos;
+        if(move[bar] != 0) {
+            ScrollWindow(hwnd, move[SB_HORZ], move[SB_VERT], NULL, NULL);
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void do_scroll(HWND hwnd, int bar, int lines)
+    {
+        SCROLLINFO si;
+        si.cbSize = sizeof(SCROLLINFO);
+        si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE | SIF_TRACKPOS;
+        GetScrollInfo(hwnd, bar, &si);
+        int max_pos = si.nMax - (si.nPage - 1);
+        int page = static_cast<int>(si.nPage);
+        int line = page * 10 / 100;
+        int new_pos = std::clamp(si.nPos + line * lines, si.nMin, max_pos);
+        SetScrollPos(hwnd, bar, new_pos, TRUE);
+        update_main_window_pos(hwnd, bar, new_pos);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void on_scroll(HWND hwnd, int bar, UINT code)
+    {
+        int new_pos = new_scroll_pos(hwnd, bar, code);
+        SetScrollPos(hwnd, bar, new_pos, TRUE);
+        update_main_window_pos(hwnd, bar, new_pos);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void on_vscroll_main_handler(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    {
+        on_scroll(hwnd, SB_VERT, code);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -561,13 +675,14 @@ namespace
                                                    setting_color_handler,    \
                                                    &dialog_settings.name));
 
-#define DECL_SETTING_ENUM(type, name, string_id, value)                          \
-    dialog_controllers.push_back(new enum_setting<type>(#name,                   \
-                                                        string_id,               \
-                                                        IDD_DIALOG_SETTING_ENUM, \
-                                                        IDC_STATIC_SETTING_ENUM, \
-                                                        setting_base_handler,    \
-                                                        &dialog_settings.name));
+#define DECL_SETTING_ENUM(type, name, string_id, names, value)             \
+    dialog_controllers.push_back(new enum_setting(#name,                   \
+                                                  string_id,               \
+                                                  IDD_DIALOG_SETTING_ENUM, \
+                                                  IDC_STATIC_SETTING_ENUM, \
+                                                  setting_enum_handler,    \
+                                                  names,                   \
+                                                  reinterpret_cast<uint *>(&dialog_settings.name)));
 
 #define DECL_SETTING_RANGED(type, name, string_id, value, min, max)                  \
     dialog_controllers.push_back(new ranged_setting<type>(#name,                     \
@@ -592,7 +707,7 @@ namespace
 
         for(auto const s : dialog_controllers) {
             HWND a = CreateDialogParamA(GetModuleHandle(null),
-                                        MAKEINTRESOURCE(s->dialog_id),
+                                        MAKEINTRESOURCE(s->dialog_resource_id),
                                         hwnd,
                                         s->dlg_handler,
                                         reinterpret_cast<LPARAM>(s));
@@ -602,7 +717,7 @@ namespace
             height += r.h();
         }
         SetWindowPos(hwnd, null, 0, 0, main_rect.w(), height, SWP_NOZORDER | SWP_NOMOVE);
-        update_scroll_info(hwnd);
+        update_scroll_info(hwnd, false, true);
         return 0;
     }
 
@@ -702,6 +817,13 @@ namespace
         }
         }
         return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void on_mousewheel_main_handler(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+    {
+        do_scroll(hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -821,40 +943,13 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void on_command_settings_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        switch(id) {
-
-        case app::LRESULT_LAUNCH_AS_ADMIN:
-            EndDialog(hwnd, app::LRESULT_LAUNCH_AS_ADMIN);
-            break;
-
-        case IDOK:
-            EndDialog(hwnd, 0);
-            break;
-
-        case IDCANCEL:
-            EndDialog(hwnd, 0);
-            break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void on_mousewheel_main_handler(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
-    {
-        do_scroll(hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
 //#pragma warning(disable : 4100)
 #pragma warning(pop)
 
 
     //////////////////////////////////////////////////////////////////////
 
-    INT_PTR main_settings_handler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR main_handler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
             HANDLE_MSG(hWnd, WM_CTLCOLORDLG, on_ctl_color);

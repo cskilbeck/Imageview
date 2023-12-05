@@ -76,15 +76,15 @@ DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 1, 1, 1,
 
 // which mouse button for interactive zoom
 
-DECL_SETTING_ENUM(mouse_button_t, zoom_button, IDS_SETTING_NAME_ZOOM_BUTTON, btn_middle);
+DECL_SETTING_ENUM(mouse_button_t, zoom_button, IDS_SETTING_NAME_ZOOM_BUTTON, enum_mouse_buttons_map, btn_middle);
 
 // which mouse button for dragging image
 
-DECL_SETTING_ENUM(mouse_button_t, drag_button, IDS_SETTING_NAME_DRAG_BUTTON, btn_right);
+DECL_SETTING_ENUM(mouse_button_t, drag_button, IDS_SETTING_NAME_DRAG_BUTTON, enum_mouse_buttons_map, btn_right);
 
 // which mouse button for selection
 
-DECL_SETTING_ENUM(mouse_button_t, select_button, IDS_SETTING_NAME_SELECT_BUTTON, btn_left);
+DECL_SETTING_ENUM(mouse_button_t, select_button, IDS_SETTING_NAME_SELECT_BUTTON, enum_mouse_buttons_map, btn_left);
 
 //////////////////////////////////////////////////////////////////////
 // window
@@ -111,6 +111,7 @@ DECL_SETTING_BOOL(auto_paste, IDS_SETTING_NAME_AUTO_PASTE, true);
 DECL_SETTING_ENUM(fullscreen_startup_option,
                   fullscreen_mode,
                   IDS_SETTING_NAME_STARTUP_FULLSCREEN,
+                  enum_fullscreen_startup_map,
                   fullscreen_startup_option::start_remember);
 
 // non-fullscreen window placement
@@ -130,6 +131,7 @@ DECL_SETTING_BOOL(show_full_filename_in_titlebar, IDS_SETTING_NAME_SHOW_FULL_FIL
 DECL_SETTING_ENUM(show_filename_option,
                   show_filename,
                   IDS_SETTING_NAME_SHOW_FILENAME,
+                  enum_show_filename_map,
                   show_filename_option::show_filename_briefly);
 
 //////////////////////////////////////////////////////////////////////
@@ -137,7 +139,8 @@ DECL_SETTING_ENUM(show_filename_option,
 
 // what to do about exif metadata
 
-DECL_SETTING_ENUM(exif_option, image_rotation_option, IDS_SETTING_NAME_EXIF_OPTION, exif_option::exif_option_apply);
+DECL_SETTING_ENUM(
+    exif_option, image_rotation_option, IDS_SETTING_NAME_EXIF_OPTION, enum_exif_map, exif_option::exif_option_apply);
 
 // how much memory to use for caching files and decoded images
 
@@ -146,6 +149,13 @@ DECL_SETTING_RANGED(
 
 // what happens when you press 'z'
 
-DECL_SETTING_ENUM(zoom_mode_t, zoom_mode, IDS_SETTING_NAME_ZOOM_MODE, zoom_mode_t::shrink_to_fit);
+DECL_SETTING_ENUM(zoom_mode_t, zoom_mode, IDS_SETTING_NAME_ZOOM_MODE, enum_zoom_mode_map, zoom_mode_t::shrink_to_fit);
+
+DECL_SETTING_ENUM(startup_zoom_mode_option,
+                  startup_zoom_mode,
+                  IDS_SETTING_NAME_STARTUP_ZOOM_MODE,
+                  enum_startup_zoom_mode_map,
+                  startup_zoom_mode_option::startup_zoom_shrink_to_fit);
+
 
 #pragma warning(pop)

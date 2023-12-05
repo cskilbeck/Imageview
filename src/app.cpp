@@ -3943,10 +3943,6 @@ namespace imageview::app
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    HRESULT hr = imageview::app::main();
-    if(FAILED(hr)) {
-        imageview::display_error("main", hr);
-        return 1;
-    }
+    imageview::app::main();
     return 0;
 }
