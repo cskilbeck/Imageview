@@ -78,15 +78,37 @@ enum mouse_button_t : int
 struct settings_t
 {
 
-#define DECL_SETTING_BOOL(name, string_id, default_value) bool name{ default_value };
+#define DECL_SETTING_SEPARATOR(string_id)
 
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) vec4 name{ r, g, b, a };
+#define DECL_SETTING_BOOL(name, string_id, default_value) \
+    bool name                                             \
+    {                                                     \
+        default_value                                     \
+    }
 
-#define DECL_SETTING_ENUM(type, name, string_id, enum_map, value) type name{ value };
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
+    vec4 name                                           \
+    {                                                   \
+        r, g, b, a                                      \
+    }
 
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) type name{ value };
+#define DECL_SETTING_ENUM(type, name, string_id, enum_map, value) \
+    type name                                                     \
+    {                                                             \
+        value                                                     \
+    }
 
-#define DECL_SETTING_INTERNAL(type, name, ...) type name{ __VA_ARGS__ };
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
+    type name                                                       \
+    {                                                               \
+        value                                                       \
+    }
+
+#define DECL_SETTING_INTERNAL(type, name, ...) \
+    type name                                  \
+    {                                          \
+        __VA_ARGS__                            \
+    }
 
 #include "settings_fields.h"
 

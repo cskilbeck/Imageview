@@ -6,6 +6,8 @@
 //////////////////////////////////////////////////////////////////////
 // background colors { r,g,b,a }
 
+DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_BACKGROUND);
+
 // border color beyond image bounds
 
 DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0.05f, 0.1f, 0.3f, 1);
@@ -16,6 +18,8 @@ DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 1, 0, 0,
 
 //////////////////////////////////////////////////////////////////////
 // grid
+
+DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_GRID);
 
 // grid on or off
 
@@ -40,6 +44,8 @@ DECL_SETTING_RANGED(int, grid_multiplier, IDS_SETTING_NAME_GRID_MULTIPLIER, 2, 1
 
 //////////////////////////////////////////////////////////////////////
 // select
+
+DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_SELECT);
 
 // selection rectangle fill color
 
@@ -74,6 +80,8 @@ DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 1, 1, 1,
 //////////////////////////////////////////////////////////////////////
 // mouse buttons
 
+DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_MOUSE);
+
 // which mouse button for interactive zoom
 
 DECL_SETTING_ENUM(mouse_button_t, zoom_button, IDS_SETTING_NAME_ZOOM_BUTTON, enum_mouse_buttons_map, btn_middle);
@@ -88,6 +96,8 @@ DECL_SETTING_ENUM(mouse_button_t, select_button, IDS_SETTING_NAME_SELECT_BUTTON,
 
 //////////////////////////////////////////////////////////////////////
 // window
+
+DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_WINDOW);
 
 // has it ever been run before? if not, use some sensible defaults for window pos
 

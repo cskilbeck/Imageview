@@ -44,6 +44,7 @@ HRESULT settings_t::serialize(serialize_action action, char const *key)
         return E_INVALIDARG;
     }
 
+#undef DECL_SETTING_SEPARATOR
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_COLOR
 #undef DECL_SETTING_ENUM
@@ -52,6 +53,8 @@ HRESULT settings_t::serialize(serialize_action action, char const *key)
 
 #define SERIALIZE_SETTING(name) \
     CHK_HR(serialize_setting(action, key, #name, reinterpret_cast<byte *>(&name), static_cast<DWORD>(sizeof(name))))
+
+#define DECL_SETTING_SEPARATOR(string_id)
 
 #define DECL_SETTING_BOOL(name, string_id, value) SERIALIZE_SETTING(name)
 
