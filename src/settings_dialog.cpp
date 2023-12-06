@@ -153,18 +153,20 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // scroll info for the settings page
 
-    scroll_info main_scroll;
+    scroll_info settings_scroll;
 
     //////////////////////////////////////////////////////////////////////
 
-    bool hide_tab(settings_tab_t const *t)
+    bool should_hide_tab(settings_tab_t const *t)
     {
         return (t->flags & hide_if_elevated) != 0 && app::is_elevated ||
                (t->flags & hide_if_not_elevated) != 0 && !app::is_elevated;
     }
 
     //////////////////////////////////////////////////////////////////////
+    // switch to a tab page
 
     HRESULT show_settings_page(uint tab)
     {
@@ -181,19 +183,10 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // UNREFERENCED PARAMETER warning suppressed in here (too unwieldy)
 
 #pragma warning(push)
 #pragma warning(disable : 4100)
-
-    //////////////////////////////////////////////////////////////////////
-
-    BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
-    {
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
-        setting *s = reinterpret_cast<setting *>(lParam);
-        s->setup_controls(hwnd);
-        return 0;
-    }
 
     //////////////////////////////////////////////////////////////////////
     // dialogs which are in tab pages have white backgrounds
@@ -204,7 +197,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // dialogs which are in tab pages have white backgrounds
+    // the separator has a gray background
 
     HBRUSH on_ctl_color_separator(HWND hwnd, HDC hdc, HWND hwndChild, int type)
     {
@@ -214,6 +207,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // default ctl color for most controls
 
     INT_PTR setting_ctlcolor_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -228,6 +222,17 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+
+    BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
+        setting *s = reinterpret_cast<setting *>(lParam);
+        s->setup_controls(hwnd);
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // base handler for settings
 
     INT_PTR setting_base_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -251,6 +256,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // a separator 'setting' isn't really a setting, just a... separator
 
     struct separator_setting : setting
     {
@@ -262,6 +268,7 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // a bool setting is a checkbox
 
     struct bool_setting : setting
     {
@@ -279,6 +286,7 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // enum setting is a combobox
 
     struct enum_setting : setting
     {
@@ -318,6 +326,7 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // color setting is a button and edit control for the hex
 
     struct color_setting : setting
     {
@@ -338,6 +347,7 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // a ranged setting is... more complicated
 
     template <typename T> struct ranged_setting : setting
     {
@@ -356,16 +366,22 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // all the settings on the settings page
 
-    std::list<setting *> dialog_controllers;
+    std::list<setting *> setting_controllers;
 
-    // currently being edited
+    //////////////////////////////////////////////////////////////////////
+    // copy of settings currently being edited
+
     settings_t dialog_settings;
 
-    // what they were when the dialog was shown (for 'cancel')
+    //////////////////////////////////////////////////////////////////////
+    // copy of settings from when the dialog was shown (for 'cancel')
+
     settings_t revert_settings;
 
     //////////////////////////////////////////////////////////////////////
+    // a colored button for setting colors
 
     void on_drawitem_setting_color(HWND hwnd, const DRAWITEMSTRUCT *lpDrawItem)
     {
@@ -388,6 +404,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // they clicked the colored button or edited the hex text
 
     void on_command_setting_color(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -432,6 +449,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // they chose a new enum value from the combobox
 
     void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -447,14 +465,24 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // suppress the text caret in the 'about' text box
 
-    LRESULT CALLBACK suppress_cursor(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    LRESULT CALLBACK suppress_cursor_subclass(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
     {
         HideCaret(dlg);
         return DefSubclassProc(dlg, msg, wparam, lparam);
     }
 
     //////////////////////////////////////////////////////////////////////
+    // BOOL setting \ DLGPROC
+
+    INT_PTR setting_bool_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        return setting_base_handler(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // ENUM setting \ DLGPROC
 
     INT_PTR setting_enum_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -466,6 +494,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // COLOR setting \ DLGPROC
 
     INT_PTR setting_color_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -478,23 +507,31 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // RANGED setting \ DLGPROC
+
+    INT_PTR setting_ranged_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        return setting_base_handler(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // PAGES
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS \ WM_VSCROLL
+    // SETTINGS page \ WM_VSCROLL
 
     void on_vscroll_settings_handler(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        on_scroll(main_scroll, SB_VERT, code);
+        on_scroll(settings_scroll, SB_VERT, code);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS \ WM_INITDIALOG
+    // SETTINGS page \ WM_INITDIALOG
 
     BOOL on_initdialog_settings_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        if(dialog_controllers.empty()) {
+        if(setting_controllers.empty()) {
 
             // snapshot current settings
             dialog_settings = settings;
@@ -506,42 +543,42 @@ namespace
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define DECL_SETTING_SEPARATOR(string_id) dialog_controllers.push_back(new separator_setting(string_id))
+#define DECL_SETTING_SEPARATOR(string_id) setting_controllers.push_back(new separator_setting(string_id))
 
-#define DECL_SETTING_BOOL(name, string_id, value)                          \
-    dialog_controllers.push_back(new bool_setting(#name,                   \
-                                                  string_id,               \
-                                                  IDD_DIALOG_SETTING_BOOL, \
-                                                  IDC_CHECK_SETTING_BOOL,  \
-                                                  setting_base_handler,    \
-                                                  &dialog_settings.name));
-
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a)                      \
-    dialog_controllers.push_back(new color_setting(#name,                    \
-                                                   string_id,                \
-                                                   IDD_DIALOG_SETTING_COLOR, \
-                                                   IDC_STATIC_SETTING_COLOR, \
-                                                   setting_color_handler,    \
+#define DECL_SETTING_BOOL(name, string_id, value)                           \
+    setting_controllers.push_back(new bool_setting(#name,                   \
+                                                   string_id,               \
+                                                   IDD_DIALOG_SETTING_BOOL, \
+                                                   IDC_CHECK_SETTING_BOOL,  \
+                                                   setting_bool_handler,    \
                                                    &dialog_settings.name));
 
-#define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)        \
-    dialog_controllers.push_back(new enum_setting(#name,                   \
-                                                  string_id,               \
-                                                  IDD_DIALOG_SETTING_ENUM, \
-                                                  IDC_STATIC_SETTING_ENUM, \
-                                                  setting_enum_handler,    \
-                                                  enum_names,              \
-                                                  reinterpret_cast<uint *>(&dialog_settings.name)));
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a)                       \
+    setting_controllers.push_back(new color_setting(#name,                    \
+                                                    string_id,                \
+                                                    IDD_DIALOG_SETTING_COLOR, \
+                                                    IDC_STATIC_SETTING_COLOR, \
+                                                    setting_color_handler,    \
+                                                    &dialog_settings.name));
 
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max)                  \
-    dialog_controllers.push_back(new ranged_setting<type>(#name,                     \
-                                                          string_id,                 \
-                                                          IDD_DIALOG_SETTING_RANGED, \
-                                                          IDC_STATIC_SETTING_RANGED, \
-                                                          setting_base_handler,      \
-                                                          &dialog_settings.name,     \
-                                                          min,                       \
-                                                          max));
+#define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)         \
+    setting_controllers.push_back(new enum_setting(#name,                   \
+                                                   string_id,               \
+                                                   IDD_DIALOG_SETTING_ENUM, \
+                                                   IDC_STATIC_SETTING_ENUM, \
+                                                   setting_enum_handler,    \
+                                                   enum_names,              \
+                                                   reinterpret_cast<uint *>(&dialog_settings.name)));
+
+#define DECL_SETTING_RANGED(type, name, string_id, value, min, max)                   \
+    setting_controllers.push_back(new ranged_setting<type>(#name,                     \
+                                                           string_id,                 \
+                                                           IDD_DIALOG_SETTING_RANGED, \
+                                                           IDC_STATIC_SETTING_RANGED, \
+                                                           setting_ranged_handler,    \
+                                                           &dialog_settings.name,     \
+                                                           min,                       \
+                                                           max));
 
 #define DECL_SETTING_INTERNAL(setting_type, name, ...)
 
@@ -566,7 +603,7 @@ namespace
 
         int cur_height = top_margin;
 
-        for(auto const s : dialog_controllers) {
+        for(auto const s : setting_controllers) {
             HWND setting = CreateDialogParamA(app::instance,
                                               MAKEINTRESOURCE(s->dialog_resource_id),
                                               hwnd,
@@ -583,21 +620,21 @@ namespace
 
         // make this window big enough to contain the settings
         SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), cur_height, SWP_NOZORDER | SWP_NOMOVE);
-        update_scrollbars(main_scroll, hwnd, tab_rect);
+        update_scrollbars(settings_scroll, hwnd, tab_rect);
 
         return 0;
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS \ WM_MOUSEWHEEL
+    // SETTINGS page \ WM_MOUSEWHEEL
 
     void on_mousewheel_settings_handler(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
-        scroll_window(main_scroll, SB_VERT, -zDelta / WHEEL_DELTA);
+        scroll_window(settings_scroll, SB_VERT, -zDelta / WHEEL_DELTA);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS \ DLGPROC
+    // SETTINGS page \ DLGPROC
 
     INT_PTR settings_handler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -615,7 +652,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
-    // RELAUNCH (explorer) \ WM_COMMAND
+    // RELAUNCH (explorer) page \ WM_COMMAND
 
     void on_command_relaunch_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -628,7 +665,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // RELAUNCH (explorer) \ DLGPROC
+    // RELAUNCH (explorer) page \ DLGPROC
 
     INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -643,7 +680,8 @@ namespace
     // EXPLORER page handlers
     //////////////////////////////////////////////////////////////////////
 
-    // EXPLORER \ DLGPROC
+    //////////////////////////////////////////////////////////////////////
+    // EXPLORER page \ DLGPROC
 
     INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -654,12 +692,12 @@ namespace
     // ABOUT page handlers
     //////////////////////////////////////////////////////////////////////
 
-    // ABOUT \ WM_INITDIALOG
+    // ABOUT page \ WM_INITDIALOG
 
     BOOL on_init_about_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
-        SetWindowSubclass(about, suppress_cursor, 0, 0);
+        SetWindowSubclass(about, suppress_cursor_subclass, 0, 0);
         SendMessage(about, EM_SETREADONLY, 1, 0);
         std::string version{ "Version?" };
         get_app_version(version);
@@ -675,7 +713,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // ABOUT \ WM_COMMAND
+    // ABOUT page \ WM_COMMAND
 
     void on_command_about_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -731,7 +769,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // ABOUT \ DLGPROC
+    // ABOUT page \ DLGPROC
 
     INT_PTR about_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -748,7 +786,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
-    // HOTKEYS \ WM_INITDIALOG
+    // HOTKEYS page \ WM_INITDIALOG
 
     BOOL on_init_hotkeys_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
@@ -809,7 +847,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // HOTKEYS \ WM_SHOWWINDOW
+    // HOTKEYS page \ WM_SHOWWINDOW
 
     void on_showwindow_hotkeys_handler(HWND hwnd, BOOL fShow, UINT status)
     {
@@ -824,7 +862,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // HOTKEYS \ WM_NOTIFY
+    // HOTKEYS page \ WM_NOTIFY
 
     int on_notify_hotkeys_handler(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
@@ -849,7 +887,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // HOTKEYS \ DLGPROC
+    // HOTKEYS page \ DLGPROC
 
     INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
@@ -867,7 +905,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
-    // MAIN \ WM_INITDIALOG
+    // MAIN dialog \ WM_INITDIALOG
 
     BOOL on_init_main_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
@@ -887,7 +925,7 @@ namespace
 
             settings_tab_t *tab = tabs + i;
 
-            if(!hide_tab(tab)) {
+            if(!should_hide_tab(tab)) {
 
                 std::string tab_text = localize((uint64)tab->resource_id);
                 TCITEMA tci;
@@ -910,7 +948,7 @@ namespace
 
         for(auto t : active_tabs) {
 
-            if(!hide_tab(t)) {
+            if(!should_hide_tab(t)) {
 
                 if(t->resource_id == requested_tab_resource_id) {
                     active_tab_index = t->index;
@@ -949,7 +987,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // MAIN \ WM_NOTIFY
+    // MAIN dialog \ WM_NOTIFY
 
     int on_notify_main_handler(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
@@ -968,7 +1006,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // MAIN \ WM_COMMAND
+    // MAIN dialog \ WM_COMMAND
 
     void on_command_main_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -989,7 +1027,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // MAIN \ DLGPROC
+    // MAIN dialog \ DLGPROC
 
     INT_PTR main_dialog_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
