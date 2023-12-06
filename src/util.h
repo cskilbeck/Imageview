@@ -16,7 +16,7 @@ namespace imageview
     HRESULT log_win32_error(DWORD err, char const *message, ...);
     HRESULT log_win32_error(char const *message, ...);
     void display_error(std::string const &message, HRESULT hr = 0);
-    int message_box(HWND hwnd, std::string const &text, std::string const &title, uint buttons);
+    int message_box(HWND hwnd, std::string const &text, uint buttons);
 
     //////////////////////////////////////////////////////////////////////
 
@@ -96,9 +96,44 @@ namespace imageview
     }
 
     //////////////////////////////////////////////////////////////////////
+
+    inline int rect_width(RECT const &r)
+    {
+        return r.right - r.left;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    inline int rect_height(RECT const &r)
+    {
+        return r.bottom - r.top;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    inline POINT rect_top_left(RECT const &r)
+    {
+        return { r.left, r.top };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    inline SIZE rect_size(RECT const &r)
+    {
+        return { rect_width(r), rect_height(r) };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    inline std::string rect_to_string(RECT const &r)
+    {
+        return std::format("{},{} ({}x{})", r.left, r.top, rect_width(r), rect_height(r));
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // string
 
-    std::string localize(uint64 id);
+    std::string localize(uint id);
     std::string convert_wide_text_to_utf8_string(wchar const *text, size_t len);
     std::string convert_wide_text_to_ascii_string(wchar const *text, size_t len);
     std::wstring convert_utf8_text_to_wide_string(char const *text, size_t len);

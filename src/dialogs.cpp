@@ -92,7 +92,7 @@ namespace
         if(uiMsg == WM_INITDIALOG) {
             CHOOSECOLOR *cc = reinterpret_cast<CHOOSECOLOR *>(lParam);
             if(cc != null && cc->lCustData != 0) {
-                SetWindowTextA(hdlg, reinterpret_cast<char const *>(cc->lCustData));
+                SetWindowTextW(hdlg, reinterpret_cast<wchar const *>(cc->lCustData));
             }
         }
         return 0;

@@ -22,7 +22,7 @@ namespace imageview::hotkeys
     {
         // load the accelerator table and get all the ACCEL structures
 
-        CHK_NULL(accelerators = LoadAccelerators(GetModuleHandle(null), MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
+        CHK_NULL(accelerators = LoadAccelerators(app::instance, MAKEINTRESOURCE(IDR_ACCELERATORS_EN_UK)));
 
         UINT num_accelerators = CopyAcceleratorTable(accelerators, null, 0);
 

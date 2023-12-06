@@ -12,16 +12,15 @@ namespace imageview
             return E_INVALIDARG;
         }
 
-        HINSTANCE instance = GetModuleHandle(null);
 
         HRSRC rsrc;
-        CHK_NULL(rsrc = FindResourceA(instance, MAKEINTRESOURCEA(id), type));
+        CHK_NULL(rsrc = FindResourceA(app::instance, MAKEINTRESOURCEA(id), type));
 
         size_t len;
-        CHK_ZERO(len = SizeofResource(instance, rsrc));
+        CHK_ZERO(len = SizeofResource(app::instance, rsrc));
 
         HGLOBAL mem;
-        CHK_NULL(mem = LoadResource(instance, rsrc));
+        CHK_NULL(mem = LoadResource(app::instance, rsrc));
 
         void *data;
         CHK_NULL(data = LockResource(mem));
@@ -83,9 +82,10 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    int message_box(HWND hwnd, std::string const &text, std::string const &title, uint buttons)
+    int message_box(HWND hwnd, std::string const &text, uint buttons)
     {
-        return MessageBoxW(hwnd, unicode(text).c_str(), unicode(title).c_str(), buttons);
+        std::wstring title = unicode(localize(IDS_AppName));
+        return MessageBoxW(hwnd, unicode(text).c_str(), title.c_str(), buttons);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -95,8 +95,8 @@ namespace imageview
         if(hr == 0) {
             hr = HRESULT_FROM_WIN32(GetLastError());
         }
-        std::string err = std::format("Error:\n\n{}\n\n{}", message, windows_error_message(hr));
-        message_box(null, err.c_str(), localize(IDS_AppName).c_str(), MB_ICONEXCLAMATION);
+        std::string err = std::format("{}\r\n{}\r\n{}", localize(IDS_ERROR), message, windows_error_message(hr));
+        message_box(null, err, MB_ICONEXCLAMATION);
         log_win32_error(hr, err.c_str());
     }
 
@@ -161,9 +161,9 @@ namespace imageview
     //////////////////////////////////////////////////////////////////////
     // get a localized string by id
 
-    std::string localize(uint64 id)
+    std::string localize(uint id)
     {
-        static std::unordered_map<uint64, std::string> localized_strings;
+        static std::unordered_map<uint, std::string> localized_strings;
 
         auto f = localized_strings.find(id);
 
@@ -174,7 +174,7 @@ namespace imageview
         // For some reason LoadStringA doesn't work...?
 
         wchar *str;
-        int len = LoadStringW(GetModuleHandle(null), static_cast<uint>(id), reinterpret_cast<wchar *>(&str), 0);
+        int len = LoadStringW(app::instance, id, reinterpret_cast<wchar *>(&str), 0);
 
         if(len <= 0) {
             return std::format("UNLOCALIZED_{}", id);

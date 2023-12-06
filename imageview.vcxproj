@@ -240,6 +240,7 @@
     <ClInclude Include="src\log.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\rect.h" />
+    <ClInclude Include="src\scrollbar.h" />
     <ClInclude Include="src\settings.h" />
     <ClInclude Include="src\settings_fields.h" />
     <ClInclude Include="src\settings_dialog.h" />
@@ -264,6 +265,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\scrollbar.cpp" />
     <ClCompile Include="src\settings.cpp" />
     <ClCompile Include="src\settings_dialog.cpp" />
     <ClCompile Include="src\thread_pool.cpp" />

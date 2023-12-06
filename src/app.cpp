@@ -1,9 +1,9 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
 // settings / keyboard shortcuts dialog
-// localization
 // file type association / handler thing
 // settings dialog in a thread so apply is instant (send new settings to main thread as a window message)
+// overlay grid as well as background checkerboard
 //
 // command line parameters ?
 // -log_level
@@ -25,11 +25,9 @@
 //////////////////////////////////////////////////////////////////////
 // TO FIX
 //
-// alt key problem freezes window every other time you press it
-// colorspace wrong in png or heif (they're different, either way)
-// colorspace error when decoding heif
+// colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
 // handle SRGB / premultiplied alpha correctly in image decoder
-// HDR (requires windows version?)
+// HDR (requires windows version 10 1703?)
 //
 // the cache
 // all the leaks
@@ -244,6 +242,8 @@ namespace imageview::app
 
     LPCSTR window_class = "ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
+    HMODULE instance;
+
     bool is_elevated{ false };
     uint64 system_memory_gb;
 
@@ -383,12 +383,12 @@ namespace imageview::app
 
     // mouse admin
     int mouse_grab{ 0 };
-    point_s mouse_pos[btn_count] = {};
-    point_s mouse_offset[btn_count] = {};
-    point_s mouse_click[btn_count] = {};
-    point_s cur_mouse_pos;
-    point_s shift_mouse_pos;
-    point_s ctrl_mouse_pos;
+    POINT mouse_pos[btn_count] = {};
+    POINT mouse_offset[btn_count] = {};
+    POINT mouse_click[btn_count] = {};
+    POINT cur_mouse_pos;
+    POINT shift_mouse_pos;
+    POINT ctrl_mouse_pos;
     uint64 mouse_click_timestamp[btn_count];
 
     // hold modifier key to snap selection square or fix on an axis
@@ -419,7 +419,7 @@ namespace imageview::app
         {
             HMODULE h = null;
             if(source == src::user) {
-                h = GetModuleHandle(null);
+                h = app::instance;
             }
             return LoadCursor(h, MAKEINTRESOURCEA(id));
         }
@@ -519,18 +519,18 @@ namespace imageview::app
     void error_message_box(std::string const &msg, HRESULT hr)
     {
         std::string err = windows_error_message(hr);
-        message_box(null, std::format("{}\r\n{}", msg, err), localize(IDS_AppName), MB_ICONEXCLAMATION);
+        message_box(null, std::format("{}\r\n{}", msg, err), MB_ICONEXCLAMATION);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    rect center_rect_on_default_monitor(rect const &r)
+    RECT center_rect_on_default_monitor(RECT const &r)
     {
         int sw = GetSystemMetrics(SM_CXSCREEN);
         int sh = GetSystemMetrics(SM_CYSCREEN);
-        int ww = r.w();
-        int wh = r.h();
-        rect rc;
+        int ww = rect_width(r);
+        int wh = rect_height(r);
+        RECT rc;
         rc.left = (sw - ww) / 2;
         rc.top = (sh - wh) / 2;
         rc.right = rc.left + ww;
@@ -1134,9 +1134,9 @@ namespace imageview::app
     {
         std::string admin;
         if(is_elevated) {
-            admin = "** ADMIN! ** ";
+            admin = localize(IDS_ADMIN);
         }
-        SetWindowTextA(window, std::format("{}{}", admin, text).c_str());
+        SetWindowTextW(window, unicode(std::format("{}{}", admin, text)).c_str());
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1902,9 +1902,9 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // convert a window pos (point_s) to texel pos
+    // convert a window pos to texel pos
 
-    vec2 screen_to_texture_pos(point_s pos)
+    vec2 screen_to_texture_pos(POINT pos)
     {
         return screen_to_texture_pos(vec2(pos));
     }
@@ -1928,7 +1928,7 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // this is a mess, but kinda necessarily so
 
-    HRESULT get_startup_rect_and_style(rect *r, DWORD *style, DWORD *ex_style)
+    HRESULT get_startup_rect_and_style(RECT *r, DWORD *style, DWORD *ex_style)
     {
         if(r == null || style == null || ex_style == null) {
             return E_INVALIDARG;
@@ -1951,8 +1951,8 @@ namespace imageview::app
             settings.fullscreen_rect = { 0, 0, default_monitor_width, default_monitor_height };
             *style = WS_OVERLAPPEDWINDOW;
             *r = { 0, 0, default_monitor_width * 2 / 3, default_monitor_height * 2 / 3 };
-            window_width = r->w();
-            window_height = r->h();
+            window_width = rect_width(*r);
+            window_height = rect_height(*r);
             AdjustWindowRectEx(r, *style, FALSE, *ex_style);
             *r = center_rect_on_default_monitor(*r);
             return S_OK;
@@ -1975,10 +1975,10 @@ namespace imageview::app
             *r = settings.window_placement.rcNormalPosition;
 
             // get client size of window rect for WS_OVERLAPPEDWINDOW
-            rect z{ 0, 0, 0, 0 };
+            RECT z{ 0, 0, 0, 0 };
             AdjustWindowRectEx(&z, *style, false, *ex_style);
-            window_width = std::max(100l, r->w() - z.w());
-            window_height = std::max(100l, r->h() - z.h());
+            window_width = std::max(100, rect_width(*r) - rect_width(z));
+            window_height = std::max(100, rect_height(*r) - rect_height(z));
 
         } else {
 
@@ -1987,16 +1987,16 @@ namespace imageview::app
             // check the monitor is still there and the same size
             MONITORINFO i;
             i.cbSize = sizeof(MONITORINFO);
-            HMONITOR m = MonitorFromPoint(settings.fullscreen_rect.top_left(), MONITOR_DEFAULTTONEAREST);
+            HMONITOR m = MonitorFromPoint(rect_top_left(settings.fullscreen_rect), MONITOR_DEFAULTTONEAREST);
             if(m != null && GetMonitorInfo(m, &i) &&
-               memcmp(&settings.fullscreen_rect, &i.rcMonitor, sizeof(rect)) == 0) {
+               memcmp(&settings.fullscreen_rect, &i.rcMonitor, sizeof(RECT)) == 0) {
                 *r = settings.fullscreen_rect;
             } else {
                 *r = { 0, 0, default_monitor_width, default_monitor_height };
             }
             // client size is same as window rect for WS_POPUP (no border/caption etc)
-            window_width = r->w();
-            window_height = r->h();
+            window_width = rect_width(*r);
+            window_height = rect_height(*r);
         }
         LOG_INFO("Startup window is {}x{} (at {},{})", window_width, window_height, r->left, r->top);
         return S_OK;
@@ -2125,8 +2125,7 @@ namespace imageview::app
 
         if(settings.fullscreen) {
             GetWindowPlacement(window, &settings.window_placement);
-            LOG_INFO("toggle_fullscreen: {}",
-                     ((rect const *)(&settings.window_placement.rcNormalPosition))->to_string());
+            LOG_INFO("toggle_fullscreen: {}", rect_to_string(settings.window_placement.rcNormalPosition));
             style = WS_POPUP;
         }
 
@@ -2139,9 +2138,9 @@ namespace imageview::app
             monitor_info.cbSize = sizeof(MONITORINFO);
 
             HMONITOR h = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
-            rect window_rect;
+            RECT window_rect;
             if(h != null && GetMonitorInfo(h, &monitor_info)) {
-                window_rect = rect::as(monitor_info.rcMonitor);
+                window_rect = monitor_info.rcMonitor;
             } else {
                 window_rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
             }
@@ -2150,8 +2149,8 @@ namespace imageview::app
 
             int sx = window_rect.left;
             int sy = window_rect.top;
-            int sw = window_rect.w();
-            int sh = window_rect.h();
+            int sw = rect_width(window_rect);
+            int sh = rect_height(window_rect);
 
             SetWindowPos(window, HWND_TOP, sx, sy, sw, sh, SWP_FRAMECHANGED | SWP_HIDEWINDOW);
             ShowWindow(window, SW_SHOW);
@@ -2234,7 +2233,7 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // WM_[L/M/R]BUTTONDOWN]
 
-    void on_mouse_button_down(point_s pos, uint button)
+    void on_mouse_button_down(POINT pos, uint button)
     {
         assert(button < btn_count);
 
@@ -2270,7 +2269,7 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // WM_[L/M/R]BUTTONUP]
 
-    void on_mouse_button_up(point_s pos, uint button)
+    void on_mouse_button_up(POINT pos, uint button)
     {
         mouse_button_t btn = static_cast<mouse_button_t>(button);
         clear_mouse_button(btn);
@@ -2290,14 +2289,14 @@ namespace imageview::app
                 SystemParametersInfo(SPI_GETMOUSEHOVERHEIGHT, 0, &hover_high, 0);
                 SystemParametersInfo(SPI_GETMOUSEHOVERWIDTH, 0, &hover_wide, 0);
 
-                point_s const &click_pos = mouse_click[settings.drag_button];
+                POINT const &click_pos = mouse_click[settings.drag_button];
 
                 uint x_distance = std::abs(click_pos.x - pos.x);
                 uint y_distance = std::abs(click_pos.y - pos.y);
 
                 if(x_distance < hover_wide && y_distance < hover_high) {
 
-                    HMENU menu = LoadMenu(GetModuleHandle(null), MAKEINTRESOURCE(IDR_MENU_POPUP));
+                    HMENU menu = LoadMenu(app::instance, MAKEINTRESOURCE(IDR_MENU_POPUP));
                     HMENU popup_menu = GetSubMenu(menu, 0);
                     POINT screen_pos{ click_pos.x, click_pos.y };
                     ClientToScreen(window, &screen_pos);
@@ -2334,7 +2333,7 @@ namespace imageview::app
     //////////////////////////////////////////////////////////////////////
     // zoom in or out, focusing on a point
 
-    void do_zoom(point_s pos, int delta)
+    void do_zoom(POINT pos, int delta)
     {
         // get normalized position
         float px = (pos.x - current_rect.x) / current_rect.w;
@@ -2503,7 +2502,7 @@ namespace imageview::app
 
     void reset_settings()
     {
-        if(message_box(window, localize(IDS_RESET_SETTINGS), localize(IDS_AppName), MB_YESNO) == IDYES) {
+        if(message_box(window, localize(IDS_RESET_SETTINGS), MB_YESNO) == IDYES) {
 
             bool old_fullscreen = settings.fullscreen;
             WINDOWPLACEMENT old_windowplacement = settings.window_placement;
@@ -3202,7 +3201,8 @@ namespace imageview::app
                 image::image_t const &img = current_file->img;
                 HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
-                    message_box(window, windows_error_message(hr), localize(IDS_CANT_SAVE_FILE), MB_ICONEXCLAMATION);
+                    std::string msg = std::format("{}\r\n{}", localize(IDS_CANT_SAVE_FILE), windows_error_message(hr));
+                    message_box(window, msg, MB_ICONEXCLAMATION);
                 } else {
                     set_message(std::format("{} {}", localize(IDS_SAVED_FILE), filename), 5);
                 }
@@ -3248,8 +3248,8 @@ namespace imageview::app
         RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
         if(!settings.first_run && !settings.fullscreen) {
-            rect const &rc = settings.window_placement.rcNormalPosition;
-            LOG_DEBUG("INITIALLY: {} ({})", rc.to_string(), settings.window_placement.showCmd);
+            RECT const &rc = settings.window_placement.rcNormalPosition;
+            LOG_DEBUG("INITIALLY: {} ({})", rect_to_string(rc), settings.window_placement.showCmd);
             WINDOWPLACEMENT hidden = settings.window_placement;
             hidden.flags = 0;
             hidden.showCmd = SW_HIDE;
@@ -3286,14 +3286,14 @@ namespace imageview::app
     {
         FORWARD_WM_NCCALCSIZE(hwnd, fCalcValidRects, lpcsp, DefWindowProcA);
 
-        rect const &new_client_rect = lpcsp->rgrc[0];
+        RECT const &new_client_rect = lpcsp->rgrc[0];
 
         // if starting window maximized, ignore the first wm_nccalcsize, it's got bogus dimensions
 
         if(!(frame_count == 0 && settings.window_placement.showCmd == SW_SHOWMAXIMIZED)) {
 
-            int width = new_client_rect.w();
-            int height = new_client_rect.h();
+            int new_width = rect_width(new_client_rect);
+            int new_height = rect_height(new_client_rect);
             WINDOWPLACEMENT wp;
             wp.length = sizeof(wp);
             GetWindowPlacement(window, &wp);
@@ -3302,8 +3302,8 @@ namespace imageview::app
                 return S_OK;
             }
 
-            window_width = std::max(width, 1);
-            window_height = std::max(height, 1);
+            window_width = std::max(new_width, 1);
+            window_height = std::max(new_height, 1);
 
             if(FAILED(create_resources())) {
                 // Hmmm
@@ -3407,45 +3407,39 @@ namespace imageview::app
 
     void OnLButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
-        on_mouse_button_down(pos, btn_left);
+        on_mouse_button_down({ x, y }, btn_left);
     }
 
     void OnRButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
-        on_mouse_button_down(pos, btn_right);
+        on_mouse_button_down({ x, y }, btn_right);
     }
 
     void OnMButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
-        on_mouse_button_down(pos, btn_middle);
+        on_mouse_button_down({ x, y }, btn_middle);
     }
 
     void OnLButtonUp(HWND hwnd, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
-        on_mouse_button_up(pos, btn_left);
+        on_mouse_button_up({ x, y }, btn_left);
     }
 
     void OnRButtonUp(HWND hwnd, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
-        on_mouse_button_up(pos, btn_right);
+        on_mouse_button_up({ x, y }, btn_right);
     }
 
     void OnMButtonUp(HWND hwnd, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
-        on_mouse_button_up(pos, btn_middle);
+        on_mouse_button_up({ x, y }, btn_middle);
     }
 
     //////////////////////////////////////////////////////////////////////
 
     void OnMouseMove(HWND hwnd, int x, int y, UINT keyFlags)
     {
-        point_s pos{ static_cast<short>(x), static_cast<short>(y) };
+        POINT pos{ x, y };
 
         if(!get_mouse_buttons(settings.zoom_button)) {
             cur_mouse_pos = pos;
@@ -3570,7 +3564,7 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
-    void OnDpiChanged(HWND hwnd, UINT xdpi, UINT ydpi, rect const *new_rect)
+    void OnDpiChanged(HWND hwnd, UINT xdpi, UINT ydpi, RECT const *new_rect)
     {
         if(!ignore_dpi_for_a_moment) {
 
@@ -3583,7 +3577,7 @@ namespace imageview::app
 
             create_text_formats();
 
-            MoveWindow(window, new_rect->x(), new_rect->y(), new_rect->w(), new_rect->h(), true);
+            MoveWindow(window, new_rect->left, new_rect->top, rect_width(*new_rect), rect_height(*new_rect), true);
         }
     }
 
@@ -3664,7 +3658,7 @@ namespace imageview::app
     // These are missing from windowsx.h
 
 #define HANDLE_WM_DPICHANGED(hwnd, wParam, lParam, fn) \
-    ((fn)((hwnd), (UINT)LOWORD(wParam), (UINT)HIWORD(wParam), (rect const *)(lParam)), 0L)
+    ((fn)((hwnd), (UINT)LOWORD(wParam), (UINT)HIWORD(wParam), (RECT const *)(lParam)), 0L)
 
 #define HANDLE_WM_INPUT(hwnd, wParam, lParam, fn) ((fn)((hwnd), (HRAWINPUT)(lParam)), 0L)
 
@@ -3754,11 +3748,13 @@ namespace imageview::app
 
     HRESULT main()
     {
+        instance = GetModuleHandle(null);
+
         // check for required CPU support (for DirectXMath SIMD)
 
         if(!XMVerifyCPUSupport()) {
             std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
-            message_box(null, message, localize(IDS_AppName), MB_ICONEXCLAMATION);
+            message_box(null, message, MB_ICONEXCLAMATION);
             return 0;
         }
 
@@ -3778,7 +3774,6 @@ namespace imageview::app
             if(FAILED(settings.load())) {
                 message_box(null,
                             std::format("{}\r\n{}", localize(IDS_FAILED_TO_LOAD_SETTINGS), windows_error_message()),
-                            localize(IDS_AppName),
                             MB_ICONEXCLAMATION);
             }
 
@@ -3847,14 +3842,14 @@ namespace imageview::app
 
         // right, register window class
 
-        HICON icon = LoadIcon(GetModuleHandle(null), MAKEINTRESOURCE(IDI_ICON_DEFAULT));
+        HICON icon = LoadIcon(app::instance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
         HCURSOR cursor = LoadCursor(null, IDC_ARROW);
 
         WNDCLASSEXA wcex = {};
         wcex.cbSize = sizeof(WNDCLASSEXW);
         wcex.style = CS_HREDRAW | CS_VREDRAW;
         wcex.lpfnWndProc = WndProc;
-        wcex.hInstance = GetModuleHandle(null);
+        wcex.hInstance = app::instance;
         wcex.hIcon = icon;
         wcex.hCursor = cursor;
         wcex.lpszClassName = window_class;
@@ -3867,7 +3862,7 @@ namespace imageview::app
 
         DWORD window_style;
         DWORD window_ex_style;
-        rect rc;
+        RECT rc;
         CHK_HR(get_startup_rect_and_style(&rc, &window_style, &window_ex_style));
 
         // create the window
@@ -3877,13 +3872,13 @@ namespace imageview::app
                                         window_class,
                                         localize(IDS_AppName).c_str(),
                                         window_style,
-                                        rc.x(),
-                                        rc.y(),
-                                        rc.w(),
-                                        rc.h(),
+                                        rc.left,
+                                        rc.top,
+                                        rect_width(rc),
+                                        rect_height(rc),
                                         null,
                                         null,
-                                        GetModuleHandle(null),
+                                        app::instance,
                                         null));
 
         // pump messages

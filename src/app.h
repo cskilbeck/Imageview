@@ -17,12 +17,17 @@ namespace imageview::app
     extern uint64 system_memory_gb;
 
     //////////////////////////////////////////////////////////////////////
-    // return this from settings dialog to relaunch as admin
-
-    static constexpr LRESULT LRESULT_LAUNCH_AS_ADMIN = 0x29034893;
-
-    //////////////////////////////////////////////////////////////////////
     // the current accelerator (hotkey) table
 
     extern HACCEL accelerators;
+
+    //////////////////////////////////////////////////////////////////////
+    // the current application instance
+
+    extern HMODULE instance;
+
+    //////////////////////////////////////////////////////////////////////
+    // return this from settings dialog to relaunch as admin
+
+    static constexpr LRESULT LRESULT_LAUNCH_AS_ADMIN = 0x29034893;
 };

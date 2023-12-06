@@ -2,67 +2,8 @@
 
 #pragma once
 
-//////////////////////////////////////////////////////////////////////
 namespace imageview
 {
-    struct rect : RECT
-    {
-        rect() = default;
-
-        rect(RECT const &r) : RECT(r)
-        {
-        }
-
-        rect(long l, long t, long r, long b) : RECT{ l, t, r, b }
-        {
-        }
-
-        inline static rect &as(RECT &r)
-        {
-            return (rect &)r;
-        }
-
-        long w() const
-        {
-            return right - left;
-        }
-
-        long h() const
-        {
-            return bottom - top;
-        }
-
-        long x() const
-        {
-            return left;
-        }
-
-        long y() const
-        {
-            return top;
-        }
-
-        long r() const
-        {
-            return right;
-        }
-
-        long b() const
-        {
-            return bottom;
-        }
-
-        POINT top_left() const
-        {
-            return { left, top };
-        }
-
-        std::string to_string() const
-        {
-            return std::format("{},{} ({}x{})", x(), y(), w(), h());
-        }
-    };
-
     //////////////////////////////////////////////////////////////////////
 
     struct vec2
@@ -122,53 +63,6 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    struct size : vec2
-    {
-        size() = default;
-
-        explicit size(float x, float y) : vec2(x, y)
-        {
-        }
-
-        explicit size(vec2 v) : vec2(v)
-        {
-        }
-    };
-
-    //////////////////////////////////////////////////////////////////////
-
-    struct point_s : POINTS
-    {
-        point_s() : POINTS()
-        {
-        }
-
-        point_s(short x, short y) : POINTS{ x, y }
-        {
-        }
-
-        // shady
-        point_s(POINT const &p) : POINTS{ (SHORT)p.x, (SHORT)p.y }
-        {
-        }
-
-        point_s(POINTS const &p) : POINTS(p)
-        {
-        }
-
-        operator POINTS()
-        {
-            return *this;
-        }
-
-        operator POINT()
-        {
-            return { x, y };
-        }
-    };
-
-    //////////////////////////////////////////////////////////////////////
-
     struct rect_f
     {
         float x;
@@ -179,10 +73,6 @@ namespace imageview
         rect_f() = default;
 
         rect_f(float _x, float _y, float _w, float _h) : x(_x), y(_y), w(_w), h(_h)
-        {
-        }
-
-        rect_f(vec2 topleft, size wh) : x(topleft.x), y(topleft.y), w(wh.x), h(wh.y)
         {
         }
 

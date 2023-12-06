@@ -130,7 +130,7 @@ DECL_SETTING_INTERNAL(WINDOWPLACEMENT, window_placement, sizeof(WINDOWPLACEMENT)
 
 // last fullscreen rect
 
-DECL_SETTING_INTERNAL(imageview::rect, fullscreen_rect, 0, 0, 0, 0);
+DECL_SETTING_INTERNAL(RECT, fullscreen_rect, 0, 0, 0, 0);
 
 // show either just filename or full path in window titlebar
 
