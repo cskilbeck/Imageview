@@ -53,7 +53,7 @@ DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0.1f, 
 
 // selection rectangle alpha
 
-DECL_SETTING_RANGED(select_fill_alpha, IDS_SETTING_NAME_SELECT_FILL_ALPHA, 64, 8, 248);
+DECL_SETTING_RANGED(select_fill_alpha, IDS_SETTING_NAME_SELECT_FILL_ALPHA, 64, 0, 255);
 
 // selection outline colors (line alternates)
 
@@ -70,11 +70,11 @@ DECL_SETTING_INTERNAL(float, select_border_grab_size, 8);
 
 // selection border width (1 or maybe 2, anything bigger likely to cause problems)
 
-DECL_SETTING_RANGED(select_border_width, IDS_SETTING_NAME_SELECT_BORDER_WIDTH, 2, 1, 4);
+DECL_SETTING_RANGED(select_border_width, IDS_SETTING_NAME_SELECT_BORDER_WIDTH, 2, 1, 16);
 
 // selection line dash length
 
-DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 32);
+DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 64);
 
 // crosshair line colors
 

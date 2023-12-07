@@ -69,23 +69,19 @@ namespace
 
     HWND app_window = null;
 
-    int current_page = -1;
-
-    std::atomic_bool dialog_is_active{ false };
-
     //////////////////////////////////////////////////////////////////////
 
     enum tab_flags_t
     {
         dont_care = 0,
-        hide_if_elevated = 1,
-        hide_if_not_elevated = 2,
+        hide_if_elevated = (1 << 0),
+        hide_if_not_elevated = (1 << 1),
     };
 
-    struct settings_tab_t
+    struct tab_page_t
     {
         uint resource_id;
-        DLGPROC handler;
+        DLGPROC dlg_proc;
         int flags;
         int index;
         HWND hwnd;
@@ -93,39 +89,39 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    INT_PTR settings_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
-    INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
-    INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
-    INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
-    INT_PTR about_handler(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR settings_dlgproc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR hotkeys_dlgproc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR explorer_dlgproc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR relaunch_dlgproc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
+    INT_PTR about_dlgproc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
 
     //////////////////////////////////////////////////////////////////////
     // all the tabs that can be created
 
-    settings_tab_t tabs[] = {
-        { IDD_DIALOG_SETTINGS_MAIN, settings_handler, dont_care },
-        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_handler, dont_care },
-        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_handler, hide_if_not_elevated },
-        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_handler, hide_if_elevated },
-        { IDD_DIALOG_SETTINGS_ABOUT, about_handler, dont_care },
+    tab_page_t all_tabs[] = {
+        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, dont_care },
+        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, dont_care },
+        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, hide_if_not_elevated },
+        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, hide_if_elevated },
+        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, dont_care },
     };
 
     //////////////////////////////////////////////////////////////////////
     // which tabs will be shown (some might be hidden)
 
-    std::vector<settings_tab_t *> active_tabs;
+    std::vector<tab_page_t *> active_tabs;
 
     //////////////////////////////////////////////////////////////////////
     // all the settings derive from this
 
     struct setting
     {
-        setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler)
+        setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlgproc)
             : internal_name(n)
             , string_resource_id(s)
             , dialog_resource_id(dlg_id)
             , text_item_ctl_id(text_id)
-            , dlg_handler(handler)
+            , dlg_proc(dlgproc)
         {
         }
 
@@ -141,7 +137,7 @@ namespace
         // which control contains the descriptive text
         uint text_item_ctl_id;
 
-        DLGPROC dlg_handler;
+        DLGPROC dlg_proc;
 
         // set name text and update controls for editing this setting
         virtual void setup_controls(HWND hwnd)
@@ -170,7 +166,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    bool should_hide_tab(settings_tab_t const *t)
+    bool should_hide_tab(tab_page_t const *t)
     {
         return (t->flags & hide_if_elevated) != 0 && app::is_elevated ||
                (t->flags & hide_if_not_elevated) != 0 && !app::is_elevated;
@@ -179,17 +175,15 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // switch to a tab page
 
-    HRESULT show_settings_page(uint tab)
+    HRESULT show_current_page(int show)
     {
+        HWND tab_ctrl = GetDlgItem(main_dialog, IDC_SETTINGS_TAB_CONTROL);
+        uint tab = TabCtrl_GetCurSel(tab_ctrl);
         if(tab >= active_tabs.size()) {
             LOG_ERROR("!? Tab {} is out of range (there are {} tabs)", tab, active_tabs.size());
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
-        if(current_page != -1) {
-            ShowWindow(active_tabs[current_page]->hwnd, SW_HIDE);
-        }
-        current_page = tab;
-        ShowWindow(active_tabs[current_page]->hwnd, SW_SHOW);
+        ShowWindow(active_tabs[tab]->hwnd, show);
         return S_OK;
     }
 
@@ -200,15 +194,15 @@ namespace
 #pragma warning(disable : 4100)
 
     //////////////////////////////////////////////////////////////////////
-    // dialogs which are in tab pages have white backgrounds
+    // tab pages have white backgrounds - this sets the background of all controls to white
 
-    HBRUSH on_ctl_color(HWND hwnd, HDC hdc, HWND hwndChild, int type)
+    HBRUSH on_ctl_color_base(HWND hwnd, HDC hdc, HWND hwndChild, int type)
     {
         return GetSysColorBrush(COLOR_WINDOW);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // the separator has a gray background
+    // only the separator has a gray background
 
     HBRUSH on_ctl_color_separator(HWND hwnd, HDC hdc, HWND hwndChild, int type)
     {
@@ -220,21 +214,21 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // default ctl color for most controls
 
-    INT_PTR setting_ctlcolor_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_ctlcolor_base(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color);
-            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color);
-            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color);
-            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color);
+            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color_base);
+            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color_base);
+            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color_base);
+            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color_base);
         }
         return 0;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    BOOL on_initdialog_setting_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
         setting *s = reinterpret_cast<setting *>(lParam);
@@ -243,27 +237,27 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // base handler for settings
+    // base dialog proc for settings
 
-    INT_PTR setting_base_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting_handler);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting);
         }
-        return setting_ctlcolor_handler(dlg, msg, wParam, lParam);
+        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    INT_PTR setting_separator_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_separator_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
             HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color_separator);
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting_handler);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting);
         }
-        return setting_base_handler(dlg, msg, wParam, lParam);
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -273,7 +267,7 @@ namespace
     {
         separator_setting(uint s)
             : setting(
-                  "separator", s, IDD_DIALOG_SETTING_SEPARATOR, IDC_STATIC_SETTING_SEPARATOR, setting_separator_handler)
+                  "separator", s, IDD_DIALOG_SETTING_SEPARATOR, IDC_STATIC_SETTING_SEPARATOR, setting_separator_dlgproc)
         {
         }
     };
@@ -283,8 +277,8 @@ namespace
 
     struct bool_setting : setting
     {
-        bool_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, bool *b)
-            : setting(n, s, dlg_id, text_id, handler), value(b)
+        bool_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, bool *b)
+            : setting(n, s, dlg_id, text_id, dlg_proc), value(b)
         {
         }
 
@@ -302,8 +296,8 @@ namespace
     struct enum_setting : setting
     {
         enum_setting(
-            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, enum_id_map const &names, uint *b)
-            : setting(n, s, dlg_id, text_id, handler), enum_names(names), value(b)
+            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, enum_id_map const &names, uint *b)
+            : setting(n, s, dlg_id, text_id, dlg_proc), enum_names(names), value(b)
         {
         }
 
@@ -341,8 +335,8 @@ namespace
 
     struct color_setting : setting
     {
-        color_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, vec4 *b)
-            : setting(n, s, dlg_id, text_id, handler), value(b)
+        color_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, vec4 *b)
+            : setting(n, s, dlg_id, text_id, dlg_proc), value(b)
         {
         }
 
@@ -363,8 +357,8 @@ namespace
     struct ranged_setting : setting
     {
         ranged_setting(
-            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, uint *b, uint minval, uint maxval)
-            : setting(n, s, dlg_id, text_id, handler), value(b), min_value(minval), max_value(maxval)
+            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, uint *b, uint minval, uint maxval)
+            : setting(n, s, dlg_id, text_id, dlg_proc), value(b), min_value(minval), max_value(maxval)
         {
         }
 
@@ -411,6 +405,15 @@ namespace
     // copy of settings from when the dialog was shown (for 'cancel')
 
     settings_t revert_settings;
+
+    //////////////////////////////////////////////////////////////////////
+    // brutally suppress the text caret in the 'about' text box
+
+    LRESULT CALLBACK suppress_cursor_subclass(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    {
+        HideCaret(dlg);
+        return DefSubclassProc(dlg, msg, wparam, lparam);
+    }
 
     //////////////////////////////////////////////////////////////////////
     // a colored button for setting colors
@@ -499,15 +502,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // brutally suppress the text caret in the 'about' text box
-
-    LRESULT CALLBACK suppress_cursor_subclass(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
-    {
-        HideCaret(dlg);
-        return DefSubclassProc(dlg, msg, wparam, lparam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // BOOL setting \ WM_COMMAND
 
     void on_command_setting_bool(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
@@ -522,73 +516,72 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // RANGED setting \ WM_NOTIFY
+
+    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    {
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+        ranged_setting &ranged = setting::get<ranged_setting>(hwnd);
+        *ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
+        post_new_settings();
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // BOOL setting \ DLGPROC
 
-    INT_PTR setting_bool_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_bool_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
             HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_bool);
         }
-        return setting_base_handler(dlg, msg, wParam, lParam);
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
     // ENUM setting \ DLGPROC
 
-    INT_PTR setting_enum_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_enum_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
             HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_enum);
         }
-        return setting_base_handler(dlg, msg, wParam, lParam);
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
     // COLOR setting \ DLGPROC
 
-    INT_PTR setting_color_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_color_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
             HANDLE_MSG(dlg, WM_DRAWITEM, on_drawitem_setting_color);
             HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_color);
         }
-        return setting_base_handler(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // RANGED setting \ WM_NOTIFY
-
-    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
-    {
-        ranged_setting &ranged = setting::get<ranged_setting>(hwnd);
-        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
-        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-        LOG_DEBUG("{} ?", new_pos);
-        *ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
-        post_new_settings();
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
     // RANGED setting \ DLGPROC
 
-    INT_PTR setting_ranged_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR setting_ranged_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
             HANDLE_MSG(dlg, WM_HSCROLL, on_hscroll_setting_ranged);
         }
-        return setting_base_handler(dlg, msg, wParam, lParam);
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // PAGES
+    // SETTINGS page
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_VSCROLL
 
-    void on_vscroll_settings_handler(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
         on_scroll(settings_scroll, SB_VERT, code);
     }
@@ -596,7 +589,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_INITDIALOG
 
-    BOOL on_initdialog_settings_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    BOOL on_initdialog_settings(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         if(setting_controllers.empty()) {
 
@@ -617,7 +610,7 @@ namespace
                                                    string_id,               \
                                                    IDD_DIALOG_SETTING_BOOL, \
                                                    IDC_CHECK_SETTING_BOOL,  \
-                                                   setting_bool_handler,    \
+                                                   setting_bool_dlgproc,    \
                                                    &dialog_settings.name));
 
 #define DECL_SETTING_COLOR(name, string_id, r, g, b, a)                       \
@@ -625,7 +618,7 @@ namespace
                                                     string_id,                \
                                                     IDD_DIALOG_SETTING_COLOR, \
                                                     IDC_STATIC_SETTING_COLOR, \
-                                                    setting_color_handler,    \
+                                                    setting_color_dlgproc,    \
                                                     &dialog_settings.name));
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)         \
@@ -633,7 +626,7 @@ namespace
                                                    string_id,               \
                                                    IDD_DIALOG_SETTING_ENUM, \
                                                    IDC_STATIC_SETTING_ENUM, \
-                                                   setting_enum_handler,    \
+                                                   setting_enum_dlgproc,    \
                                                    enum_names,              \
                                                    reinterpret_cast<uint *>(&dialog_settings.name)));
 
@@ -642,7 +635,7 @@ namespace
                                                      string_id,                 \
                                                      IDD_DIALOG_SETTING_RANGED, \
                                                      IDC_STATIC_SETTING_RANGED, \
-                                                     setting_ranged_handler,    \
+                                                     setting_ranged_dlgproc,    \
                                                      &dialog_settings.name,     \
                                                      min,                       \
                                                      max));
@@ -671,11 +664,8 @@ namespace
         int cur_height = top_margin;
 
         for(auto const s : setting_controllers) {
-            HWND setting = CreateDialogParamA(app::instance,
-                                              MAKEINTRESOURCE(s->dialog_resource_id),
-                                              hwnd,
-                                              s->dlg_handler,
-                                              reinterpret_cast<LPARAM>(s));
+            HWND setting = CreateDialogParamA(
+                app::instance, MAKEINTRESOURCE(s->dialog_resource_id), hwnd, s->dlg_proc, reinterpret_cast<LPARAM>(s));
             RECT r;
             GetWindowRect(setting, &r);
             SetWindowPos(
@@ -695,7 +685,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_MOUSEWHEEL
 
-    void on_mousewheel_settings_handler(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+    void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
         scroll_window(settings_scroll, SB_VERT, -zDelta / WHEEL_DELTA);
     }
@@ -703,25 +693,25 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ DLGPROC
 
-    INT_PTR settings_handler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR settings_dlgproc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_settings_handler);
-            HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings_handler);
-            HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings_handler);
+            HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_settings);
+            HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
+            HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
         }
-        return setting_ctlcolor_handler(hWnd, msg, wParam, lParam);
+        return setting_ctlcolor_base(hWnd, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // RELAUNCH (explorer) page handlers
+    // RELAUNCH (explorer) page
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
     // RELAUNCH (explorer) page \ WM_COMMAND
 
-    void on_command_relaunch_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    void on_command_relaunch(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
         switch(id) {
 
@@ -735,34 +725,34 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // RELAUNCH (explorer) page \ DLGPROC
 
-    INT_PTR relaunch_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR relaunch_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_relaunch_handler);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_relaunch);
         }
-        return setting_ctlcolor_handler(dlg, msg, wParam, lParam);
+        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // EXPLORER page handlers
+    // EXPLORER page
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
     // EXPLORER page \ DLGPROC
 
-    INT_PTR explorer_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR explorer_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
-        return setting_ctlcolor_handler(dlg, msg, wParam, lParam);
+        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // ABOUT page handlers
+    // ABOUT page
     //////////////////////////////////////////////////////////////////////
 
     // ABOUT page \ WM_INITDIALOG
 
-    BOOL on_init_about_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    BOOL on_initdialog_about(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
         SetWindowSubclass(about, suppress_cursor_subclass, 0, 0);
@@ -783,7 +773,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // ABOUT page \ WM_COMMAND
 
-    void on_command_about_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    void on_command_about(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
         switch(id) {
 
@@ -839,24 +829,24 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // ABOUT page \ DLGPROC
 
-    INT_PTR about_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR about_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_init_about_handler);
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_about_handler);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_about);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_about);
         }
-        return setting_ctlcolor_handler(dlg, msg, wParam, lParam);
+        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // HOTKEYS page handlers
+    // HOTKEYS page
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
     // HOTKEYS page \ WM_INITDIALOG
 
-    BOOL on_init_hotkeys_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    BOOL on_initdialog_hotkeys(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
 
@@ -917,7 +907,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // HOTKEYS page \ WM_SHOWWINDOW
 
-    void on_showwindow_hotkeys_handler(HWND hwnd, BOOL fShow, UINT status)
+    void on_showwindow_hotkeys(HWND hwnd, BOOL fShow, UINT status)
     {
         HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
 
@@ -932,7 +922,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // HOTKEYS page \ WM_NOTIFY
 
-    int on_notify_hotkeys_handler(HWND hwnd, int idFrom, LPNMHDR nmhdr)
+    int on_notify_hotkeys(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
         switch(nmhdr->idFrom) {
 
@@ -957,15 +947,15 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // HOTKEYS page \ DLGPROC
 
-    INT_PTR hotkeys_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR hotkeys_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_init_hotkeys_handler);
-            HANDLE_MSG(dlg, WM_SHOWWINDOW, on_showwindow_hotkeys_handler);
-            HANDLE_MSG(dlg, WM_NOTIFY, on_notify_hotkeys_handler);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_hotkeys);
+            HANDLE_MSG(dlg, WM_SHOWWINDOW, on_showwindow_hotkeys);
+            HANDLE_MSG(dlg, WM_NOTIFY, on_notify_hotkeys);
         }
-        return setting_ctlcolor_handler(dlg, msg, wParam, lParam);
+        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -975,7 +965,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // MAIN dialog \ WM_INITDIALOG
 
-    BOOL on_init_main_handler(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    BOOL on_initdialog_main(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         main_dialog = hwnd;
 
@@ -989,9 +979,9 @@ namespace
         active_tabs.clear();
 
         int index = 0;
-        for(int i = 0; i < _countof(tabs); ++i) {
+        for(int i = 0; i < _countof(all_tabs); ++i) {
 
-            settings_tab_t *tab = tabs + i;
+            tab_page_t *tab = all_tabs + i;
 
             if(!should_hide_tab(tab)) {
 
@@ -1022,7 +1012,7 @@ namespace
                     active_tab_index = t->index;
                 }
 
-                CHK_NULL(t->hwnd = CreateDialogA(app::instance, MAKEINTRESOURCE(t->resource_id), hwnd, t->handler));
+                CHK_NULL(t->hwnd = CreateDialogA(app::instance, MAKEINTRESOURCE(t->resource_id), hwnd, t->dlg_proc));
 
                 SetWindowPos(
                     t->hwnd, HWND_TOP, tab_rect.left, tab_rect.top, rect_width(tab_rect), rect_height(tab_rect), 0);
@@ -1049,7 +1039,7 @@ namespace
 
         SetWindowPos(hwnd, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
 
-        show_settings_page(active_tab_index);
+        show_current_page(SW_SHOW);
 
         return false;
     }
@@ -1057,18 +1047,21 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // MAIN dialog \ WM_NOTIFY
 
-    int on_notify_main_handler(HWND hwnd, int idFrom, LPNMHDR nmhdr)
+    int on_notify_main(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
         switch(nmhdr->idFrom) {
 
         case IDC_SETTINGS_TAB_CONTROL:
 
-            if(nmhdr->code == static_cast<UINT>(TCN_SELCHANGE)) {
+            switch(nmhdr->code) {
+            case TCN_SELCHANGE: {
+                show_current_page(SW_SHOW);
+            } break;
 
-                HWND tab_ctrl = GetDlgItem(hwnd, IDC_SETTINGS_TAB_CONTROL);
-                show_settings_page(TabCtrl_GetCurSel(tab_ctrl));
+            case TCN_SELCHANGING: {
+                show_current_page(SW_HIDE);
+            } break;
             }
-            break;
         }
         return 0;
     }
@@ -1076,7 +1069,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // MAIN dialog \ WM_COMMAND
 
-    void on_command_main_handler(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    void on_command_main(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
         switch(id) {
 
@@ -1099,34 +1092,30 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // MAIN dialog \ DLGPROC
 
-    INT_PTR main_dialog_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    INT_PTR main_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         switch(msg) {
 
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_init_main_handler);
-            HANDLE_MSG(dlg, WM_NOTIFY, on_notify_main_handler);
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_main_handler);
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_main);
+            HANDLE_MSG(dlg, WM_NOTIFY, on_notify_main);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_main);
         }
         return 0;
     }
 
-    //#pragma warning(disable : 4100)
-#pragma warning(pop)
+#pragma warning(pop)    // warning(disable : 4100)
 }
 
 //////////////////////////////////////////////////////////////////////
-// PostThreadMessage(
 
 namespace imageview
 {
-    HRESULT show_settings_dialog(HWND parent, uint tab_id)
+    HRESULT show_settings_dialog(HWND app_hwnd, uint tab_id)
     {
-        current_page = -1;
-
         if(main_dialog == null) {
-            app_window = parent;
-            CHK_NULL(CreateDialogParamA(
-                app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dialog_handler, tab_id));
+            app_window = app_hwnd;
+            CHK_NULL(
+                CreateDialogParamA(app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dlgproc, tab_id));
         }
         ShowWindow(main_dialog, SW_SHOW);
         BringWindowToTop(main_dialog);
