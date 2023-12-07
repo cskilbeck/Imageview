@@ -98,6 +98,8 @@ namespace imageview::image
 
     //////////////////////////////////////////////////////////////////////
 
+    HRESULT is_file_extension_supported(std::string const &extension, bool &is_supported);
+
     HRESULT check_heif_support();
 
     HRESULT get_size(std::string const &filename, uint32 &width, uint32 &height, uint64 &total_size);

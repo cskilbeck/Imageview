@@ -122,6 +122,7 @@ namespace
             , dialog_resource_id(dlg_id)
             , text_item_ctl_id(text_id)
             , dlg_proc(dlgproc)
+            , window(null)
         {
         }
 
@@ -139,15 +140,18 @@ namespace
 
         DLGPROC dlg_proc;
 
+        HWND window;
+
         // set name text and update controls for editing this setting
         virtual void setup_controls(HWND hwnd)
         {
+            window = hwnd;
             SetWindowTextW(GetDlgItem(hwnd, text_item_ctl_id), unicode(localize(string_resource_id)).c_str());
-            update_controls(hwnd);
+            update_controls();
         }
 
         // update the dialog controls with current value of this setting
-        virtual void update_controls(HWND)
+        virtual void update_controls()
         {
         }
 
@@ -282,9 +286,9 @@ namespace
         {
         }
 
-        void update_controls(HWND hwnd) override
+        void update_controls() override
         {
-            Button_SetCheck(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), *value ? BST_CHECKED : BST_UNCHECKED);
+            Button_SetCheck(GetDlgItem(window, IDC_CHECK_SETTING_BOOL), *value ? BST_CHECKED : BST_UNCHECKED);
         }
 
         bool *value;
@@ -313,12 +317,12 @@ namespace
             setting::setup_controls(hwnd);
         }
 
-        void update_controls(HWND hwnd) override
+        void update_controls() override
         {
             int index = 0;
             for(auto const &name : enum_names) {
                 if(name.first == *value) {
-                    HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+                    HWND combo_box = GetDlgItem(window, IDC_COMBO_SETTING_ENUM);
                     ComboBox_SetCurSel(combo_box, index);
                     break;
                 }
@@ -340,12 +344,12 @@ namespace
         {
         }
 
-        void update_controls(HWND hwnd) override
+        void update_controls() override
         {
             uint32 color = color_swap_red_blue(color_to_uint32(*value));
             std::string hex = std::format("{:06x}", color & 0xffffff);
             make_uppercase(hex);
-            SetWindowTextA(GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR), hex.c_str());
+            SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
         }
 
         vec4 *value;
@@ -370,9 +374,9 @@ namespace
             setting::setup_controls(hwnd);
         }
 
-        void update_controls(HWND hwnd) override
+        void update_controls() override
         {
-            HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+            HWND slider = GetDlgItem(window, IDC_SLIDER_SETTING_RANGED);
             SendMessage(slider, TBM_SETPOS, true, *value);
         }
 
@@ -392,19 +396,37 @@ namespace
     settings_t dialog_settings;
 
     //////////////////////////////////////////////////////////////////////
-
-    void post_new_settings()
-    {
-        // main window is responsible for freeing this copy of the settings
-        settings_t *settings_copy = new settings_t();
-        memcpy(settings_copy, &dialog_settings, sizeof(settings_t));
-        PostMessage(app_window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // copy of settings from when the dialog was shown (for 'cancel')
 
     settings_t revert_settings;
+
+    bool settings_should_update{ false };
+
+    //////////////////////////////////////////////////////////////////////
+
+    void post_new_settings()
+    {
+        if(settings_should_update) {
+
+            // main window is responsible for freeing this copy of the settings
+            settings_t *settings_copy = new settings_t();
+            memcpy(settings_copy, &dialog_settings, sizeof(settings_t));
+            PostMessage(app_window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void update_all_settings_controls()
+    {
+        settings_should_update = false;
+
+        for(auto s : setting_controllers) {
+            s->update_controls();
+        }
+
+        settings_should_update = true;
+    }
 
     //////////////////////////////////////////////////////////////////////
     // brutally suppress the text caret in the 'about' text box
@@ -453,7 +475,7 @@ namespace
             uint new_color = color_to_uint32(*setting.value);
             if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
                 *setting.value = color_from_uint32(new_color);
-                setting.update_controls(hwnd);
+                setting.update_controls();
                 InvalidateRect(hwnd, null, true);
                 post_new_settings();
             }
@@ -591,10 +613,10 @@ namespace
 
     BOOL on_initdialog_settings(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        if(setting_controllers.empty()) {
+        revert_settings = settings;    // for reverting
+        dialog_settings = settings;    // currently editing
 
-            // snapshot current settings
-            dialog_settings = settings;
+        if(setting_controllers.empty()) {
 
 #undef DECL_SETTING_SEPARATOR
 #undef DECL_SETTING_BOOL
@@ -716,6 +738,7 @@ namespace
         switch(id) {
 
         case IDC_BUTTON_SETTINGS_RELAUNCH: {
+            main_dialog = null;
             EndDialog(hwnd, 0);
             PostMessage(app_window, app::WM_RELAUNCH_AS_ADMIN, 0, 0);
         } break;
@@ -1023,13 +1046,13 @@ namespace
 
         // center dialog in main window rect
 
-        HWND parent;
-        if((parent = GetParent(hwnd)) == NULL) {
-            parent = GetDesktopWindow();
+        HWND app_win = app_window;
+        if(app_win == NULL) {
+            app_win = GetDesktopWindow();
         }
 
         RECT parent_rect;
-        GetWindowRect(parent, &parent_rect);
+        GetWindowRect(app_win, &parent_rect);
 
         RECT dlg_rect;
         GetWindowRect(hwnd, &dlg_rect);
@@ -1041,6 +1064,8 @@ namespace
 
         show_current_page(SW_SHOW);
 
+        settings_should_update = true;
+
         return false;
     }
 
@@ -1049,7 +1074,47 @@ namespace
 
     int on_notify_main(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
-        switch(nmhdr->idFrom) {
+        switch(idFrom) {
+
+        case IDC_SPLIT_BUTTON_SETTINGS: {
+
+            if(nmhdr->code == BCN_DROPDOWN) {
+
+                RECT rc;
+                GetWindowRect(GetDlgItem(hwnd, IDC_SPLIT_BUTTON_SETTINGS), &rc);
+                HMENU menu = LoadMenuA(app::instance, MAKEINTRESOURCEA(IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON));
+                HMENU popup = GetSubMenu(menu, 0);
+                TPMPARAMS tpm;
+                tpm.cbSize = sizeof(TPMPARAMS);
+                tpm.rcExclude = rc;
+                uint choice = TrackPopupMenuEx(popup,
+                                               TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_VERTICAL | TPM_RETURNCMD,
+                                               rc.left,
+                                               rc.bottom,
+                                               hwnd,
+                                               &tpm);
+                DestroyMenu(menu);
+
+                switch(choice) {
+
+                case ID_POPUP_SETTINGS_RESET_DEFAULT:
+                    dialog_settings = default_settings;
+                    update_all_settings_controls();
+                    post_new_settings();
+                    break;
+
+                case ID_POPUP_SETTINGS_SAVE:
+                    dialog_settings.save();
+                    break;
+
+                case ID_POPUP_SETTINGS_LOAD_SAVED:
+                    dialog_settings.load();
+                    update_all_settings_controls();
+                    post_new_settings();
+                    break;
+                }
+            }
+        } break;
 
         case IDC_SETTINGS_TAB_CONTROL:
 
@@ -1073,16 +1138,14 @@ namespace
     {
         switch(id) {
 
-        case IDC_SETTINGS_BUTTON_APPLY:
+        case IDC_SPLIT_BUTTON_SETTINGS:
+            dialog_settings = revert_settings;
+            update_all_settings_controls();
             post_new_settings();
             break;
 
-        case IDOK:
-            main_dialog = null;
-            EndDialog(hwnd, 0);
-            break;
-
-        case IDCANCEL:
+        case IDCANCEL:    // window closed
+        case IDCLOSE:     // "Close" button clicked
             main_dialog = null;
             EndDialog(hwnd, 0);
             break;
@@ -1099,6 +1162,13 @@ namespace
             HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_main);
             HANDLE_MSG(dlg, WM_NOTIFY, on_notify_main);
             HANDLE_MSG(dlg, WM_COMMAND, on_command_main);
+
+        case app::WM_NEW_SETTINGS: {
+            settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
+            memcpy(&dialog_settings, new_settings, sizeof(settings_t));
+            delete new_settings;
+            update_all_settings_controls();
+        } break;
         }
         return 0;
     }
@@ -1110,6 +1180,8 @@ namespace
 
 namespace imageview
 {
+    //////////////////////////////////////////////////////////////////////
+
     HRESULT show_settings_dialog(HWND app_hwnd, uint tab_id)
     {
         if(main_dialog == null) {
@@ -1122,5 +1194,16 @@ namespace imageview
         SwitchToThisWindow(main_dialog, true);
 
         return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void update_settings_dialog()
+    {
+        if(main_dialog != null) {
+            settings_t *settings_copy = new settings_t();
+            memcpy(settings_copy, &settings, sizeof(settings_t));
+            PostMessage(main_dialog, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
+        }
     }
 }

@@ -99,6 +99,7 @@
 #define IDS_ADMIN                       191
 #define IDS_ERROR                       192
 #define IDS_SETTING_NAME_SELECT_FILL_ALPHA 193
+#define IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON 194
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002
@@ -118,9 +119,18 @@
 #define IDC_STATIC_SETTING_RANGED       1016
 #define IDC_EDIT_SETTING_COLOR          1017
 #define IDC_STATIC_SETTING_SEPARATOR    1018
-#define IDC_SLIDER1                     1019
 #define IDC_SLIDER_SETTING_RANGED       1019
-#define IDC_SPLIT1                      1023
+#define IDC_SPLIT_BUTTON_SETTINGS       1023
+#define ID_RECENT_FILE_00               30000
+#define ID_RECENT_FILE_01               30001
+#define ID_RECENT_FILE_02               30002
+#define ID_RECENT_FILE_03               30003
+#define ID_RECENT_FILE_04               30004
+#define ID_RECENT_FILE_05               30005
+#define ID_RECENT_FILE_06               30006
+#define ID_RECENT_FILE_07               30007
+#define ID_RECENT_FILE_08               30008
+#define ID_RECENT_FILE_09               30009
 #define ID_FILE_LOAD                    40005
 #define ID_FILE_SAVE                    40006
 #define ID_VIEW_ALPHA                   40008
@@ -152,14 +162,22 @@
 #define ID_SELECT_CROP                  40043
 #define ID_SHOW_SETTINGS                40069
 #define ID_VIEW_SETBORDERCOLOR          40075
+#define ID_POPUP_REVERT                 40080
+#define ID_POPUP_RESET                  40081
+#define ID_POPUP_REVERTTOLASTSAVED      40082
+#define ID_POPUP_SETTINGS_REVERT        40083
+#define ID_POPUP_SETTINGS_LOAD_SAVED    40084
+#define ID_POPUP_SETTINGS_RESET_DEFAULT 40085
+#define ID_POPUP_SAVESETTINGS           40086
+#define ID_POPUP_SETTINGS_SAVE          40087
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        194
-#define _APS_NEXT_COMMAND_VALUE         40080
+#define _APS_NEXT_RESOURCE_VALUE        195
+#define _APS_NEXT_COMMAND_VALUE         40088
 #define _APS_NEXT_CONTROL_VALUE         1024
-#define _APS_NEXT_SYMED_VALUE           102
+#define _APS_NEXT_SYMED_VALUE           112
 #endif
 #endif

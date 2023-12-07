@@ -655,4 +655,33 @@ namespace imageview::image
 
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT is_file_extension_supported(std::string const &extension, bool &is_supported)
+    {
+        std::string ext;
+
+        if(extension[0] == '.') {
+
+            ext = extension.substr(1);
+
+        } else {
+
+            ext = extension;
+        }
+
+        make_uppercase(ext);
+
+        decltype(image::formats.begin()) found;
+
+        {
+            auto iflock{ std::lock_guard(formats_mutex) };
+            found = image::formats.find(ext);
+        }
+
+        is_supported = found != image::formats.end();
+
+        return S_OK;
+    }
 }

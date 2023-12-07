@@ -357,10 +357,21 @@ BEGIN
         MENUITEM SEPARATOR
         POPUP "Open recent"
         BEGIN
-            MENUITEM "DUMMY",                       ID_RECENT_DUMMY
+            MENUITEM "Open file",                   ID_RECENT_DUMMY, GRAYED
         END
         MENUITEM "Settings",                    ID_FILE_SETTINGS
         MENUITEM "Exit",                        ID_EXIT
+    END
+END
+
+IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON MENU
+BEGIN
+    POPUP "Popup"
+    BEGIN
+        MENUITEM "Load saved settings",         ID_POPUP_SETTINGS_LOAD_SAVED
+        MENUITEM "Save settings",               ID_POPUP_SETTINGS_SAVE
+        MENUITEM SEPARATOR
+        MENUITEM "Reset to defaults",           ID_POPUP_SETTINGS_RESET_DEFAULT
     END
 END
 
@@ -375,11 +386,9 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSM
 CAPTION "Settings - ImageView"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,157,208,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,213,208,50,14
+    PUSHBUTTON      "Close",IDCLOSE,213,208,50,14
     CONTROL         "",IDC_SETTINGS_TAB_CONTROL,"SysTabControl32",0x0,7,7,257,198
-    CONTROL         "Revert",IDC_SPLIT1,"Button",BS_SPLITBUTTON | WS_TABSTOP,7,208,50,14
-    PUSHBUTTON      "Apply",IDC_SETTINGS_BUTTON_APPLY,102,208,50,14
+    CONTROL         "Revert",IDC_SPLIT_BUTTON_SETTINGS,"Button",BS_SPLITBUTTON | WS_TABSTOP,7,208,50,14
 END
 
 IDD_DIALOG_SETTINGS_MAIN DIALOGEX 0, 0, 252, 120

@@ -141,4 +141,5 @@ using Microsoft::WRL::ComPtr;
 #include "scrollbar.h"
 #include "settings_dialog.h"
 #include "d3d.h"
+#include "recent_files.h"
 #include "app.h"

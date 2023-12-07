@@ -366,9 +366,7 @@ namespace imageview::file
         size_t lb = wcslen(pb.data());
         differ = true;
         if(la == lb) {
-            _wcslwr_s(pa.data(), la);
-            _wcslwr_s(pb.data(), lb);
-            differ = memcmp(&pa[0], &pb[0], la) != 0;
+            differ = _wcsicmp(pa.data(), pb.data()) != 0;
         }
         return S_OK;
     }

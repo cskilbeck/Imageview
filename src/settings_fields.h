@@ -160,7 +160,7 @@ DECL_SETTING_ENUM(
 // TODO (chs): separate settings for file and uncompressed image caches?
 // or... ditch the uncompressed cache? help with exif prompt problem
 
-DECL_SETTING_RANGED(cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 1024, 64, 4096);    // 1GB memory cache by default
+DECL_SETTING_RANGED(cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 128, 16, 4096);    // 1GB memory cache by default
 
 // what happens when you press 'z'
 

@@ -1,41 +1,33 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
-// settings / keyboard shortcuts dialog
+// settings / keyboard shortcuts dialog \
+//      ranged edit control text
+//      mutual exclude mouse buttons
+//      update show full filename in title bar dynamically
+// show message or progress indicator if file load is slow?
 // file type association / handler thing
-// settings dialog in a thread so apply is instant (send new settings to main thread as a window message)
 // overlay grid as well as background checkerboard
-// crosshairs when zoomed in
+// crosshairs when zoomed in look ass
+// flip/rotate
 //
-// command line parameters ?
-// -log_level
-// -log_to_file=filename
-// -log_to_console
+// colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
+// handle SRGB / premultiplied alpha correctly in image decoder
+// HDR (requires windows version 10 1703?)
+//
+// fix the cache
+// fix all the leaks
+// proper error handling/reporting
+// ?folder scanning broken after on_command_line from external?
 //
 // get these into another file:
 //      d3d
 //      d2d
 //      cache
 //      scanner
-//      dragdrop
 //
 // MAYBE
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
-// show message or progress indicator if file load is slow?
-// flip/rotate? losslessly?
 //
-//////////////////////////////////////////////////////////////////////
-// TO FIX
-//
-// colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
-// handle SRGB / premultiplied alpha correctly in image decoder
-// HDR (requires windows version 10 1703?)
-//
-//
-// the cache
-// all the leaks
-// error handling/reporting
-//
-// folder scanning broken after on_command_line from external?
 
 #include "pch.h"
 #include <dcomp.h>
@@ -394,6 +386,9 @@ namespace imageview::app
     // which frame rendering
     int frame_count{ 0 };
 
+    // 10 recent files
+    std::vector<std::wstring> recent_files;
+
     DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
 
     //////////////////////////////////////////////////////////////////////
@@ -607,34 +602,31 @@ namespace imageview::app
                         uint64 img_size;
                         if(SUCCEEDED(get_image_file_size(this_file, &img_size))) {
 
-                            size_t cache_size = settings.cache_size_mb * 1048576;
+                            size_t cache_size = settings.cache_size_mb * 1048576llu;
 
-                            if(img_size < cache_size) {
+                            while((cache_in_use + img_size) > cache_size) {
 
-                                while(cache_in_use + img_size > cache_size) {
-
-                                    image::image_file *loser = null;
-                                    uint loser_diff = 0;
-                                    for(auto const &fl : loaded_files) {
-                                        uint diff = std::abs(fl.second->index - current_file_cursor);
-                                        if(diff > loser_diff) {
-                                            loser_diff = diff;
-                                            loser = fl.second;
-                                        }
+                                image::image_file *loser = null;
+                                uint loser_diff = 0;
+                                for(auto const &fl : loaded_files) {
+                                    uint diff = std::abs(fl.second->index - current_file_cursor);
+                                    if(diff > loser_diff) {
+                                        loser_diff = diff;
+                                        loser = fl.second;
                                     }
+                                }
 
-                                    if(loser != null) {
+                                if(loser != null) {
 
-                                        LOG_DEBUG("Removing {} ({}) from cache (now {} MB in use)",
-                                                  loser->filename,
-                                                  loser->index,
-                                                  cache_in_use / 1048576);
+                                    LOG_DEBUG("Removing {} ({}) from cache (now {} MB in use)",
+                                              loser->filename,
+                                              loser->index,
+                                              cache_in_use / 1048576);
 
-                                        cache_in_use -= loser->total_size();
-                                        loaded_files.erase(loser->filename);
-                                    } else {
-                                        break;
-                                    }
+                                    cache_in_use -= loser->total_size();
+                                    loaded_files.erase(loser->filename);
+                                } else {
+                                    break;
                                 }
                             }
 
@@ -2210,7 +2202,7 @@ namespace imageview::app
                 drag_selection = true;
             }
 
-            if(!drag_selection) {
+            if(!drag_selection && image_texture.Get() != null) {
 
                 select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
                 select_current = select_anchor;
@@ -2262,7 +2254,34 @@ namespace imageview::app
 
                     popup_menu_active = true;
                     clear_message();
+
+                    recent_files::get_files(recent_files);
+
+                    // insert recent files into the recent files menu entry
+                    MENUITEMINFOW dummy_info;
+                    mem_clear(&dummy_info);
+                    dummy_info.cbSize = sizeof(dummy_info);
+                    dummy_info.fMask = MIIM_ID;
+                    if(GetMenuItemInfoW(menu, ID_RECENT_DUMMY, MF_BYCOMMAND, &dummy_info) == 0) {
+                        log_win32_error("GetMenuItemInfoW");
+                    } else {
+                        uint index = ID_RECENT_FILE_00;
+                        MENUITEMINFOW recent_info;
+                        mem_clear(&recent_info);
+                        recent_info.cbSize = sizeof(recent_info);
+                        recent_info.fMask = MIIM_ID | MIIM_STRING | MIIM_DATA;
+                        recent_info.fType = MFT_STRING;
+                        for(auto &f : recent_files) {
+                            recent_info.wID = index;
+                            recent_info.cch = static_cast<uint>(f.size());
+                            recent_info.dwTypeData = f.data();
+                            InsertMenuItemW(menu, dummy_info.wID, MF_BYCOMMAND, &recent_info);
+                            index += 1;
+                        }
+                        DeleteMenu(menu, ID_RECENT_DUMMY, MF_BYCOMMAND);
+                    }
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
+
                     m_timer.reset();
                     popup_menu_active = false;
                 }
@@ -2444,7 +2463,7 @@ namespace imageview::app
 
     void select_all()
     {
-        if(image_texture.Get() != 0) {
+        if(image_texture.Get() != null) {
             drag_select_pos = { 0, 0 };
             select_anchor = { 0, 0 };
             select_current = sub_point(texture_size(), { 1, 1 });
@@ -2769,7 +2788,7 @@ namespace imageview::app
 
                 // draw a vertical crosshair line
 
-                float blip = (float)((frame_count >> 0) & 31);
+                float blip = (float)((frame_count >> 0) % settings.dash_length);
                 grid_pos = sub_point(g2, vec2::mod({ sp1.x + blip, sp1.y + blip }, g2));
 
                 shader_constants.grid_offset = { 0, grid_pos.y };
@@ -2860,11 +2879,6 @@ namespace imageview::app
 
     HRESULT update()
     {
-        if(is_key_down(VK_LMENU) || is_key_down(VK_RMENU)) {
-
-            crosshairs_active = true;
-        }
-
         m_timer.update();
 
         float delta_t = static_cast<float>(std::min(m_timer.delta(), 0.25));
@@ -2896,7 +2910,7 @@ namespace imageview::app
             has_been_zoomed_or_dragged = true;
         }
 
-        selecting = get_mouse_buttons(settings.select_button);
+        selecting = get_mouse_buttons(settings.select_button) && image_texture.Get() != null;
 
         if(selecting && !get_mouse_buttons(settings.zoom_button)) {
 
@@ -2917,7 +2931,7 @@ namespace imageview::app
                 float *y = &select_anchor.y;
 
                 vec2 max{ 0, 0 };
-                vec2 min = select_anchor;
+                vec2 min{ select_anchor };
 
                 if(selection_hover & sel_hover_left) {
                     x = &select_anchor.x;
@@ -2938,6 +2952,8 @@ namespace imageview::app
                     max.y = (float)texture_height - 1;
                     min.y = select_anchor.y;
                 }
+
+                max = vec2::max(max, min);
 
                 if(selection_hover == sel_hover_inside) {
                     min = { 0, 0 };
@@ -2967,7 +2983,8 @@ namespace imageview::app
                 // remember texel coordinate for next frame
                 drag_select_pos = add_point(drag_select_pos, delta);
 
-            } else {
+            } else if(image_texture.Get() != null) {
+
                 select_current = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
 
                 // force the selection to be square if ctrl is held
@@ -3040,6 +3057,7 @@ namespace imageview::app
 #pragma warning(disable : 4100)
 
     //////////////////////////////////////////////////////////////////////
+    // send new settings to the settings dialog if it's active...
 
     void OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -3079,20 +3097,24 @@ namespace imageview::app
 
         case ID_VIEW_ALPHA:
             settings.grid_enabled = !settings.grid_enabled;
+            update_settings_dialog();
             break;
 
         case ID_VIEW_FIXEDGRID:
             settings.fixed_grid = !settings.fixed_grid;
+            update_settings_dialog();
             break;
 
         case ID_VIEW_GRIDSIZE:
             settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
+            update_settings_dialog();
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
             uint32 bg_color = color_to_uint32(settings.background_color);
             if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
                 settings.background_color = color_from_uint32(bg_color);
+                update_settings_dialog();
             }
         } break;
 
@@ -3100,22 +3122,26 @@ namespace imageview::app
             uint32 border_color = color_to_uint32(settings.border_color);
             if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
                 settings.border_color = color_from_uint32(border_color);
+                update_settings_dialog();
             }
         } break;
 
         case ID_ZOOM_1:
             settings.zoom_mode = zoom_mode_t::one_to_one;
             reset_zoom(settings.zoom_mode);
+            update_settings_dialog();
             break;
 
         case ID_ZOOM_FIT:
             settings.zoom_mode = zoom_mode_t::fit_to_window;
             reset_zoom(settings.zoom_mode);
+            update_settings_dialog();
             break;
 
         case ID_ZOOM_SHRINKTOFIT:
             settings.zoom_mode = zoom_mode_t::shrink_to_fit;
             reset_zoom(settings.zoom_mode);
+            update_settings_dialog();
             break;
 
         case ID_ZOOM_SELECTION:
@@ -3164,6 +3190,13 @@ namespace imageview::app
         case ID_EXIT:
             DestroyWindow(window);
             break;
+        }
+
+        if(id >= ID_RECENT_FILE_00 && id <= ID_RECENT_FILE_09) {
+            uint index = id - ID_RECENT_FILE_00;
+            if(index < recent_files.size()) {
+                load_image_file(utf8(recent_files[index]));
+            }
         }
     }
 
@@ -3422,7 +3455,7 @@ namespace imageview::app
             }
         }
 
-        if(!get_mouse_buttons(settings.select_button)) {
+        if(!get_mouse_buttons(settings.select_button) && select_active) {
             check_selection_hover(vec2(static_cast<float>(x), static_cast<float>(y)));
         } else if(selection_hover == selection_hover_t::sel_hover_outside) {
             set_mouse_cursor(null);
@@ -3591,6 +3624,13 @@ namespace imageview::app
         }
     }
 
+    //////////////////////////////////////////////////////////////////////
+
+    void OnSysKey(HWND hwnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
+    {
+        crosshairs_active = fDown;
+    }
+
 //#pragma warning(disable : 4100)
 #pragma warning(pop)
 
@@ -3662,6 +3702,8 @@ namespace imageview::app
             HANDLE_MSG(hwnd, WM_EXITSIZEMOVE, OnExitSizeMove);
             HANDLE_MSG(hwnd, WM_POWERBROADCAST, OnPowerBroadcast);
             HANDLE_MSG(hwnd, WM_SYSCOMMAND, OnSysCommand);
+            HANDLE_MSG(hwnd, WM_SYSKEYDOWN, OnSysKey);
+            HANDLE_MSG(hwnd, WM_SYSKEYUP, OnSysKey);
 
             //////////////////////////////////////////////////////////////////////
 
@@ -3711,14 +3753,13 @@ namespace imageview::app
             return 0;
         }
 
+        recent_files::init();
+
         // com
 
         CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
 
         CHK_HR(get_is_process_elevated(is_elevated));
-
-        // remember default settings for 'reset settings to default' feature in settings dialog
-        default_settings = settings;
 
         // in debug builds, hold middle mouse button at startup to reset settings to defaults
 #if defined(_DEBUG)
