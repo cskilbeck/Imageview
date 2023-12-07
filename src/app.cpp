@@ -4,6 +4,7 @@
 // file type association / handler thing
 // settings dialog in a thread so apply is instant (send new settings to main thread as a window message)
 // overlay grid as well as background checkerboard
+// crosshairs when zoomed in
 //
 // command line parameters ?
 // -log_level
@@ -28,6 +29,7 @@
 // colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
 // handle SRGB / premultiplied alpha correctly in image decoder
 // HDR (requires windows version 10 1703?)
+//
 //
 // the cache
 // all the leaks
@@ -62,15 +64,6 @@ LOG_CONTEXT("app");
 
 namespace
 {
-    //////////////////////////////////////////////////////////////////////
-    // WM_USER messages for main window
-
-    enum user_message_t : uint
-    {
-        WM_FILE_LOAD_COMPLETE = WM_USER,         // a file load completed (lparam -> file_loader *)
-        WM_FOLDER_SCAN_COMPLETE = WM_USER + 1    // a folder scan completed (lparam -> folder_scan_results *)
-    };
-
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for scanner thread
 
@@ -162,72 +155,6 @@ namespace imageview::app
         square
     };
 
-    HRESULT load_image_file(std::string const &filepath);
-    HRESULT show_image(image::image_file *f);
-
-    //////////////////////////////////////////////////////////////////////
-    // DragDrop admin
-
-    struct FileDropper : public CDragDropHelper
-    {
-        long refcount{ 0 };
-
-        //////////////////////////////////////////////////////////////////////
-        // DragDropHelper stuff
-
-        IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv)
-        {
-            static QITAB const qit[] = {
-                QITABENT(FileDropper, IDropTarget),
-                { 0 },
-            };
-            return QISearch(this, qit, riid, ppv);
-        }
-
-        //////////////////////////////////////////////////////////////////////
-
-        IFACEMETHODIMP_(ULONG) AddRef()
-        {
-            return InterlockedIncrement(&refcount);
-        }
-
-        //////////////////////////////////////////////////////////////////////
-
-        IFACEMETHODIMP_(ULONG) Release()
-        {
-            long cRef = InterlockedDecrement(&refcount);
-            if(cRef == 0) {
-                delete this;
-            }
-            return cRef;
-        }
-
-        //////////////////////////////////////////////////////////////////////
-        // user dropped something on the window, try to load it as a file
-
-        HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState)
-        {
-            UNREFERENCED_PARAMETER(grfKeyState);
-            ComPtr<IShellItem> shell_item;
-            CHK_HR(psia->GetItemAt(0, &shell_item));
-            PWSTR path{};
-            CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
-            DEFER(CoTaskMemFree(path));
-            return load_image_file(utf8(path));
-        }
-
-        //////////////////////////////////////////////////////////////////////
-        // they dropped something that cam be interpreted as text
-        // if it exists as a file, try to load it
-        // otherwise.... no dice I guess
-
-        HRESULT on_drop_string(wchar const *str)
-        {
-            std::string bare_name = strip_quotes(utf8(str));
-            return load_image_file(bare_name);
-        }
-    };
-
     //////////////////////////////////////////////////////////////////////
     // files which have been loaded
 
@@ -248,8 +175,6 @@ namespace imageview::app
     uint64 system_memory_gb;
 
     ComPtr<ID3D11Debug> d3d_debug;
-
-    FileDropper file_dropper;
 
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
     std::string current_folder;
@@ -324,6 +249,8 @@ namespace imageview::app
     bool s_in_suspend = false;
     bool s_minimized = false;
 
+    thread_pool_t thread_pool;
+
     //////////////////////////////////////////////////////////////////////
     // shader constants header is shared with the HLSL files
 
@@ -332,8 +259,6 @@ namespace imageview::app
 #include "shader_constants.h"
 #pragma pack(pop)
         shader_constants;
-
-    thread_pool_t thread_pool;
 
     // all the com pointers
 
@@ -390,6 +315,7 @@ namespace imageview::app
     POINT shift_mouse_pos;
     POINT ctrl_mouse_pos;
     uint64 mouse_click_timestamp[btn_count];
+    bool crosshairs_active{ false };
 
     // hold modifier key to snap selection square or fix on an axis
     shift_snap_axis_t snap_axis{ shift_snap_axis_t::none };
@@ -470,32 +396,62 @@ namespace imageview::app
 
     DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
 
-    // file/image cache admin
-
     //////////////////////////////////////////////////////////////////////
     // cursors for hovering over rectangle interior/corners/edges
     // see selection_hover_t
 
     cursor_def sel_hover_cursors[16] = {
-        { app::cursor_def::src::user, IDC_CURSOR_HAND },    //  0 - inside
-        { app::cursor_def::src::system, IDC_SIZEWE },       //  1 - left
-        { app::cursor_def::src::system, IDC_SIZEWE },       //  2 - right
-        { app::cursor_def::src::system, IDC_ARROW },        //  3 - xx left and right shouldn't be possible
-        { app::cursor_def::src::system, IDC_SIZENS },       //  4 - top
-        { app::cursor_def::src::system, IDC_SIZENWSE },     //  5 - left and top
-        { app::cursor_def::src::system, IDC_SIZENESW },     //  6 - right and top
-        { app::cursor_def::src::system, IDC_ARROW },        //  7 - xx top left and right
-        { app::cursor_def::src::system, IDC_SIZENS },       //  8 - bottom
-        { app::cursor_def::src::system, IDC_SIZENESW },     //  9 - bottom left
-        { app::cursor_def::src::system, IDC_SIZENWSE },     // 10 - bottom right
-        { app::cursor_def::src::system, IDC_ARROW },        // 11 - xx bottom left and right
-        { app::cursor_def::src::system, IDC_ARROW },        // 12 - xx bottom and top
-        { app::cursor_def::src::system, IDC_ARROW },        // 13 - xx bottom top and left
-        { app::cursor_def::src::system, IDC_ARROW },        // 14 - xx bottom top and right
-        { app::cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
+        { cursor_def::src::user, IDC_CURSOR_HAND },    //  0 - inside
+        { cursor_def::src::system, IDC_SIZEWE },       //  1 - left
+        { cursor_def::src::system, IDC_SIZEWE },       //  2 - right
+        { cursor_def::src::system, IDC_ARROW },        //  3 - xx left and right shouldn't be possible
+        { cursor_def::src::system, IDC_SIZENS },       //  4 - top
+        { cursor_def::src::system, IDC_SIZENWSE },     //  5 - left and top
+        { cursor_def::src::system, IDC_SIZENESW },     //  6 - right and top
+        { cursor_def::src::system, IDC_ARROW },        //  7 - xx top left and right
+        { cursor_def::src::system, IDC_SIZENS },       //  8 - bottom
+        { cursor_def::src::system, IDC_SIZENESW },     //  9 - bottom left
+        { cursor_def::src::system, IDC_SIZENWSE },     // 10 - bottom right
+        { cursor_def::src::system, IDC_ARROW },        // 11 - xx bottom left and right
+        { cursor_def::src::system, IDC_ARROW },        // 12 - xx bottom and top
+        { cursor_def::src::system, IDC_ARROW },        // 13 - xx bottom top and left
+        { cursor_def::src::system, IDC_ARROW },        // 14 - xx bottom top and right
+        { cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
     };
 
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT load_image_file(std::string const &filepath);
+    HRESULT show_image(image::image_file *f);
     HRESULT on_device_lost();
+
+    //////////////////////////////////////////////////////////////////////
+    // DragDrop admin
+
+    struct FileDropper : public CDragDropHelper
+    {
+        //////////////////////////////////////////////////////////////////////
+        // user dropped something on the window, try to load it as a file
+
+        HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) override
+        {
+            UNREFERENCED_PARAMETER(grfKeyState);
+            ComPtr<IShellItem> shell_item;
+            CHK_HR(psia->GetItemAt(0, &shell_item));
+            PWSTR path{};
+            CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
+            DEFER(CoTaskMemFree(path));
+            return load_image_file(utf8(path));
+        }
+
+        //////////////////////////////////////////////////////////////////////
+        // dropped a thing that can be interpreted as text, try to load it as a file
+
+        HRESULT on_drop_string(wchar const *str) override
+        {
+            return load_image_file(strip_quotes(utf8(str)));
+        }
+    } file_dropper;
 
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
@@ -759,6 +715,7 @@ namespace imageview::app
         }
 
         // if it's in the cache already, just show it
+        // TODO (chs): make this file path compare canonical
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
@@ -2523,8 +2480,14 @@ namespace imageview::app
 
         d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
-        vec2 ws = window_size();
-        CD3D11_VIEWPORT viewport(0.0f, 0.0f, ws.x, ws.y);
+        DXGI_SWAP_CHAIN_DESC desc;
+        swap_chain->GetDesc(&desc);
+
+        float width = static_cast<float>(desc.BufferDesc.Width);
+        float height = static_cast<float>(desc.BufferDesc.Height);
+
+        CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
+
         d3d_context->RSSetViewports(1, &viewport);
     }
 
@@ -2741,13 +2704,12 @@ namespace imageview::app
                 float select_h = std::max(1.0f, select_b - select_t + 0.5f);
 
                 // border width clamp if rectangle is too small
-                int min_s = (int)std::min(select_w, select_h) - settings.select_border_width * 2;
-                int min_t = std::min(settings.select_border_width, min_s);
+                uint min_s = static_cast<uint>(std::min(select_w, select_h)) - settings.select_border_width * 2;
+                uint min_t = std::min(settings.select_border_width, min_s);
 
-                int select_border_width = std::max(1, min_t);
+                uint select_border_width = std::max(1u, min_t);
 
-                shader_constants.select_border_width =
-                    select_border_width;    // set viewport coords for the vertex shader
+                shader_constants.select_border_width = select_border_width;
 
                 shader_constants.scale = get_scale({ select_w, select_h });
                 shader_constants.offset = get_offset({ select_l, select_t });
@@ -2775,11 +2737,7 @@ namespace imageview::app
 
             ///// draw crosshairs when alt key is held down
 
-            bool crosshairs_active = false;
-
-            if(is_key_down(VK_LMENU) || is_key_down(VK_RMENU)) {
-
-                crosshairs_active = true;
+            if(crosshairs_active) {
 
                 d3d_context->PSSetShader(grid_shader.Get(), null, 0);
 
@@ -2822,29 +2780,6 @@ namespace imageview::app
                 shader_constants.offset = get_offset({ 0, sp1.y });
                 shader_constants.scale = get_scale({ (float)window_width, sp2.y - sp1.y });
                 CHK_HR(update_constants());
-                d3d_context->Draw(4, 0);
-            }
-
-            // spinner if file load is slow
-            if(false) {
-                float w = (float)m_timer.wall_time();
-                float t1 = w * 9 + sinf(w * 7);
-                float t2 = w * 13;
-                float r1 = 23;
-                float r2 = 19;
-                vec2 sm = mul_point(window_size(), { 0.5f, 0.5f });
-                vec2 mid = add_point(sm, { sinf(t1) * r1, cosf(t1) * r1 });
-                vec2 off = add_point(sm, { sinf(t2) * r2, cosf(t2) * r2 });
-                vec2 mn = sub_point(vec2::min(mid, off), { 12.0f, 12.0f });
-                vec2 mx = sub_point(add_point(vec2::max(mid, off), { 12.0f, 12.0f }), mn);
-
-                shader_constants.offset = get_offset(mn);
-                shader_constants.scale = get_scale(mx);
-
-                shader_constants.glowing_line_s = mid;
-                shader_constants.glowing_line_e = off;
-                CHK_HR(update_constants());
-                d3d_context->PSSetShader(spinner_shader.Get(), null, 0);
                 d3d_context->Draw(4, 0);
             }
 
@@ -2921,6 +2856,11 @@ namespace imageview::app
 
     HRESULT update()
     {
+        if(is_key_down(VK_LMENU) || is_key_down(VK_RMENU)) {
+
+            crosshairs_active = true;
+        }
+
         m_timer.update();
 
         float delta_t = static_cast<float>(std::min(m_timer.delta(), 0.25));
@@ -3146,16 +3086,16 @@ namespace imageview::app
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
-            uint32 bg_color = color_swap_red_blue(color_to_uint32(settings.background_color));
+            uint32 bg_color = color_to_uint32(settings.background_color);
             if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
-                settings.background_color = color_from_uint32(color_swap_red_blue(bg_color));
+                settings.background_color = color_from_uint32(bg_color);
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
-            uint32 border_color = color_swap_red_blue(color_to_uint32(settings.border_color));
+            uint32 border_color = color_to_uint32(settings.border_color);
             if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
-                settings.border_color = color_from_uint32(color_swap_red_blue(border_color));
+                settings.border_color = color_from_uint32(border_color);
             }
         } break;
 
@@ -3214,11 +3154,7 @@ namespace imageview::app
         } break;
 
         case ID_FILE_SETTINGS: {
-            LRESULT r = show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
-            if(r == LRESULT_LAUNCH_AS_ADMIN) {
-                relaunch_as_admin = true;
-                DestroyWindow(window);
-            }
+            show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
         } break;
 
         case ID_EXIT:
@@ -3734,6 +3670,19 @@ namespace imageview::app
         case WM_FOLDER_SCAN_COMPLETE:
             on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
             break;
+
+            //////////////////////////////////////////////////////////////////////
+
+        case WM_NEW_SETTINGS: {
+            settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
+            memcpy(&settings, new_settings, sizeof(settings));
+            delete new_settings;
+        } break;
+
+        case WM_RELAUNCH_AS_ADMIN: {
+            relaunch_as_admin = true;
+            DestroyWindow(window);
+        } break;
 
             //////////////////////////////////////////////////////////////////////
 

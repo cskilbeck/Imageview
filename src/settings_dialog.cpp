@@ -67,7 +67,13 @@ namespace
 
     HWND main_dialog = null;
 
+    HWND app_window = null;
+
     int current_page = -1;
+
+    bool settings_dialog_visible{ false };
+
+    std::atomic_bool dialog_is_active{ false };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -349,9 +355,10 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // a ranged setting is... more complicated
 
-    template <typename T> struct ranged_setting : setting
+    struct ranged_setting : setting
     {
-        ranged_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, T *b, T minval, T maxval)
+        ranged_setting(
+            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC handler, uint *b, uint minval, uint maxval)
             : setting(n, s, dlg_id, text_id, handler), value(b), min_value(minval), max_value(maxval)
         {
         }
@@ -360,9 +367,9 @@ namespace
         {
         }
 
-        T *value;
-        T min_value;
-        T max_value;
+        uint *value;
+        uint min_value;
+        uint max_value;
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -374,6 +381,16 @@ namespace
     // copy of settings currently being edited
 
     settings_t dialog_settings;
+
+    //////////////////////////////////////////////////////////////////////
+
+    void post_new_settings()
+    {
+        // main window is responsible for freeing this copy of the settings
+        settings_t *settings_copy = new settings_t();
+        memcpy(settings_copy, &dialog_settings, sizeof(settings_t));
+        PostMessage(app_window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
+    }
 
     //////////////////////////////////////////////////////////////////////
     // copy of settings from when the dialog was shown (for 'cancel')
@@ -420,6 +437,7 @@ namespace
                 *setting->value = color_from_uint32(new_color);
                 setting->update_controls(hwnd);
                 InvalidateRect(hwnd, null, true);
+                post_new_settings();
             }
         } break;
 
@@ -440,6 +458,7 @@ namespace
                     if(SUCCEEDED(color_from_string(txt, new_color))) {
                         *setting->value = color_from_uint32(new_color);
                         InvalidateRect(hwnd, null, true);
+                        post_new_settings();
                     }
                 }
             } break;
@@ -460,6 +479,7 @@ namespace
             uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
             enum_setting *setting = reinterpret_cast<enum_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
             *setting->value = v;
+            post_new_settings();
         } break;
         }
     }
@@ -474,10 +494,27 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // BOOL setting \ WM_COMMAND
+
+    void on_command_setting_bool(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+        case IDC_CHECK_SETTING_BOOL: {
+            bool_setting *setting = reinterpret_cast<bool_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+            *setting->value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
+            post_new_settings();
+        } break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // BOOL setting \ DLGPROC
 
     INT_PTR setting_bool_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
+        switch(msg) {
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_bool);
+        }
         return setting_base_handler(dlg, msg, wParam, lParam);
     }
 
@@ -570,15 +607,15 @@ namespace
                                                    enum_names,              \
                                                    reinterpret_cast<uint *>(&dialog_settings.name)));
 
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max)                   \
-    setting_controllers.push_back(new ranged_setting<type>(#name,                     \
-                                                           string_id,                 \
-                                                           IDD_DIALOG_SETTING_RANGED, \
-                                                           IDC_STATIC_SETTING_RANGED, \
-                                                           setting_ranged_handler,    \
-                                                           &dialog_settings.name,     \
-                                                           min,                       \
-                                                           max));
+#define DECL_SETTING_RANGED(name, string_id, value, min, max)                   \
+    setting_controllers.push_back(new ranged_setting(#name,                     \
+                                                     string_id,                 \
+                                                     IDD_DIALOG_SETTING_RANGED, \
+                                                     IDC_STATIC_SETTING_RANGED, \
+                                                     setting_ranged_handler,    \
+                                                     &dialog_settings.name,     \
+                                                     min,                       \
+                                                     max));
 
 #define DECL_SETTING_INTERNAL(setting_type, name, ...)
 
@@ -659,7 +696,8 @@ namespace
         switch(id) {
 
         case IDC_BUTTON_SETTINGS_RELAUNCH: {
-            EndDialog(main_dialog, app::LRESULT_LAUNCH_AS_ADMIN);
+            EndDialog(hwnd, 0);
+            PostMessage(app_window, app::WM_RELAUNCH_AS_ADMIN, 0, 0);
         } break;
         }
     }
@@ -1012,15 +1050,17 @@ namespace
     {
         switch(id) {
 
-        case app::LRESULT_LAUNCH_AS_ADMIN:
-            EndDialog(hwnd, app::LRESULT_LAUNCH_AS_ADMIN);
+        case IDC_SETTINGS_BUTTON_APPLY:
+            post_new_settings();
             break;
 
         case IDOK:
+            settings_dialog_visible = false;
             EndDialog(hwnd, 0);
             break;
 
         case IDCANCEL:
+            settings_dialog_visible = false;
             EndDialog(hwnd, 0);
             break;
         }
@@ -1045,13 +1085,22 @@ namespace
 }
 
 //////////////////////////////////////////////////////////////////////
+// PostThreadMessage(
 
 namespace imageview
 {
-    LRESULT show_settings_dialog(HWND parent, uint tab_id)
+    void show_settings_dialog(HWND parent, uint tab_id)
     {
+        if(settings_dialog_visible) {
+            return;
+        }
+        settings_dialog_visible = true;
+        app_window = parent;
+
         current_page = -1;
-        return DialogBoxParamA(
-            app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), parent, main_dialog_handler, tab_id);
+
+        HWND dlg =
+            CreateDialogParamA(app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dialog_handler, tab_id);
+        ShowWindow(dlg, SW_SHOW);
     }
 }

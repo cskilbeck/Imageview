@@ -230,6 +230,7 @@
     <ClInclude Include="shaders\hlsl.h" />
     <ClInclude Include="src\ansi.h" />
     <ClInclude Include="src\app.h" />
+    <ClInclude Include="src\d3d.h" />
     <ClInclude Include="src\defer.h" />
     <ClInclude Include="src\dialogs.h" />
     <ClInclude Include="src\drag_drop.h" />
@@ -252,6 +253,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp" />
+    <ClCompile Include="src\d3d.cpp" />
     <ClCompile Include="src\dialogs.cpp" />
     <ClCompile Include="src\drag_drop.cpp" />
     <ClCompile Include="src\file.cpp" />

@@ -117,6 +117,8 @@
 #define IDC_STATIC_SETTING_RANGED       1016
 #define IDC_EDIT_SETTING_COLOR          1017
 #define IDC_STATIC_SETTING_SEPARATOR    1018
+#define IDC_SLIDER1                     1019
+#define IDC_SPLIT1                      1023
 #define ID_FILE_LOAD                    40005
 #define ID_FILE_SAVE                    40006
 #define ID_VIEW_ALPHA                   40008
@@ -153,9 +155,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        192
+#define _APS_NEXT_RESOURCE_VALUE        194
 #define _APS_NEXT_COMMAND_VALUE         40080
-#define _APS_NEXT_CONTROL_VALUE         1019
+#define _APS_NEXT_CONTROL_VALUE         1024
 #define _APS_NEXT_SYMED_VALUE           102
 #endif
 #endif

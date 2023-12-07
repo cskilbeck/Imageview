@@ -2,5 +2,5 @@
 
 namespace imageview
 {
-    LRESULT show_settings_dialog(HWND parent, uint tab_id);
+    void show_settings_dialog(HWND parent, uint tab_id);
 }

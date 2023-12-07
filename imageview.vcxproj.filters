@@ -85,6 +85,9 @@
     <ClInclude Include="src\scrollbar.h">
       <Filter>4_include</Filter>
     </ClInclude>
+    <ClInclude Include="src\d3d.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -130,6 +133,9 @@
       <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\scrollbar.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\d3d.cpp">
       <Filter>3_src</Filter>
     </ClCompile>
   </ItemGroup>

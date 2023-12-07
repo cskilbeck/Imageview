@@ -159,10 +159,48 @@ public:
         return S_OK;
     }
 
+    long refcount{ 0 };
+
+    //////////////////////////////////////////////////////////////////////
+    // DragDropHelper stuff
+
+    IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv)
+    {
+        static QITAB const qit[] = {
+            QITABENT(CDragDropHelper, IDropTarget),
+            { 0 },
+        };
+        return QISearch(this, qit, riid, ppv);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    IFACEMETHODIMP_(ULONG) AddRef()
+    {
+        return InterlockedIncrement(&refcount);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    IFACEMETHODIMP_(ULONG) Release()
+    {
+        long cRef = InterlockedDecrement(&refcount);
+        if(cRef == 0) {
+            delete this;
+        }
+        return cRef;
+    }
+
 private:
     // client provides
-    virtual HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) = 0;
-    virtual HRESULT on_drop_string(wchar const *str) = 0;
+    virtual HRESULT on_drop_shell_item(IShellItemArray *, DWORD)
+    {
+        return S_OK;
+    }
+    virtual HRESULT on_drop_string(wchar const *)
+    {
+        return S_OK;
+    }
     virtual HRESULT OnDropError(IDataObject * /* pdtobj */)
     {
         return S_OK;

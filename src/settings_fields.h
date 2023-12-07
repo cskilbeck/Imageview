@@ -32,7 +32,7 @@ DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0.25f, 0.25f, 0.2
 
 // grid size in pixels
 
-DECL_SETTING_RANGED(float, grid_size, IDS_SETTING_NAME_GRID_SIZE, 16.0f, 4.0f, 32.0f);
+DECL_SETTING_RANGED(grid_size, IDS_SETTING_NAME_GRID_SIZE, 16, 1, 512);
 
 // grid is fixed to screen coords (true) or floats (fixed to image origin)
 
@@ -40,7 +40,7 @@ DECL_SETTING_BOOL(fixed_grid, IDS_SETTING_NAME_FIXED_GRID, true);
 
 // grid size multiplier, @NOTE must be a power of 2
 
-DECL_SETTING_RANGED(int, grid_multiplier, IDS_SETTING_NAME_GRID_MULTIPLIER, 2, 1, 4);
+DECL_SETTING_RANGED(grid_multiplier, IDS_SETTING_NAME_GRID_MULTIPLIER, 2, 1, 4);
 
 //////////////////////////////////////////////////////////////////////
 // select
@@ -66,11 +66,11 @@ DECL_SETTING_INTERNAL(float, select_border_grab_size, 8);
 
 // selection border width (1 or maybe 2, anything bigger likely to cause problems)
 
-DECL_SETTING_RANGED(int, select_border_width, IDS_SETTING_NAME_SELECT_BORDER_WIDTH, 2, 1, 4);
+DECL_SETTING_RANGED(select_border_width, IDS_SETTING_NAME_SELECT_BORDER_WIDTH, 2, 1, 4);
 
 // selection line dash length
 
-DECL_SETTING_RANGED(uint, dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 32);
+DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 32);
 
 // crosshair line colors
 
@@ -153,9 +153,10 @@ DECL_SETTING_ENUM(
     exif_option, image_rotation_option, IDS_SETTING_NAME_EXIF_OPTION, enum_exif_map, exif_option::exif_option_apply);
 
 // how much memory to use for caching files and decoded images
+// TODO (chs): separate settings for file and uncompressed image caches?
+// or... ditch the uncompressed cache? help with exif prompt problem
 
-DECL_SETTING_RANGED(
-    size_t, cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 1024, 64, 4096);    // 1GB memory cache by default
+DECL_SETTING_RANGED(cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 1024, 64, 4096);    // 1GB memory cache by default
 
 // what happens when you press 'z'
 

@@ -140,4 +140,5 @@ using Microsoft::WRL::ComPtr;
 #include "hotkeys.h"
 #include "scrollbar.h"
 #include "settings_dialog.h"
+#include "d3d.h"
 #include "app.h"

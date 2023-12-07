@@ -98,10 +98,10 @@ struct settings_t
         value                                                     \
     }
 
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) \
-    type name                                                       \
-    {                                                               \
-        value                                                       \
+#define DECL_SETTING_RANGED(name, string_id, value, min, max) \
+    uint name                                                 \
+    {                                                         \
+        value                                                 \
     }
 
 #define DECL_SETTING_INTERNAL(type, name, ...) \
@@ -137,5 +137,4 @@ struct settings_t
 // settings get serialized/deserialized to/from the registry
 
 extern settings_t settings;
-
 extern settings_t default_settings;

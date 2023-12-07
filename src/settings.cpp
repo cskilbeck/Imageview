@@ -62,7 +62,7 @@ HRESULT settings_t::serialize(serialize_action action, char const *key)
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_names, value) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_RANGED(type, name, string_id, value, min, max) SERIALIZE_SETTING(name)
+#define DECL_SETTING_RANGED(name, string_id, value, min, max) SERIALIZE_SETTING(name)
 
 #define DECL_SETTING_INTERNAL(type, name, ...) SERIALIZE_SETTING(name)
 
