@@ -171,6 +171,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_ERROR               "Error"
+    IDS_SETTING_NAME_SELECT_FILL_ALPHA "Selection alpha"
 END
 
 #endif    // English (Neutral) resources
@@ -450,7 +451,7 @@ FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     LTEXT           "This is the name of the setting",IDC_STATIC_SETTING_RANGED,6,2,112,8
     EDITTEXT        IDC_EDIT1,196,0,40,12,ES_AUTOHSCROLL
-    CONTROL         "",IDC_SLIDER1,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,118,1,77,11
+    CONTROL         "",IDC_SLIDER_SETTING_RANGED,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,118,1,77,11
 END
 
 IDD_DIALOG_SETTING_SEPARATOR DIALOGEX 0, 0, 210, 13

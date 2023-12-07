@@ -98,6 +98,7 @@
 #define IDS_SET_COLOR_FOR               190
 #define IDS_ADMIN                       191
 #define IDS_ERROR                       192
+#define IDS_SETTING_NAME_SELECT_FILL_ALPHA 193
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002
@@ -118,6 +119,7 @@
 #define IDC_EDIT_SETTING_COLOR          1017
 #define IDC_STATIC_SETTING_SEPARATOR    1018
 #define IDC_SLIDER1                     1019
+#define IDC_SLIDER_SETTING_RANGED       1019
 #define IDC_SPLIT1                      1023
 #define ID_FILE_LOAD                    40005
 #define ID_FILE_SAVE                    40006

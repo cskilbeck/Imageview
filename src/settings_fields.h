@@ -51,6 +51,10 @@ DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_SELECT);
 
 DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0.1f, 0.2f, 0.5f, 0.5f);
 
+// selection rectangle alpha
+
+DECL_SETTING_RANGED(select_fill_alpha, IDS_SETTING_NAME_SELECT_FILL_ALPHA, 64, 8, 248);
+
 // selection outline colors (line alternates)
 
 DECL_SETTING_COLOR(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 1, 1, 1, 0.2f);

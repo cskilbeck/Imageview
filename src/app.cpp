@@ -1724,7 +1724,7 @@ namespace imageview::app
             return;
         }
 
-        int new_file_cursor = clamp(0, current_file_cursor + movement, (int)current_folder_scan->files.size() - 1);
+        int new_file_cursor = std::clamp(current_file_cursor + movement, 0, (int)current_folder_scan->files.size() - 1);
 
         if(new_file_cursor != current_file_cursor) {
             current_file_cursor = new_file_cursor;
@@ -1846,7 +1846,7 @@ namespace imageview::app
     vec2 clamp_to_texture(vec2 pos)
     {
         vec2 t = texture_size();
-        return vec2{ clamp(0.0f, pos.x, t.x - 1), clamp(0.0f, pos.y, t.y - 1) };
+        return vec2{ std::clamp(pos.x, 0.0f, t.x - 1), std::clamp(pos.y, 0.0f, t.y - 1) };
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2625,7 +2625,10 @@ namespace imageview::app
                 shader_constants.grid_color[3] = settings.background_color;
             }
 
-            shader_constants.select_color[0] = settings.select_fill_color;
+            vec4 select_fill = settings.select_fill_color;
+            select_fill = XMVectorSetW(select_fill, static_cast<float>(settings.select_fill_alpha) / 255.0f);
+
+            shader_constants.select_color[0] = select_fill;
             shader_constants.select_color[1] = settings.select_outline_color1;
             shader_constants.select_color[2] = settings.select_outline_color2;
 
@@ -2727,7 +2730,8 @@ namespace imageview::app
 
                 // flash the selection color when they copy
                 float f = (float)std::min(1.0, (m_timer.current_time - copy_timestamp) / 0.12);
-                shader_constants.select_color[0] = XMVectorLerp(vec4{ 1, 1, 1, 0.5f }, settings.select_fill_color, f);
+
+                shader_constants.select_color[0] = XMVectorLerp(vec4{ 1, 1, 1, 0.5f }, select_fill, f);
 
                 CHK_HR(update_constants());
 

@@ -2,6 +2,48 @@
 
 #include "pch.h"
 
+namespace
+{
+    //////////////////////////////////////////////////////////////////////
+
+    std::string convert_wide_text_to_utf8_string(wchar const *text, size_t len)
+    {
+        std::string result;
+        uint size = WideCharToMultiByte(CP_UTF8, 0, text, static_cast<int>(len), null, 0, null, null);
+        if(size != 0) {
+            result.resize(size);
+            WideCharToMultiByte(CP_UTF8, 0, text, static_cast<int>(len), result.data(), size, null, null);
+        }
+        return result;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    std::wstring convert_utf8_text_to_wide_string(char const *text, size_t len)
+    {
+        std::wstring result;
+        uint size = MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(len), null, 0);
+        if(size != 0) {
+            result.resize(size);
+            MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(len), result.data(), size);
+        }
+        return result;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    std::string convert_wide_text_to_ascii_string(wchar const *text, size_t len)
+    {
+        std::string result;
+        uint size = WideCharToMultiByte(CP_ACP, 0, text, static_cast<int>(len), null, 0, null, null);
+        if(size != 0) {
+            result.resize(size);
+            WideCharToMultiByte(CP_ACP, 0, text, static_cast<int>(len), result.data(), size, null, null);
+        }
+        return result;
+    }
+}
+
 namespace imageview
 {
     //////////////////////////////////////////////////////////////////////
@@ -78,6 +120,57 @@ namespace imageview
         rc.right = rc.left + ww;
         rc.bottom = rc.top + wh;
         return rc;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    std::wstring unicode(std::string s)
+    {
+        return convert_utf8_text_to_wide_string(s.c_str(), s.size());
+    }
+
+    std::wstring unicode(char const *s, size_t len)
+    {
+        return convert_utf8_text_to_wide_string(s, len);
+    }
+
+    std::wstring unicode(char const *s)
+    {
+        return convert_utf8_text_to_wide_string(s, strlen(s));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    std::string utf8(std::wstring s)
+    {
+        return convert_wide_text_to_utf8_string(s.c_str(), s.size());
+    }
+
+    std::string utf8(wchar const *s, size_t len)
+    {
+        return convert_wide_text_to_utf8_string(s, len);
+    }
+
+    std::string utf8(wchar const *s)
+    {
+        return convert_wide_text_to_utf8_string(s, wcslen(s));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    std::string ascii(std::wstring s)
+    {
+        return convert_wide_text_to_ascii_string(s.c_str(), s.size());
+    }
+
+    std::string ascii(wchar const *s, size_t len)
+    {
+        return convert_wide_text_to_ascii_string(s, len);
+    }
+
+    std::string ascii(wchar const *s)
+    {
+        return convert_wide_text_to_ascii_string(s, wcslen(s));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -246,45 +339,6 @@ namespace imageview
         CHK_BOOL(GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize));
         is_elevated = elevation.TokenIsElevated;
         return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    std::string convert_wide_text_to_utf8_string(wchar const *text, size_t len)
-    {
-        std::string result;
-        uint size = WideCharToMultiByte(CP_UTF8, 0, text, static_cast<int>(len), null, 0, null, null);
-        if(size != 0) {
-            result.resize(size);
-            WideCharToMultiByte(CP_UTF8, 0, text, static_cast<int>(len), result.data(), size, null, null);
-        }
-        return result;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    std::wstring convert_utf8_text_to_wide_string(char const *text, size_t len)
-    {
-        std::wstring result;
-        uint size = MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(len), null, 0);
-        if(size != 0) {
-            result.resize(size);
-            MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(len), result.data(), size);
-        }
-        return result;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    std::string convert_wide_text_to_ascii_string(wchar const *text, size_t len)
-    {
-        std::string result;
-        uint size = WideCharToMultiByte(CP_ACP, 0, text, static_cast<int>(len), null, 0, null, null);
-        if(size != 0) {
-            result.resize(size);
-            WideCharToMultiByte(CP_ACP, 0, text, static_cast<int>(len), result.data(), size, null, null);
-        }
-        return result;
     }
 
     //////////////////////////////////////////////////////////////////////

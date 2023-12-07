@@ -19,13 +19,15 @@ namespace imageview
     int message_box(HWND hwnd, std::string const &text, uint buttons);
 
     //////////////////////////////////////////////////////////////////////
+    // color admin
 
     uint32 color_to_uint32(vec4 color);
     vec4 color_from_uint32(uint32 color);
     uint32 color_swap_red_blue(uint32 color);
-    HRESULT color_from_string(std::string const &text, uint32 &color);
+    HRESULT color_from_string(std::string const &hex_text, uint32 &color);
 
     //////////////////////////////////////////////////////////////////////
+    // app admin
 
     HRESULT get_is_process_elevated(bool &is_elevated);
     float get_window_dpi(HWND w);
@@ -37,15 +39,53 @@ namespace imageview
     HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
 
     //////////////////////////////////////////////////////////////////////
+    // string
+
+    std::string localize(uint id);
+    std::string strip_quotes(std::string const &s);
+
+    std::wstring unicode(std::string s);
+    std::wstring unicode(char const *s, size_t len);
+    std::wstring unicode(char const *s);
+
+    std::string utf8(std::wstring s);
+    std::string utf8(wchar const *s, size_t len);
+    std::string utf8(wchar const *s);
+
+    std::string ascii(std::wstring s);
+    std::string ascii(wchar const *s, size_t len);
+    std::string ascii(wchar const *s);
+
+    //////////////////////////////////////////////////////////////////////
+    // upper/lower case - these are not valid for many unicode pages!
+
+    template <typename T> void make_lowercase(T &str)
+    {
+        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
+            return static_cast<T::value_type>(::tolower(x));
+        });
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> void make_uppercase(T &str)
+    {
+        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
+            return static_cast<T::value_type>(::toupper(x));
+        });
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // helpers
 
     inline int get_x(LPARAM lp)
     {
-        return static_cast<int>(static_cast<short>(LOWORD(lp)));
+        return static_cast<int>(LOWORD(lp));
     }
 
     inline int get_y(LPARAM lp)
     {
-        return static_cast<int>(static_cast<short>(HIWORD(lp)));
+        return static_cast<int>(HIWORD(lp));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -53,14 +93,6 @@ namespace imageview
     template <typename T> void mem_clear(T *o)
     {
         memset(o, 0, sizeof(T));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // general
-
-    template <typename T> T clamp(T min, T a, T max)
-    {
-        return std::max(min, std::min(a, max));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -128,84 +160,6 @@ namespace imageview
     inline std::string rect_to_string(RECT const &r)
     {
         return std::format("{},{} ({}x{})", r.left, r.top, rect_width(r), rect_height(r));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // string
-
-    std::string localize(uint id);
-    std::string convert_wide_text_to_utf8_string(wchar const *text, size_t len);
-    std::string convert_wide_text_to_ascii_string(wchar const *text, size_t len);
-    std::wstring convert_utf8_text_to_wide_string(char const *text, size_t len);
-    std::string strip_quotes(std::string const &s);
-
-    //////////////////////////////////////////////////////////////////////
-
-    template <typename T> void make_lowercase(T &str)
-    {
-        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
-            return static_cast<T::value_type>(::tolower(x));
-        });
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    template <typename T> void make_uppercase(T &str)
-    {
-        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
-            return static_cast<T::value_type>(::toupper(x));
-        });
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    inline std::wstring unicode(std::string s)
-    {
-        return convert_utf8_text_to_wide_string(s.c_str(), s.size());
-    }
-
-    inline std::wstring unicode(char const *s, size_t len)
-    {
-        return convert_utf8_text_to_wide_string(s, len);
-    }
-
-    inline std::wstring unicode(char const *s)
-    {
-        return convert_utf8_text_to_wide_string(s, strlen(s));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    inline std::string utf8(std::wstring s)
-    {
-        return convert_wide_text_to_utf8_string(s.c_str(), s.size());
-    }
-
-    inline std::string utf8(wchar const *s, size_t len)
-    {
-        return convert_wide_text_to_utf8_string(s, len);
-    }
-
-    inline std::string utf8(wchar const *s)
-    {
-        return convert_wide_text_to_utf8_string(s, wcslen(s));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    inline std::string ascii(std::wstring s)
-    {
-        return convert_wide_text_to_ascii_string(s.c_str(), s.size());
-    }
-
-    inline std::string ascii(wchar const *s, size_t len)
-    {
-        return convert_wide_text_to_ascii_string(s, len);
-    }
-
-    inline std::string ascii(wchar const *s)
-    {
-        return convert_wide_text_to_ascii_string(s, wcslen(s));
     }
 }
 

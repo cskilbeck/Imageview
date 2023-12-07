@@ -52,7 +52,7 @@ namespace imageview
 
         static vec2 clamp(vec2 const &min, vec2 const &a, vec2 const &max)
         {
-            return { imageview::clamp(min.x, a.x, max.x), imageview::clamp(min.y, a.y, max.y) };
+            return { std::clamp(a.x, min.x, max.x), std::clamp(a.y, min.y, max.y) };
         }
 
         static float length(vec2 const &a)

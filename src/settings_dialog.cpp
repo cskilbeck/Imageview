@@ -71,8 +71,6 @@ namespace
 
     int current_page = -1;
 
-    bool settings_dialog_visible{ false };
-
     std::atomic_bool dialog_is_active{ false };
 
     //////////////////////////////////////////////////////////////////////
@@ -155,6 +153,13 @@ namespace
         // update the dialog controls with current value of this setting
         virtual void update_controls(HWND)
         {
+        }
+
+        // get a pointer to the setting object associated with a setting window
+        template <typename T> static T &get(HWND w)
+        {
+            T *p = reinterpret_cast<T *>(GetWindowLongPtrA(w, GWLP_USERDATA));
+            return *p;
         }
     };
 
@@ -363,8 +368,18 @@ namespace
         {
         }
 
+        void setup_controls(HWND hwnd) override
+        {
+            HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+            SendMessage(slider, TBM_SETRANGEMAX, false, max_value);
+            SendMessage(slider, TBM_SETRANGEMIN, false, min_value);
+            setting::setup_controls(hwnd);
+        }
+
         void update_controls(HWND hwnd) override
         {
+            HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+            SendMessage(slider, TBM_SETPOS, true, *value);
         }
 
         uint *value;
@@ -404,9 +419,9 @@ namespace
     {
         if(lpDrawItem->CtlID == IDC_BUTTON_SETTING_COLOR) {
 
-            color_setting *setting = reinterpret_cast<color_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+            color_setting &setting = setting::get<color_setting>(hwnd);
 
-            uint color = color_to_uint32(*setting->value) & 0xffffff;
+            uint color = color_to_uint32(*setting.value) & 0xffffff;
 
             SetDCBrushColor(lpDrawItem->hDC, color);
 
@@ -425,17 +440,17 @@ namespace
 
     void on_command_setting_color(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
-        color_setting *setting = reinterpret_cast<color_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+        color_setting &setting = setting::get<color_setting>(hwnd);
 
         switch(id) {
 
         case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
 
-            std::string title = localize(setting->string_resource_id);
-            uint new_color = color_to_uint32(*setting->value);
+            std::string title = localize(setting.string_resource_id);
+            uint new_color = color_to_uint32(*setting.value);
             if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
-                *setting->value = color_from_uint32(new_color);
-                setting->update_controls(hwnd);
+                *setting.value = color_from_uint32(new_color);
+                setting.update_controls(hwnd);
                 InvalidateRect(hwnd, null, true);
                 post_new_settings();
             }
@@ -456,7 +471,7 @@ namespace
                     txt.pop_back();
                     uint32 new_color{};
                     if(SUCCEEDED(color_from_string(txt, new_color))) {
-                        *setting->value = color_from_uint32(new_color);
+                        *setting.value = color_from_uint32(new_color);
                         InvalidateRect(hwnd, null, true);
                         post_new_settings();
                     }
@@ -477,15 +492,14 @@ namespace
             HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
             int sel = ComboBox_GetCurSel(combo_box);
             uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
-            enum_setting *setting = reinterpret_cast<enum_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
-            *setting->value = v;
+            *setting::get<enum_setting>(hwnd).value = v;
             post_new_settings();
         } break;
         }
     }
 
     //////////////////////////////////////////////////////////////////////
-    // suppress the text caret in the 'about' text box
+    // brutally suppress the text caret in the 'about' text box
 
     LRESULT CALLBACK suppress_cursor_subclass(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
     {
@@ -500,8 +514,8 @@ namespace
     {
         switch(id) {
         case IDC_CHECK_SETTING_BOOL: {
-            bool_setting *setting = reinterpret_cast<bool_setting *>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
-            *setting->value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
+            bool_setting &setting = setting::get<bool_setting>(hwnd);
+            *setting.value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
             post_new_settings();
         } break;
         }
@@ -544,10 +558,26 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // RANGED setting \ WM_NOTIFY
+
+    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    {
+        ranged_setting &ranged = setting::get<ranged_setting>(hwnd);
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+        LOG_DEBUG("{} ?", new_pos);
+        *ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
+        post_new_settings();
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // RANGED setting \ DLGPROC
 
     INT_PTR setting_ranged_handler(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
+        switch(msg) {
+            HANDLE_MSG(dlg, WM_HSCROLL, on_hscroll_setting_ranged);
+        }
         return setting_base_handler(dlg, msg, wParam, lParam);
     }
 
@@ -1055,12 +1085,12 @@ namespace
             break;
 
         case IDOK:
-            settings_dialog_visible = false;
+            main_dialog = null;
             EndDialog(hwnd, 0);
             break;
 
         case IDCANCEL:
-            settings_dialog_visible = false;
+            main_dialog = null;
             EndDialog(hwnd, 0);
             break;
         }
@@ -1089,18 +1119,19 @@ namespace
 
 namespace imageview
 {
-    void show_settings_dialog(HWND parent, uint tab_id)
+    HRESULT show_settings_dialog(HWND parent, uint tab_id)
     {
-        if(settings_dialog_visible) {
-            return;
-        }
-        settings_dialog_visible = true;
-        app_window = parent;
-
         current_page = -1;
 
-        HWND dlg =
-            CreateDialogParamA(app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dialog_handler, tab_id);
-        ShowWindow(dlg, SW_SHOW);
+        if(main_dialog == null) {
+            app_window = parent;
+            CHK_NULL(CreateDialogParamA(
+                app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dialog_handler, tab_id));
+        }
+        ShowWindow(main_dialog, SW_SHOW);
+        BringWindowToTop(main_dialog);
+        SwitchToThisWindow(main_dialog, true);
+
+        return S_OK;
     }
 }
