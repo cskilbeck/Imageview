@@ -246,8 +246,10 @@
     <ClInclude Include="src\settings.h" />
     <ClInclude Include="src\settings_fields.h" />
     <ClInclude Include="src\settings_dialog.h" />
+    <ClInclude Include="src\settings_page.h" />
     <ClInclude Include="src\setting_bool.h" />
     <ClInclude Include="src\setting_color.h" />
+    <ClInclude Include="src\setting_controller.h" />
     <ClInclude Include="src\setting_enum.h" />
     <ClInclude Include="src\setting_ranged.h" />
     <ClInclude Include="src\setting_separator.h" />
@@ -277,8 +279,10 @@
     <ClCompile Include="src\scrollbar.cpp" />
     <ClCompile Include="src\settings.cpp" />
     <ClCompile Include="src\settings_dialog.cpp" />
+    <ClCompile Include="src\settings_page.cpp" />
     <ClCompile Include="src\setting_bool.cpp" />
     <ClCompile Include="src\setting_color.cpp" />
+    <ClCompile Include="src\setting_controller.cpp" />
     <ClCompile Include="src\setting_enum.cpp" />
     <ClCompile Include="src\setting_ranged.cpp" />
     <ClCompile Include="src\setting_separator.cpp" />

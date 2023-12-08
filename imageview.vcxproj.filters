@@ -106,6 +106,12 @@
     <ClInclude Include="src\setting_ranged.h">
       <Filter>4_include</Filter>
     </ClInclude>
+    <ClInclude Include="src\setting_controller.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\settings_page.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -173,6 +179,12 @@
     </ClCompile>
     <ClCompile Include="src\setting_color.cpp">
       <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_controller.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\settings_page.cpp">
+      <Filter>4_include</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

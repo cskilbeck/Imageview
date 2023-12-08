@@ -139,6 +139,8 @@ using Microsoft::WRL::ComPtr;
 #include "settings.h"
 #include "hotkeys.h"
 #include "scrollbar.h"
+#include "setting_controller.h"
+#include "settings_page.h"
 #include "settings_dialog.h"
 #include "setting_separator.h"
 #include "setting_bool.h"

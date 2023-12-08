@@ -27,6 +27,11 @@ namespace imageview::app
     extern HMODULE instance;
 
     //////////////////////////////////////////////////////////////////////
+    // the application window - use with care
+
+    extern HWND window;
+
+    //////////////////////////////////////////////////////////////////////
     // WM_USER messages for main window
 
     enum user_message_t : uint

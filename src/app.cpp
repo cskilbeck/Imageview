@@ -75,6 +75,9 @@ LOG_CONTEXT("app");
 
 namespace imageview::app
 {
+    // the window handle
+    HWND window{ null };
+
     HRESULT load_image_file(std::string const &filepath);
     HRESULT show_image(image::image_file *f);
     HRESULT on_device_lost();
@@ -90,6 +93,8 @@ namespace
 {
     using namespace imageview;
     using namespace DirectX;
+
+    using app::window;
 
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for scanner thread
@@ -206,9 +211,6 @@ namespace
 
     // how many times WM_SHOWWINDOW
     int window_show_count{ 0 };
-
-    // the window handle
-    HWND window{ null };
 
     // cached window size
     int window_width{ 1280 };

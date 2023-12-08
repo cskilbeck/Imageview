@@ -2,46 +2,6 @@
 
 namespace imageview::settings_dialog
 {
-    //////////////////////////////////////////////////////////////////////
-    // all the settings on the settings page derive from this
-
-    struct setting_controller
-    {
-        setting_controller(char const *n, uint s, uint dlg_id, DLGPROC dlgproc)
-            : internal_name(n), string_resource_id(s), dialog_resource_id(dlg_id), dlg_proc(dlgproc), window(null)
-        {
-        }
-
-        // internal name of the setting
-        char const *internal_name;
-
-        // user friendly descriptive name
-        uint string_resource_id;
-
-        // create dialog from this resource id
-        uint dialog_resource_id;
-
-        DLGPROC dlg_proc;
-
-        HWND window;
-
-        virtual void setup_controls(HWND hwnd);
-
-        // update the dialog controls with current value of this setting
-        virtual void update_controls() = 0;
-
-        // get a pointer to the setting object associated with a setting window
-        template <typename T> static T &get(HWND w)
-        {
-            T *p = reinterpret_cast<T *>(GetWindowLongPtrA(w, GWLP_USERDATA));
-            return *p;
-        }
-    };
-
-    INT_PTR setting_ctlcolor_base(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
-    HBRUSH on_ctl_color_separator(HWND hwnd, HDC hdc, HWND hwndChild, int type);
-    INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
-    BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam);
     void post_new_settings();
 
     HRESULT show_settings_dialog(HWND app_hwnd, uint tab_id);
