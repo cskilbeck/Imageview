@@ -158,7 +158,7 @@ namespace
         auto dpi_scale = [=](int x) { return static_cast<int>(x * dpi / 96.0f); };
 
         int const top_margin = dpi_scale(12);
-        int const inner_margin = dpi_scale(2);
+        int const inner_margin = dpi_scale(3);
         int const bottom_margin = dpi_scale(12);
 
         int cur_height = top_margin;
@@ -215,6 +215,8 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // EXPLORER page
     //////////////////////////////////////////////////////////////////////
+
+    // TODO (chs): implement the explorer admin (file associations etc)
 
     //////////////////////////////////////////////////////////////////////
     // ABOUT page

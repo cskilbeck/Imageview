@@ -2161,9 +2161,9 @@ namespace
         // if RMB released within double-click time and haven't
         // moved it much since they pressed it, show popup menu
 
-        if(btn == settings.drag_button) {
+        if(btn == settings.menu_button) {
 
-            uint64 since = GetTickCount64() - mouse_click_timestamp[settings.drag_button];
+            uint64 since = GetTickCount64() - mouse_click_timestamp[settings.menu_button];
 
             if(since < static_cast<uint64>(GetDoubleClickTime())) {
 
@@ -2173,7 +2173,7 @@ namespace
                 SystemParametersInfo(SPI_GETMOUSEHOVERHEIGHT, 0, &hover_high, 0);
                 SystemParametersInfo(SPI_GETMOUSEHOVERWIDTH, 0, &hover_wide, 0);
 
-                POINT const &click_pos = mouse_click[settings.drag_button];
+                POINT const &click_pos = mouse_click[settings.menu_button];
 
                 uint x_distance = std::abs(click_pos.x - pos.x);
                 uint y_distance = std::abs(click_pos.y - pos.y);
@@ -2223,7 +2223,7 @@ namespace
             }
         }
 
-        else if(btn == settings.zoom_button) {
+        if(btn == settings.zoom_button) {
 
             ShowCursor(TRUE);
             clear_mouse_button(settings.drag_button);    // in case they pressed the drag button while zooming

@@ -173,6 +173,7 @@ BEGIN
     IDS_ERROR               "Error"
     IDS_SETTING_NAME_SELECT_FILL_ALPHA "Selection alpha"
     IDS_IS_LOADING          " loading..."
+    IDS_SETTING_NAME_MENU_BUTTON "Menu mouse button"
 END
 
 #endif    // English (Neutral) resources

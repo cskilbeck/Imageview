@@ -6,6 +6,7 @@
 namespace imageview::settings_dialog
 {
     // big sigh - these are for mapping enums to strings for the combo boxes
+    // need to be visible to settings_page
 
     // fullscreen_startup_option
 

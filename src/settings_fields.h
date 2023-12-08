@@ -98,6 +98,10 @@ DECL_SETTING_ENUM(mouse_button_t, drag_button, IDS_SETTING_NAME_DRAG_BUTTON, enu
 
 DECL_SETTING_ENUM(mouse_button_t, select_button, IDS_SETTING_NAME_SELECT_BUTTON, enum_mouse_buttons_map, btn_left);
 
+// which mouse button for popup menu
+
+DECL_SETTING_ENUM(mouse_button_t, menu_button, IDS_SETTING_NAME_MENU_BUTTON, enum_mouse_buttons_map, btn_right);
+
 //////////////////////////////////////////////////////////////////////
 // window
 

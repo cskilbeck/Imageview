@@ -38,9 +38,11 @@ namespace imageview::settings_dialog
         }
     };
 
+    // this for everybody to make all controls have the correct background color
     INT_PTR ctlcolor_base(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
 
-    HBRUSH on_ctl_color_separator(HWND hwnd, HDC hdc, HWND hwndChild, int type);
-    INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
+    // sets up controls
     BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam);
+
+    INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
 }
