@@ -1,6 +1,7 @@
-#include "pch.h"
+//////////////////////////////////////////////////////////////////////
+// An enum controller which has a combo box
 
-#pragma warning(disable : 4100)
+#include "pch.h"
 
 namespace imageview::settings_dialog
 {

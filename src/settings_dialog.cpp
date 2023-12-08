@@ -1,8 +1,7 @@
 //////////////////////////////////////////////////////////////////////
+// The main settings dialog
 
 #include "pch.h"
-
-#pragma warning(disable : 4100)
 
 LOG_CONTEXT("settings_dlg");
 

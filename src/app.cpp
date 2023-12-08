@@ -2988,13 +2988,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // adding UNREFERENCED_PARAMETER for every one of these warnings
-    // in all the message handlers would be unwieldy, not worth it
-
-#pragma warning(push)
-#pragma warning(disable : 4100)
-
-    //////////////////////////////////////////////////////////////////////
     // send new settings to the settings dialog if it's active...
 
     void OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
@@ -3578,9 +3571,6 @@ namespace
     {
         crosshairs_active = fDown;
     }
-
-//#pragma warning(disable : 4100)
-#pragma warning(pop)
 
     //////////////////////////////////////////////////////////////////////
     // These are missing from windowsx.h

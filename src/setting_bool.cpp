@@ -1,6 +1,7 @@
-#include "pch.h"
+//////////////////////////////////////////////////////////////////////
+// A bool controller which has a checkbox
 
-#pragma warning(disable : 4100)
+#include "pch.h"
 
 namespace imageview::settings_dialog
 {

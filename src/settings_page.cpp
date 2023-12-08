@@ -1,6 +1,7 @@
-#include "pch.h"
+//////////////////////////////////////////////////////////////////////
+// All the tabbed pages in the setttings dialog
 
-#pragma warning(disable : 4100)
+#include "pch.h"
 
 namespace
 {

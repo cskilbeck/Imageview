@@ -1,6 +1,7 @@
-#include "pch.h"
+//////////////////////////////////////////////////////////////////////
+// Base of the setting controllers
 
-#pragma warning(disable : 4100)
+#include "pch.h"
 
 namespace imageview::settings_dialog
 {

@@ -1,6 +1,7 @@
-#include "pch.h"
+//////////////////////////////////////////////////////////////////////
+// A separator controller which does nothing
 
-#pragma warning(disable : 4100)
+#include "pch.h"
 
 namespace imageview::settings_dialog
 {

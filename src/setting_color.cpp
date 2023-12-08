@@ -1,6 +1,7 @@
-#include "pch.h"
+//////////////////////////////////////////////////////////////////////
+// A color controller which has a colored button and an edit box (for the hex)
 
-#pragma warning(disable : 4100)
+#include "pch.h"
 
 namespace imageview::settings_dialog
 {

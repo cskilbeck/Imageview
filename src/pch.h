@@ -123,6 +123,8 @@ using Microsoft::WRL::ComPtr;
 //////////////////////////////////////////////////////////////////////
 // Local
 
+#pragma warning(disable : 4100)
+
 #include "types.h"
 #include "util.h"
 #include "ansi.h"
