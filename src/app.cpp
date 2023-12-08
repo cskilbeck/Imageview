@@ -9,21 +9,20 @@
 // overlay grid as well as background checkerboard
 // crosshairs when zoomed in look ass
 // flip/rotate
-//
+// accessibility is broken in the settings dialog
 // colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
 // handle SRGB / premultiplied alpha correctly in image decoder
 // HDR (requires windows version 10 1703?)
-//
 // fix the cache
 // fix all the leaks
 // proper error handling/reporting
 // ?folder scanning broken after on_command_line from external?
-//
 // get these into another file:
 //      d3d
 //      d2d
 //      cache
 //      scanner
+// glitched selection outline dash thing sometimes...?
 //
 // MAYBE
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
@@ -471,6 +470,40 @@ namespace imageview::app
     {
         std::string err = windows_error_message(hr);
         message_box(null, std::format("{}\r\n{}", msg, err), MB_ICONEXCLAMATION);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT setup_window_text()
+    {
+        std::string name(localize(IDS_AppName));
+        std::string details;
+        std::string admin;
+
+        if(is_elevated) {
+
+            admin = localize(IDS_ADMIN);
+        }
+
+        if(current_file != null) {
+
+            name = current_file->filename;
+
+            if(!settings.show_full_filename_in_titlebar) {
+
+                CHK_HR(file::get_filename(name, name));
+            }
+            details = std::format(" {}x{}", current_file->img.width, current_file->img.height);
+        }
+        SetWindowTextW(window, unicode(std::format("{}{}{}", admin, name, details)).c_str());
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void on_new_settings()
+    {
+        setup_window_text();
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1078,17 +1111,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    void set_window_text(std::string const &text)
-    {
-        std::string admin;
-        if(is_elevated) {
-            admin = localize(IDS_ADMIN);
-        }
-        SetWindowTextW(window, unicode(std::format("{}{}", admin, text)).c_str());
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // get dimensions of a string including padding
 
     HRESULT measure_string(std::string const &text, IDWriteTextFormat *format, float padding, vec2 &size)
@@ -1463,13 +1485,9 @@ namespace imageview::app
 
             m_timer.reset();
 
-            if(settings.show_full_filename_in_titlebar) {
-                name = f->filename;
-            } else {
-                CHK_HR(file::get_filename(f->filename, name));
-            }
-            std::string msg = std::format("{} {}x{}", name, texture_width, texture_height);
-            set_window_text(msg);
+            setup_window_text();
+
+            std::string msg{ std::format("{} {}x{}", f->filename, texture_width, texture_height) };
             set_message(msg, 2.0f);
 
         } else {
@@ -3093,6 +3111,8 @@ namespace imageview::app
 
         case ID_SELECT_NONE:
             select_active = false;
+            set_mouse_cursor(null);
+            SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
             break;
 
         case ID_VIEW_ALPHA:
@@ -3238,7 +3258,7 @@ namespace imageview::app
         if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
             return on_paste();
         }
-        set_window_text(localize(IDS_AppName));    // set_window_text prepends **ADMIN** if running as admin
+        setup_window_text();
         return TRUE;
     }
 
@@ -3723,6 +3743,7 @@ namespace imageview::app
             settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
             memcpy(&settings, new_settings, sizeof(settings));
             delete new_settings;
+            on_new_settings();
         } break;
 
         case WM_RELAUNCH_AS_ADMIN: {

@@ -78,6 +78,8 @@ namespace
         hide_if_not_elevated = (1 << 1),
     };
 
+    //////////////////////////////////////////////////////////////////////
+
     struct tab_page_t
     {
         uint resource_id;
@@ -99,11 +101,11 @@ namespace
     // all the tabs that can be created
 
     tab_page_t all_tabs[] = {
-        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, dont_care },
-        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, dont_care },
-        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, hide_if_not_elevated },
-        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, hide_if_elevated },
-        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, dont_care },
+        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, dont_care, -1, null },
+        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, dont_care, -1, null },
+        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, hide_if_not_elevated, -1, null },
+        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, hide_if_elevated, -1, null },
+        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, dont_care, -1, null },
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -112,31 +114,23 @@ namespace
     std::vector<tab_page_t *> active_tabs;
 
     //////////////////////////////////////////////////////////////////////
-    // all the settings derive from this
+    // all the settings on the settings page derive from this
 
     struct setting
     {
-        setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlgproc)
-            : internal_name(n)
-            , string_resource_id(s)
-            , dialog_resource_id(dlg_id)
-            , text_item_ctl_id(text_id)
-            , dlg_proc(dlgproc)
-            , window(null)
+        setting(char const *n, uint s, uint dlg_id, DLGPROC dlgproc)
+            : internal_name(n), string_resource_id(s), dialog_resource_id(dlg_id), dlg_proc(dlgproc), window(null)
         {
         }
 
         // internal name of the setting
         char const *internal_name;
 
-        // user friendly descriptive name for the dialog
+        // user friendly descriptive name
         uint string_resource_id;
 
         // create dialog from this resource id
         uint dialog_resource_id;
-
-        // which control contains the descriptive text
-        uint text_item_ctl_id;
 
         DLGPROC dlg_proc;
 
@@ -146,7 +140,7 @@ namespace
         virtual void setup_controls(HWND hwnd)
         {
             window = hwnd;
-            SetWindowTextW(GetDlgItem(hwnd, text_item_ctl_id), unicode(localize(string_resource_id)).c_str());
+            SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), unicode(localize(string_resource_id)).c_str());
             update_controls();
         }
 
@@ -269,9 +263,7 @@ namespace
 
     struct separator_setting : setting
     {
-        separator_setting(uint s)
-            : setting(
-                  "separator", s, IDD_DIALOG_SETTING_SEPARATOR, IDC_STATIC_SETTING_SEPARATOR, setting_separator_dlgproc)
+        separator_setting(uint s) : setting("separator", s, IDD_DIALOG_SETTING_SEPARATOR, setting_separator_dlgproc)
         {
         }
     };
@@ -281,8 +273,8 @@ namespace
 
     struct bool_setting : setting
     {
-        bool_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, bool *b)
-            : setting(n, s, dlg_id, text_id, dlg_proc), value(b)
+        bool_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, bool *b)
+            : setting(n, s, dlg_id, dlg_proc), value(b)
         {
         }
 
@@ -299,9 +291,8 @@ namespace
 
     struct enum_setting : setting
     {
-        enum_setting(
-            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, enum_id_map const &names, uint *b)
-            : setting(n, s, dlg_id, text_id, dlg_proc), enum_names(names), value(b)
+        enum_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, enum_id_map const &names, uint *b)
+            : setting(n, s, dlg_id, dlg_proc), enum_names(names), value(b)
         {
         }
 
@@ -339,8 +330,8 @@ namespace
 
     struct color_setting : setting
     {
-        color_setting(char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, vec4 *b)
-            : setting(n, s, dlg_id, text_id, dlg_proc), value(b)
+        color_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, vec4 *b)
+            : setting(n, s, dlg_id, dlg_proc), value(b)
         {
         }
 
@@ -360,9 +351,8 @@ namespace
 
     struct ranged_setting : setting
     {
-        ranged_setting(
-            char const *n, uint s, uint dlg_id, uint text_id, DLGPROC dlg_proc, uint *b, uint minval, uint maxval)
-            : setting(n, s, dlg_id, text_id, dlg_proc), value(b), min_value(minval), max_value(maxval)
+        ranged_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, uint *b, uint minval, uint maxval)
+            : setting(n, s, dlg_id, dlg_proc), value(b), min_value(minval), max_value(maxval)
         {
         }
 
@@ -377,6 +367,8 @@ namespace
         void update_controls() override
         {
             HWND slider = GetDlgItem(window, IDC_SLIDER_SETTING_RANGED);
+            HWND edit = GetDlgItem(window, IDC_EDIT_SETTING_RANGED);
+            Edit_SetText(edit, std::format("{}", *value).c_str());
             SendMessage(slider, TBM_SETPOS, true, *value);
         }
 
@@ -438,7 +430,94 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // a colored button for setting colors
+    // BOOL setting
+    //////////////////////////////////////////////////////////////////////
+
+    //////////////////////////////////////////////////////////////////////
+    // BOOL setting \ WM_LBUTTONDOWN, WM_LBUTTONDBLCLK
+
+    void on_lbuttondown_setting_bool(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+    {
+        // forward all mouse clicks to the checkbox so you can click anywhere on the setting
+        // but remove that ugly dotted line outline thing
+        SendMessage(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), WM_LBUTTONDOWN, 0, 0);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // BOOL setting \ WM_LBUTTONUP
+
+    void on_lbuttonup_setting_bool(HWND hwnd, int x, int y, UINT keyFlags)
+    {
+        SendMessage(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), WM_LBUTTONUP, 0, 0);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // BOOL setting \ WM_COMMAND
+
+    void on_command_setting_bool(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+        case IDC_CHECK_SETTING_BOOL: {
+            bool_setting &setting = setting::get<bool_setting>(hwnd);
+            *setting.value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
+            post_new_settings();
+        } break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // BOOL setting \ DLGPROC
+
+    INT_PTR setting_bool_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(dlg, WM_LBUTTONDOWN, on_lbuttondown_setting_bool);
+            HANDLE_MSG(dlg, WM_LBUTTONDBLCLK, on_lbuttondown_setting_bool);
+            HANDLE_MSG(dlg, WM_LBUTTONUP, on_lbuttonup_setting_bool);
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_bool);
+        }
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // ENUM setting
+    //////////////////////////////////////////////////////////////////////
+
+    //////////////////////////////////////////////////////////////////////
+    // ENUM setting \ WM_COMMAND
+
+    void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+        case IDC_COMBO_SETTING_ENUM: {
+            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+            int sel = ComboBox_GetCurSel(combo_box);
+            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
+            *setting::get<enum_setting>(hwnd).value = v;
+            post_new_settings();
+        } break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // ENUM setting \ DLGPROC
+
+    INT_PTR setting_enum_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_enum);
+        }
+        return setting_base_dlgproc(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // COLOR setting
+    //////////////////////////////////////////////////////////////////////
+
+    //////////////////////////////////////////////////////////////////////
+    // COLOR setting \ WM_DRAWITEM
 
     void on_drawitem_setting_color(HWND hwnd, const DRAWITEMSTRUCT *lpDrawItem)
     {
@@ -461,7 +540,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // they clicked the colored button or edited the hex text
+    // COLOR setting \ WM_COMMAND
 
     void on_command_setting_color(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -508,71 +587,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // they chose a new enum value from the combobox
-
-    void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        switch(id) {
-        case IDC_COMBO_SETTING_ENUM: {
-            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
-            int sel = ComboBox_GetCurSel(combo_box);
-            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
-            *setting::get<enum_setting>(hwnd).value = v;
-            post_new_settings();
-        } break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting \ WM_COMMAND
-
-    void on_command_setting_bool(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        switch(id) {
-        case IDC_CHECK_SETTING_BOOL: {
-            bool_setting &setting = setting::get<bool_setting>(hwnd);
-            *setting.value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
-            post_new_settings();
-        } break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // RANGED setting \ WM_NOTIFY
-
-    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
-    {
-        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
-        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-        ranged_setting &ranged = setting::get<ranged_setting>(hwnd);
-        *ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
-        post_new_settings();
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting \ DLGPROC
-
-    INT_PTR setting_bool_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_bool);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // ENUM setting \ DLGPROC
-
-    INT_PTR setting_enum_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_enum);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // COLOR setting \ DLGPROC
 
     INT_PTR setting_color_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -583,6 +597,24 @@ namespace
             HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_color);
         }
         return setting_base_dlgproc(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // RANGED setting
+    //////////////////////////////////////////////////////////////////////
+
+    //////////////////////////////////////////////////////////////////////
+    // RANGED setting \ WM_HSCROLL
+
+    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    {
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+        ranged_setting &ranged = setting::get<ranged_setting>(hwnd);
+        *ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
+        HWND edit = GetDlgItem(hwnd, IDC_EDIT_SETTING_RANGED);
+        Edit_SetText(edit, std::format("{}", *ranged.value).c_str());
+        post_new_settings();
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -627,40 +659,25 @@ namespace
 
 #define DECL_SETTING_SEPARATOR(string_id) setting_controllers.push_back(new separator_setting(string_id))
 
-#define DECL_SETTING_BOOL(name, string_id, value)                           \
-    setting_controllers.push_back(new bool_setting(#name,                   \
-                                                   string_id,               \
-                                                   IDD_DIALOG_SETTING_BOOL, \
-                                                   IDC_CHECK_SETTING_BOOL,  \
-                                                   setting_bool_dlgproc,    \
-                                                   &dialog_settings.name));
+#define DECL_SETTING_BOOL(name, string_id, value) \
+    setting_controllers.push_back(                \
+        new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, &dialog_settings.name));
 
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a)                       \
-    setting_controllers.push_back(new color_setting(#name,                    \
-                                                    string_id,                \
-                                                    IDD_DIALOG_SETTING_COLOR, \
-                                                    IDC_STATIC_SETTING_COLOR, \
-                                                    setting_color_dlgproc,    \
-                                                    &dialog_settings.name));
+#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
+    setting_controllers.push_back(                      \
+        new color_setting(#name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, &dialog_settings.name));
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)         \
     setting_controllers.push_back(new enum_setting(#name,                   \
                                                    string_id,               \
                                                    IDD_DIALOG_SETTING_ENUM, \
-                                                   IDC_STATIC_SETTING_ENUM, \
                                                    setting_enum_dlgproc,    \
                                                    enum_names,              \
                                                    reinterpret_cast<uint *>(&dialog_settings.name)));
 
-#define DECL_SETTING_RANGED(name, string_id, value, min, max)                   \
-    setting_controllers.push_back(new ranged_setting(#name,                     \
-                                                     string_id,                 \
-                                                     IDD_DIALOG_SETTING_RANGED, \
-                                                     IDC_STATIC_SETTING_RANGED, \
-                                                     setting_ranged_dlgproc,    \
-                                                     &dialog_settings.name,     \
-                                                     min,                       \
-                                                     max));
+#define DECL_SETTING_RANGED(name, string_id, value, min, max) \
+    setting_controllers.push_back(new ranged_setting(         \
+        #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, &dialog_settings.name, min, max));
 
 #define DECL_SETTING_INTERNAL(setting_type, name, ...)
 
@@ -982,7 +999,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // MAIN DIALOG HANDLERS
+    // MAIN dialog
     //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
