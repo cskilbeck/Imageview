@@ -14,7 +14,7 @@ DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0.05f, 0.1f, 0.3
 
 // bg color shows through image alpha
 
-DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 1, 0, 0, 1);
+DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 1, 0, 1, 1);
 
 //////////////////////////////////////////////////////////////////////
 // grid
@@ -23,7 +23,7 @@ DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_GRID);
 
 // grid on or off
 
-DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, false);
+DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
 
 // grid colors
 
