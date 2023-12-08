@@ -2,8 +2,6 @@
 
 using enum_id_map = std::map<uint, uint>;
 
-extern enum_id_map enum_fullscreen_startup_map;
-
 enum fullscreen_startup_option : uint
 {
     start_windowed,      // start up windowed
@@ -20,8 +18,6 @@ enum window_position_option : uint
 
 // how to show the filename overlay
 
-extern enum_id_map enum_show_filename_map;
-
 enum show_filename_option : uint
 {
     show_filename_always,
@@ -31,8 +27,6 @@ enum show_filename_option : uint
 
 // what to do about exif rotation/flip data
 
-extern enum_id_map enum_exif_map;
-
 enum exif_option : uint
 {
     exif_option_ignore,    // always ignore it
@@ -41,8 +35,6 @@ enum exif_option : uint
 };
 
 // what should zoom be at startup - the first three of these should line up with zoom_mode_t
-
-extern enum_id_map enum_startup_zoom_mode_map;
 
 enum startup_zoom_mode_option : uint
 {
@@ -54,16 +46,12 @@ enum startup_zoom_mode_option : uint
 
 // what should reset_zoom do
 
-extern enum_id_map zoom_mode_map;
-
 enum zoom_mode_t : uint
 {
     one_to_one,
     fit_to_window,
     shrink_to_fit
 };
-
-extern enum_id_map enum_mouse_buttons_map;
 
 enum mouse_button_t : int
 {

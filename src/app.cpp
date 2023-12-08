@@ -1,30 +1,48 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
+
 // settings / keyboard shortcuts dialog \
 //      ranged edit control text
 //      mutual exclude mouse buttons
-//      update show full filename in title bar dynamically
+
 // show message or progress indicator if file load is slow?
-// file type association / handler thing
-// overlay grid as well as background checkerboard
+
+// remove all traces of ImageView from this PC (remove file associations, delete settings from registry, optionally
+//       delete the exe as well)
+
+// file type association / handler thing overlay grid as well as background checkerboard
+
 // crosshairs when zoomed in look ass
+
 // flip/rotate
+
 // accessibility is broken in the settings dialog
+
 // colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
+
 // handle SRGB / premultiplied alpha correctly in image decoder
+
 // HDR (requires windows version 10 1703?)
+
 // fix the cache
+
 // fix all the leaks
+
 // proper error handling/reporting
+
 // ?folder scanning broken after on_command_line from external?
+
 // get these into another file:
 //      d3d
 //      d2d
 //      cache
 //      scanner
+
 // glitched selection outline dash thing sometimes...?
-//
+
+//////////////////////////////////////////////////////////////////////
 // MAYBE
+
 // draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
 //
 
@@ -53,8 +71,26 @@ LOG_CONTEXT("app");
 
 //////////////////////////////////////////////////////////////////////
 
+#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
+
+namespace imageview::app
+{
+    HRESULT load_image_file(std::string const &filepath);
+    HRESULT show_image(image::image_file *f);
+    HRESULT on_device_lost();
+
+    bool is_elevated{ false };
+    uint64 system_memory_gb;
+    HMODULE instance;
+}
+
+//////////////////////////////////////////////////////////////////////
+
 namespace
 {
+    using namespace imageview;
+    using namespace DirectX;
+
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for scanner thread
 
@@ -80,47 +116,17 @@ namespace
         commandline = 1
     };
 
-    using namespace DirectX;
-
     //////////////////////////////////////////////////////////////////////
 
     char const *small_font_family_name{ "Noto Sans" };
     char const *mono_font_family_name{ "Roboto Mono" };
 
-    //////////////////////////////////////////////////////////////////////
+    // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
+    std::string current_folder;
 
-#if defined(_DEBUG)
-    void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
-    {
-        resource->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
-    }
-#else
-    void set_d3d_debug_name(...)
-    {
-    }
-#endif
+    // index in folder scan of currently viewed file
+    int current_file_cursor{ -1 };
 
-    //////////////////////////////////////////////////////////////////////
-
-    template <typename T> void set_d3d_debug_name(ComPtr<T> &resource, char const *name)
-    {
-        set_d3d_debug_name(resource.Get(), name);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    bool is_key_down(uint key)
-    {
-        return (GetAsyncKeyState(key) & 0x8000) != 0;
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
-
-#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
-
-namespace imageview::app
-{
     // where on selection is mouse hovering
     enum selection_hover_t : uint
     {
@@ -160,21 +166,10 @@ namespace imageview::app
 
     LPCSTR window_class = "ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
-    HMODULE instance;
-
-    bool is_elevated{ false };
-    uint64 system_memory_gb;
-
     ComPtr<ID3D11Debug> d3d_debug;
-
-    // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
-    std::string current_folder;
 
     // most recently scanned folder results
     std::unique_ptr<file::folder_scan_result> current_folder_scan;
-
-    // index in folder scan of currently viewed file
-    int current_file_cursor{ -1 };
 
     // how many files loaded so far in this run
     int files_loaded{ 0 };
@@ -386,7 +381,7 @@ namespace imageview::app
     int frame_count{ 0 };
 
     // 10 recent files
-    std::vector<std::wstring> recent_files;
+    std::vector<std::wstring> recent_files_list;
 
     DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
 
@@ -414,12 +409,6 @@ namespace imageview::app
     };
 
     //////////////////////////////////////////////////////////////////////
-
-    HRESULT load_image_file(std::string const &filepath);
-    HRESULT show_image(image::image_file *f);
-    HRESULT on_device_lost();
-
-    //////////////////////////////////////////////////////////////////////
     // DragDrop admin
 
     struct FileDropper : public CDragDropHelper
@@ -435,7 +424,7 @@ namespace imageview::app
             PWSTR path{};
             CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
             DEFER(CoTaskMemFree(path));
-            return load_image_file(utf8(path));
+            return app::load_image_file(utf8(path));
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -443,9 +432,29 @@ namespace imageview::app
 
         HRESULT on_drop_string(wchar const *str) override
         {
-            return load_image_file(strip_quotes(utf8(str)));
+            return app::load_image_file(strip_quotes(utf8(str)));
         }
     } file_dropper;
+
+    //////////////////////////////////////////////////////////////////////
+
+#if defined(_DEBUG)
+    void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
+    {
+        resource->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
+    }
+#else
+    void set_d3d_debug_name(...)
+    {
+    }
+#endif
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> void set_d3d_debug_name(ComPtr<T> &resource, char const *name)
+    {
+        set_d3d_debug_name(resource.Get(), name);
+    }
 
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
@@ -480,7 +489,7 @@ namespace imageview::app
         std::string details;
         std::string admin;
 
-        if(is_elevated) {
+        if(app::is_elevated) {
 
             admin = localize(IDS_ADMIN);
         }
@@ -604,7 +613,7 @@ namespace imageview::app
                 // let the window know, either way, that the file load attempt is complete, failed or
                 // otherwise
                 WaitForSingleObject(window_created_event, INFINITE);
-                PostMessageA(window, WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
+                PostMessageA(window, app::WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
             },
             loader);
     }
@@ -710,7 +719,7 @@ namespace imageview::app
         }
         files_loaded += 1;
         f->view_count += 1;
-        return show_image(f);
+        return app::show_image(f);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -741,6 +750,8 @@ namespace imageview::app
 
         // if it's in the cache already, just show it
         // TODO (chs): make this file path compare canonical
+
+        set_message(std::format("{}{}", fullpath, localize(IDS_IS_LOADING)), 10);
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
@@ -802,19 +813,6 @@ namespace imageview::app
             PostThreadMessageA(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
         }
         return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT load_image_file(std::string const &filepath)
-    {
-        if(!file::exists(filepath)) {
-            std::string msg(filepath);
-            msg = msg.substr(0, msg.find_first_of("\r\n\t"));
-            set_message(std::format("{} {}", localize(IDS_CANT_LOAD_FILE), msg), 2.0f);
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-        }
-        return load_image(filepath);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1326,7 +1324,7 @@ namespace imageview::app
 
             if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
 
-                CHK_HR(on_device_lost());
+                CHK_HR(app::on_device_lost());
 
                 // OnDeviceLost will set up the new device.
                 return S_OK;
@@ -1425,89 +1423,6 @@ namespace imageview::app
     }
 
     //////////////////////////////////////////////////////////////////////
-    // recreate device and recreate current image texture if necessary
-
-    HRESULT on_device_lost()
-    {
-        CHK_HR(create_device());
-
-        CHK_HR(create_resources());
-
-        if(current_file != null) {
-            CHK_HR(display_image(current_file));
-        }
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // actually show an image
-
-    HRESULT show_image(image::image_file *f)
-    {
-        current_file = f;
-
-        std::string name;
-
-        // hresult from load_file
-        HRESULT hr = f->hresult;
-
-        ComPtr<ID3D11Texture2D> new_texture;
-        ComPtr<ID3D11ShaderResourceView> new_srv;
-
-        if(d3d_device.Get() == null) {
-            CHK_HR(create_device());
-        }
-
-        // or hresult from create_texture
-        if(SUCCEEDED(hr)) {
-            hr = create_texture(d3d_device.Get(), d3d_context.Get(), &new_texture, &new_srv, f->img);
-        }
-
-        // set texture as current
-        if(SUCCEEDED(hr)) {
-
-            image_texture.Attach(new_texture.Detach());
-            image_texture_view.Attach(new_srv.Detach());
-
-            D3D_SET_NAME(image_texture);
-            D3D_SET_NAME(image_texture_view);
-
-            D3D11_TEXTURE2D_DESC image_texture_desc;
-            image_texture->GetDesc(&image_texture_desc);
-
-            texture_width = image_texture_desc.Width;
-            texture_height = image_texture_desc.Height;
-
-            reset_zoom(settings.zoom_mode);
-
-            current_rect = target_rect;
-
-            m_timer.reset();
-
-            setup_window_text();
-
-            std::string msg{ std::format("{} {}x{}", f->filename, texture_width, texture_height) };
-            set_message(msg, 2.0f);
-
-        } else {
-
-            std::string err_str;
-
-            // "Component not found" isn't meaningful for unknown file type, override it
-            if(hr == WINCODEC_ERR_COMPONENTNOTFOUND) {
-                err_str = localize(IDS_UNKNOWN_FILE_TYPE);
-            } else {
-                err_str = windows_error_message(hr);
-            }
-
-            CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format("{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3.0f);
-        }
-        return hr;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // paste the clipboard - if it's a bitmap, paste that else if it's
     // a string, try to load that file
 
@@ -1561,7 +1476,7 @@ namespace imageview::app
             f.view_count = 0;
             CHK_HR(image::decode(&f));
             f.img.pixels = f.pixels.data();
-            return show_image(&f);
+            return app::show_image(&f);
         }
 
         UINT fmt = 0;
@@ -1613,7 +1528,7 @@ namespace imageview::app
 
         // send the results to the window, it will forward them to the app
         WaitForSingleObject(window_created_event, INFINITE);
-        SendMessage(window, WM_FOLDER_SCAN_COMPLETE, 0, reinterpret_cast<LPARAM>(results));
+        SendMessage(window, app::WM_FOLDER_SCAN_COMPLETE, 0, reinterpret_cast<LPARAM>(results));
 
         return S_OK;
     }
@@ -2273,7 +2188,7 @@ namespace imageview::app
                     popup_menu_active = true;
                     clear_message();
 
-                    recent_files::get_files(recent_files);
+                    recent_files::get_files(recent_files_list);
 
                     // insert recent files into the recent files menu entry
                     MENUITEMINFOW dummy_info;
@@ -2289,7 +2204,7 @@ namespace imageview::app
                         recent_info.cbSize = sizeof(recent_info);
                         recent_info.fMask = MIIM_ID | MIIM_STRING | MIIM_DATA;
                         recent_info.fType = MFT_STRING;
-                        for(auto &f : recent_files) {
+                        for(auto &f : recent_files_list) {
                             recent_info.wID = index;
                             recent_info.cch = static_cast<uint>(f.size());
                             recent_info.dwTypeData = f.data();
@@ -2473,7 +2388,7 @@ namespace imageview::app
         f.img.height = height;
         f.img.row_pitch = mapped_resource.RowPitch;
 
-        return show_image(&f);
+        return app::show_image(&f);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2608,7 +2523,7 @@ namespace imageview::app
         HRESULT hr = swap_chain->Present(1, 0);
 
         if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-            hr = on_device_lost();
+            hr = app::on_device_lost();
         }
 
         return hr;
@@ -2870,15 +2785,18 @@ namespace imageview::app
                     message_alpha = (float)((m_timer.wall_time() - message_timestamp) / message_fade_time);
                 }
                 if(message_alpha <= 1) {
+
                     message_alpha = 1 - powf(message_alpha, 16);
-                    vec2 pos{ window_width / 2.0f, window_height - 12.0f };
+
+                    vec2 pos{ dpi_scale(16.0f), window_height - dpi_scale(12.0f) };
+
                     draw_string(std::format("{}", current_message),
                                 large_text_format.Get(),
                                 pos,
-                                { 0.5f, 1.0f },
+                                { 0.0f, 1.0f },
                                 message_alpha,
-                                2,
-                                2);
+                                dpi_scale(3.0f),
+                                dpi_scale(3.0f));
                 }
             }
 
@@ -3117,24 +3035,24 @@ namespace imageview::app
 
         case ID_VIEW_ALPHA:
             settings.grid_enabled = !settings.grid_enabled;
-            update_settings_dialog();
+            settings_dialog::update_settings_dialog();
             break;
 
         case ID_VIEW_FIXEDGRID:
             settings.fixed_grid = !settings.fixed_grid;
-            update_settings_dialog();
+            settings_dialog::update_settings_dialog();
             break;
 
         case ID_VIEW_GRIDSIZE:
             settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
-            update_settings_dialog();
+            settings_dialog::update_settings_dialog();
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
             uint32 bg_color = color_to_uint32(settings.background_color);
             if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
                 settings.background_color = color_from_uint32(bg_color);
-                update_settings_dialog();
+                settings_dialog::update_settings_dialog();
             }
         } break;
 
@@ -3142,26 +3060,26 @@ namespace imageview::app
             uint32 border_color = color_to_uint32(settings.border_color);
             if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
                 settings.border_color = color_from_uint32(border_color);
-                update_settings_dialog();
+                settings_dialog::update_settings_dialog();
             }
         } break;
 
         case ID_ZOOM_1:
             settings.zoom_mode = zoom_mode_t::one_to_one;
             reset_zoom(settings.zoom_mode);
-            update_settings_dialog();
+            settings_dialog::update_settings_dialog();
             break;
 
         case ID_ZOOM_FIT:
             settings.zoom_mode = zoom_mode_t::fit_to_window;
             reset_zoom(settings.zoom_mode);
-            update_settings_dialog();
+            settings_dialog::update_settings_dialog();
             break;
 
         case ID_ZOOM_SHRINKTOFIT:
             settings.zoom_mode = zoom_mode_t::shrink_to_fit;
             reset_zoom(settings.zoom_mode);
-            update_settings_dialog();
+            settings_dialog::update_settings_dialog();
             break;
 
         case ID_ZOOM_SELECTION:
@@ -3200,11 +3118,11 @@ namespace imageview::app
         } break;
 
         case ID_FILE_SETTINGS_EXPLORER: {
-            show_settings_dialog(window, IDD_DIALOG_SETTINGS_EXPLORER);
+            settings_dialog::show_settings_dialog(window, IDD_DIALOG_SETTINGS_EXPLORER);
         } break;
 
         case ID_FILE_SETTINGS: {
-            show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
+            settings_dialog::show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
         } break;
 
         case ID_EXIT:
@@ -3214,8 +3132,8 @@ namespace imageview::app
 
         if(id >= ID_RECENT_FILE_00 && id <= ID_RECENT_FILE_09) {
             uint index = id - ID_RECENT_FILE_00;
-            if(index < recent_files.size()) {
-                load_image_file(utf8(recent_files[index]));
+            if(index < recent_files_list.size()) {
+                app::load_image_file(utf8(recent_files_list[index]));
             }
         }
     }
@@ -3349,16 +3267,24 @@ namespace imageview::app
     void OnCopyData(HWND hwnd, HWND from, PCOPYDATASTRUCT c)
     {
         if(c != null) {
+
             switch((copydata_t)c->dwData) {
-            case copydata_t::commandline:
+
+            case copydata_t::commandline: {
+
                 if(s_minimized) {
                     ShowWindow(hwnd, SW_RESTORE);
                 }
                 SetForegroundWindow(hwnd);
                 SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
                 SwitchToThisWindow(window, true);
-                on_command_line(reinterpret_cast<char const *>(c->lpData));
-                break;
+
+                // must copy the data before returning from this message handler
+                std::string cmd_line(reinterpret_cast<char const *>(c->lpData));
+                on_command_line(cmd_line);
+
+            } break;
+
             default:
                 break;
             }
@@ -3629,7 +3555,7 @@ namespace imageview::app
 
     void OnShowWindow(HWND hwnd, BOOL fShow, UINT status)
     {
-        if(is_elevated && window_show_count == 0) {
+        if(app::is_elevated && window_show_count == 0) {
             PostMessage(hwnd, WM_COMMAND, ID_FILE_SETTINGS_EXPLORER, (LPARAM)hwnd);
         }
         window_show_count += 1;
@@ -3727,26 +3653,26 @@ namespace imageview::app
 
             //////////////////////////////////////////////////////////////////////
 
-        case WM_FILE_LOAD_COMPLETE:
+        case app::WM_FILE_LOAD_COMPLETE:
             on_file_load_complete(reinterpret_cast<image::image_file *>(lParam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
-        case WM_FOLDER_SCAN_COMPLETE:
+        case app::WM_FOLDER_SCAN_COMPLETE:
             on_folder_scanned(reinterpret_cast<file::folder_scan_result *>(lParam));
             break;
 
             //////////////////////////////////////////////////////////////////////
 
-        case WM_NEW_SETTINGS: {
+        case app::WM_NEW_SETTINGS: {
             settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
             memcpy(&settings, new_settings, sizeof(settings));
             delete new_settings;
             on_new_settings();
         } break;
 
-        case WM_RELAUNCH_AS_ADMIN: {
+        case app::WM_RELAUNCH_AS_ADMIN: {
             relaunch_as_admin = true;
             DestroyWindow(window);
         } break;
@@ -3758,6 +3684,105 @@ namespace imageview::app
         }
 
         return 0;
+    }
+}
+
+namespace imageview::app
+{
+    //////////////////////////////////////////////////////////////////////
+    // recreate device and recreate current image texture if necessary
+
+    HRESULT on_device_lost()
+    {
+        CHK_HR(create_device());
+
+        CHK_HR(create_resources());
+
+        if(current_file != null) {
+            CHK_HR(display_image(current_file));
+        }
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // actually show an image
+
+    HRESULT show_image(image::image_file *f)
+    {
+        current_file = f;
+
+        std::string name;
+
+        // hresult from load_file
+        HRESULT hr = f->hresult;
+
+        ComPtr<ID3D11Texture2D> new_texture;
+        ComPtr<ID3D11ShaderResourceView> new_srv;
+
+        if(d3d_device.Get() == null) {
+            CHK_HR(create_device());
+        }
+
+        // or hresult from create_texture
+        if(SUCCEEDED(hr)) {
+            hr = create_texture(d3d_device.Get(), d3d_context.Get(), &new_texture, &new_srv, f->img);
+        }
+
+        // set texture as current
+        if(SUCCEEDED(hr)) {
+
+            image_texture.Attach(new_texture.Detach());
+            image_texture_view.Attach(new_srv.Detach());
+
+            D3D_SET_NAME(image_texture);
+            D3D_SET_NAME(image_texture_view);
+
+            D3D11_TEXTURE2D_DESC image_texture_desc;
+            image_texture->GetDesc(&image_texture_desc);
+
+            texture_width = image_texture_desc.Width;
+            texture_height = image_texture_desc.Height;
+
+            reset_zoom(settings.zoom_mode);
+
+            current_rect = target_rect;
+
+            m_timer.reset();
+
+            setup_window_text();
+
+            std::string msg{ std::format("{} {}x{}", f->filename, texture_width, texture_height) };
+            set_message(msg, 2.0f);
+
+        } else {
+
+            std::string err_str;
+
+            // "Component not found" isn't meaningful for unknown file type, override it
+            if(hr == WINCODEC_ERR_COMPONENTNOTFOUND) {
+                err_str = localize(IDS_UNKNOWN_FILE_TYPE);
+            } else {
+                err_str = windows_error_message(hr);
+            }
+
+            CHK_HR(file::get_filename(f->filename, name));
+            set_message(std::format("{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3.0f);
+        }
+        return hr;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT load_image_file(std::string const &filepath)
+    {
+        if(!file::exists(filepath)) {
+            std::string msg(filepath);
+            msg = msg.substr(0, msg.find_first_of("\r\n\t"));
+            set_message(std::format("{} {}", localize(IDS_CANT_LOAD_FILE), msg), 2.0f);
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        return load_image(filepath);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3784,7 +3809,7 @@ namespace imageview::app
 
         // in debug builds, hold middle mouse button at startup to reset settings to defaults
 #if defined(_DEBUG)
-        if(!is_key_down(VK_MBUTTON))
+        if((GetAsyncKeyState(VK_MBUTTON) & 0x8000) == 0)
 #endif
             if(FAILED(settings.load())) {
                 message_box(null,
@@ -3942,7 +3967,7 @@ namespace imageview::app
             }
             ShellExecuteW(null, L"runas", argv[0], args.c_str(), 0, SW_SHOWNORMAL);
         }
-        return 0;
+        return S_OK;
     }
 }
 

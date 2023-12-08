@@ -172,6 +172,7 @@ STRINGTABLE
 BEGIN
     IDS_ERROR               "Error"
     IDS_SETTING_NAME_SELECT_FILL_ALPHA "Selection alpha"
+    IDS_IS_LOADING          " loading..."
 END
 
 #endif    // English (Neutral) resources

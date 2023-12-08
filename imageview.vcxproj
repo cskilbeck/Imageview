@@ -246,6 +246,11 @@
     <ClInclude Include="src\settings.h" />
     <ClInclude Include="src\settings_fields.h" />
     <ClInclude Include="src\settings_dialog.h" />
+    <ClInclude Include="src\setting_bool.h" />
+    <ClInclude Include="src\setting_color.h" />
+    <ClInclude Include="src\setting_enum.h" />
+    <ClInclude Include="src\setting_ranged.h" />
+    <ClInclude Include="src\setting_separator.h" />
     <ClInclude Include="src\shader_constants.h" />
     <ClInclude Include="src\thread_pool.h" />
     <ClInclude Include="src\timer.h" />
@@ -272,6 +277,11 @@
     <ClCompile Include="src\scrollbar.cpp" />
     <ClCompile Include="src\settings.cpp" />
     <ClCompile Include="src\settings_dialog.cpp" />
+    <ClCompile Include="src\setting_bool.cpp" />
+    <ClCompile Include="src\setting_color.cpp" />
+    <ClCompile Include="src\setting_enum.cpp" />
+    <ClCompile Include="src\setting_ranged.cpp" />
+    <ClCompile Include="src\setting_separator.cpp" />
     <ClCompile Include="src\thread_pool.cpp" />
     <ClCompile Include="src\util.cpp" />
     <ClCompile Include="src\wm_names.cpp" />

@@ -91,6 +91,21 @@
     <ClInclude Include="src\recent_files.h">
       <Filter>4_include</Filter>
     </ClInclude>
+    <ClInclude Include="src\setting_separator.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\setting_bool.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\setting_enum.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\setting_color.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\setting_ranged.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -142,6 +157,21 @@
       <Filter>3_src</Filter>
     </ClCompile>
     <ClCompile Include="src\recent_files.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_separator.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_bool.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_enum.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_ranged.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_color.cpp">
       <Filter>3_src</Filter>
     </ClCompile>
   </ItemGroup>

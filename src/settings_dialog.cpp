@@ -2,72 +2,54 @@
 
 #include "pch.h"
 
+#pragma warning(disable : 4100)
+
 LOG_CONTEXT("settings_dlg");
 
 //////////////////////////////////////////////////////////////////////
 
 namespace
 {
-    // big sigh - these are for mapping enums to strings for the combo boxes
-
-    using enum_id_map = std::map<uint, uint>;
-
-    // fullscreen_startup_option
-
-    enum_id_map enum_fullscreen_startup_map = {
-        { fullscreen_startup_option::start_fullscreen, IDS_ENUM_FULLSCREEN_STARTUP_FULLSCREEN },
-        { fullscreen_startup_option::start_windowed, IDS_ENUM_FULLSCREEN_STARTUP_WINDOWED },
-        { fullscreen_startup_option::start_remember, IDS_ENUM_FULLSCREEN_STARTUP_REMEMBER },
-    };
-
-    // mouse_button
-
-    enum_id_map enum_mouse_buttons_map = {
-        { mouse_button_t::btn_left, IDS_ENUM_MOUSE_BUTTON_LEFT },
-        { mouse_button_t::btn_right, IDS_ENUM_MOUSE_BUTTON_RIGHT },
-        { mouse_button_t::btn_middle, IDS_ENUM_MOUSE_BUTTON_MIDDLE },
-    };
-
-    // show_filename_option
-
-    enum_id_map enum_show_filename_map = {
-        { show_filename_option::show_filename_always, IDS_ENUM_SHOW_FILENAME_ALWAYS },
-        { show_filename_option::show_filename_briefly, IDS_ENUM_SHOW_FILENAME_BRIEFLY },
-        { show_filename_option::show_filename_never, IDS_ENUM_SHOW_FILENAME_NEVER },
-    };
-
-    // exif_option
-
-    enum_id_map enum_exif_map = {
-        { exif_option::exif_option_apply, IDS_ENUM_EXIF_APPLY },
-        { exif_option::exif_option_ignore, IDS_ENUM_EXIF_IGNORE },
-        { exif_option::exif_option_prompt, IDS_ENUM_EXIF_PROMPT },
-    };
-
-    // zoom_mode
-
-    enum_id_map enum_zoom_mode_map = {
-        { zoom_mode_t::shrink_to_fit, IDS_ENUM_ZOOM_MODE_SHRINK_TO_FIT },
-        { zoom_mode_t::fit_to_window, IDS_ENUM_ZOOM_MODE_FIT_TO_WINDOW },
-        { zoom_mode_t::one_to_one, IDS_ENUM_ZOOM_MODE_ONE_TO_ONE },
-    };
-
-    // startup_zoom_mode
-
-    enum_id_map enum_startup_zoom_mode_map = {
-        { startup_zoom_mode_option::startup_zoom_shrink_to_fit, IDS_ENUM_ZOOM_MODE_SHRINK_TO_FIT },
-        { startup_zoom_mode_option::startup_zoom_fit_to_window, IDS_ENUM_ZOOM_MODE_FIT_TO_WINDOW },
-        { startup_zoom_mode_option::startup_zoom_one_to_one, IDS_ENUM_ZOOM_MODE_ONE_TO_ONE },
-        { startup_zoom_mode_option::startup_zoom_remember, IDS_ENUM_ZOOM_MODE_REMEMBER },
-    };
-
     using namespace imageview;
+    using namespace imageview::settings_dialog;
+
+    struct tab_page_t;
 
     //////////////////////////////////////////////////////////////////////
 
     HWND main_dialog = null;
 
     HWND app_window = null;
+
+    //////////////////////////////////////////////////////////////////////
+    // scroll info for the settings page
+
+    scroll_info settings_scroll;
+
+    //////////////////////////////////////////////////////////////////////
+    // all the settings on the settings page
+
+    std::list<setting_controller *> setting_controllers;
+
+    //////////////////////////////////////////////////////////////////////
+    // copy of settings currently being edited
+
+    settings_t dialog_settings;
+
+    //////////////////////////////////////////////////////////////////////
+    // copy of settings from when the dialog was shown (for 'cancel')
+
+    settings_t revert_settings;
+
+    //////////////////////////////////////////////////////////////////////
+    // suppress sending new settings to main window when bulk update in progress
+
+    bool settings_should_update{ false };
+
+    //////////////////////////////////////////////////////////////////////
+    // which tabs will be shown (some might be hidden)
+
+    std::vector<tab_page_t *> active_tabs;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -109,65 +91,38 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
-    // which tabs will be shown (some might be hidden)
-
-    std::vector<tab_page_t *> active_tabs;
-
-    //////////////////////////////////////////////////////////////////////
-    // all the settings on the settings page derive from this
-
-    struct setting
-    {
-        setting(char const *n, uint s, uint dlg_id, DLGPROC dlgproc)
-            : internal_name(n), string_resource_id(s), dialog_resource_id(dlg_id), dlg_proc(dlgproc), window(null)
-        {
-        }
-
-        // internal name of the setting
-        char const *internal_name;
-
-        // user friendly descriptive name
-        uint string_resource_id;
-
-        // create dialog from this resource id
-        uint dialog_resource_id;
-
-        DLGPROC dlg_proc;
-
-        HWND window;
-
-        // set name text and update controls for editing this setting
-        virtual void setup_controls(HWND hwnd)
-        {
-            window = hwnd;
-            SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), unicode(localize(string_resource_id)).c_str());
-            update_controls();
-        }
-
-        // update the dialog controls with current value of this setting
-        virtual void update_controls()
-        {
-        }
-
-        // get a pointer to the setting object associated with a setting window
-        template <typename T> static T &get(HWND w)
-        {
-            T *p = reinterpret_cast<T *>(GetWindowLongPtrA(w, GWLP_USERDATA));
-            return *p;
-        }
-    };
-
-    //////////////////////////////////////////////////////////////////////
-    // scroll info for the settings page
-
-    scroll_info settings_scroll;
-
-    //////////////////////////////////////////////////////////////////////
 
     bool should_hide_tab(tab_page_t const *t)
     {
         return (t->flags & hide_if_elevated) != 0 && app::is_elevated ||
                (t->flags & hide_if_not_elevated) != 0 && !app::is_elevated;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT copy_window_text_to_clipboard(HWND hwnd)
+    {
+        SetLastError(0);
+
+        int len;
+        CHK_ZERO(len = GetWindowTextLengthW(hwnd));
+
+        HANDLE handle;
+        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, static_cast<size_t>(len * sizeof(wchar)) + 1));
+
+        wchar *buffer;
+        CHK_NULL(buffer = reinterpret_cast<wchar *>(GlobalLock(handle)));
+        DEFER(GlobalUnlock(handle));
+
+        CHK_ZERO(GetWindowTextW(hwnd, buffer, len + 1));
+
+        CHK_BOOL(OpenClipboard(null));
+        DEFER(CloseClipboard());
+
+        CHK_BOOL(EmptyClipboard());
+        CHK_BOOL(SetClipboardData(CF_UNICODETEXT, handle));
+
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -186,228 +141,8 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // UNREFERENCED PARAMETER warning suppressed in here (too unwieldy)
-
-#pragma warning(push)
-#pragma warning(disable : 4100)
-
-    //////////////////////////////////////////////////////////////////////
-    // tab pages have white backgrounds - this sets the background of all controls to white
-
-    HBRUSH on_ctl_color_base(HWND hwnd, HDC hdc, HWND hwndChild, int type)
-    {
-        return GetSysColorBrush(COLOR_WINDOW);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // only the separator has a gray background
-
-    HBRUSH on_ctl_color_separator(HWND hwnd, HDC hdc, HWND hwndChild, int type)
-    {
-        SetTextColor(hdc, RGB(0, 0, 0));
-        SetBkColor(hdc, GetSysColor(COLOR_3DFACE));
-        return GetSysColorBrush(COLOR_3DFACE);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // default ctl color for most controls
-
-    INT_PTR setting_ctlcolor_base(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color_base);
-            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color_base);
-            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color_base);
-            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color_base);
-        }
-        return 0;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam)
-    {
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
-        setting *s = reinterpret_cast<setting *>(lParam);
-        s->setup_controls(hwnd);
-        return 0;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // base dialog proc for settings
-
-    INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting);
-        }
-        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    INT_PTR setting_separator_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color_separator);
-            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // a separator 'setting' isn't really a setting, just a... separator
-
-    struct separator_setting : setting
-    {
-        separator_setting(uint s) : setting("separator", s, IDD_DIALOG_SETTING_SEPARATOR, setting_separator_dlgproc)
-        {
-        }
-    };
-
-    //////////////////////////////////////////////////////////////////////
-    // a bool setting is a checkbox
-
-    struct bool_setting : setting
-    {
-        bool_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, bool *b)
-            : setting(n, s, dlg_id, dlg_proc), value(b)
-        {
-        }
-
-        void update_controls() override
-        {
-            Button_SetCheck(GetDlgItem(window, IDC_CHECK_SETTING_BOOL), *value ? BST_CHECKED : BST_UNCHECKED);
-        }
-
-        bool *value;
-    };
-
-    //////////////////////////////////////////////////////////////////////
-    // enum setting is a combobox
-
-    struct enum_setting : setting
-    {
-        enum_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, enum_id_map const &names, uint *b)
-            : setting(n, s, dlg_id, dlg_proc), enum_names(names), value(b)
-        {
-        }
-
-        void setup_controls(HWND hwnd) override
-        {
-            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
-            int index = 0;
-            for(auto const &name : enum_names) {
-                ComboBox_AddString(combo_box, localize(name.second).c_str());
-                ComboBox_SetItemData(combo_box, index, name.first);
-                index += 1;
-            }
-            setting::setup_controls(hwnd);
-        }
-
-        void update_controls() override
-        {
-            int index = 0;
-            for(auto const &name : enum_names) {
-                if(name.first == *value) {
-                    HWND combo_box = GetDlgItem(window, IDC_COMBO_SETTING_ENUM);
-                    ComboBox_SetCurSel(combo_box, index);
-                    break;
-                }
-                index += 1;
-            }
-        }
-
-        uint *value;
-        std::map<uint, uint> const &enum_names;    // map<enum_value, string_id>
-    };
-
-    //////////////////////////////////////////////////////////////////////
-    // color setting is a button and edit control for the hex
-
-    struct color_setting : setting
-    {
-        color_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, vec4 *b)
-            : setting(n, s, dlg_id, dlg_proc), value(b)
-        {
-        }
-
-        void update_controls() override
-        {
-            uint32 color = color_swap_red_blue(color_to_uint32(*value));
-            std::string hex = std::format("{:06x}", color & 0xffffff);
-            make_uppercase(hex);
-            SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
-        }
-
-        vec4 *value;
-    };
-
-    //////////////////////////////////////////////////////////////////////
-    // a ranged setting is... more complicated
-
-    struct ranged_setting : setting
-    {
-        ranged_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, uint *b, uint minval, uint maxval)
-            : setting(n, s, dlg_id, dlg_proc), value(b), min_value(minval), max_value(maxval)
-        {
-        }
-
-        void setup_controls(HWND hwnd) override
-        {
-            HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
-            SendMessage(slider, TBM_SETRANGEMAX, false, max_value);
-            SendMessage(slider, TBM_SETRANGEMIN, false, min_value);
-            setting::setup_controls(hwnd);
-        }
-
-        void update_controls() override
-        {
-            HWND slider = GetDlgItem(window, IDC_SLIDER_SETTING_RANGED);
-            HWND edit = GetDlgItem(window, IDC_EDIT_SETTING_RANGED);
-            Edit_SetText(edit, std::format("{}", *value).c_str());
-            SendMessage(slider, TBM_SETPOS, true, *value);
-        }
-
-        uint *value;
-        uint min_value;
-        uint max_value;
-    };
-
-    //////////////////////////////////////////////////////////////////////
-    // all the settings on the settings page
-
-    std::list<setting *> setting_controllers;
-
-    //////////////////////////////////////////////////////////////////////
-    // copy of settings currently being edited
-
-    settings_t dialog_settings;
-
-    //////////////////////////////////////////////////////////////////////
-    // copy of settings from when the dialog was shown (for 'cancel')
-
-    settings_t revert_settings;
-
-    bool settings_should_update{ false };
-
-    //////////////////////////////////////////////////////////////////////
-
-    void post_new_settings()
-    {
-        if(settings_should_update) {
-
-            // main window is responsible for freeing this copy of the settings
-            settings_t *settings_copy = new settings_t();
-            memcpy(settings_copy, &dialog_settings, sizeof(settings_t));
-            PostMessage(app_window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
+    // setup all the controls when the settings have changed outside
+    // of the dialog handlers (i.e. from the main window hotkeys or menu)
 
     void update_all_settings_controls()
     {
@@ -423,209 +158,10 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // brutally suppress the text caret in the 'about' text box
 
-    LRESULT CALLBACK suppress_cursor_subclass(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    LRESULT CALLBACK suppress_caret_subclass(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
     {
         HideCaret(dlg);
         return DefSubclassProc(dlg, msg, wparam, lparam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting
-    //////////////////////////////////////////////////////////////////////
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting \ WM_LBUTTONDOWN, WM_LBUTTONDBLCLK
-
-    void on_lbuttondown_setting_bool(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
-    {
-        // forward all mouse clicks to the checkbox so you can click anywhere on the setting
-        // but remove that ugly dotted line outline thing
-        SendMessage(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), WM_LBUTTONDOWN, 0, 0);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting \ WM_LBUTTONUP
-
-    void on_lbuttonup_setting_bool(HWND hwnd, int x, int y, UINT keyFlags)
-    {
-        SendMessage(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), WM_LBUTTONUP, 0, 0);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting \ WM_COMMAND
-
-    void on_command_setting_bool(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        switch(id) {
-        case IDC_CHECK_SETTING_BOOL: {
-            bool_setting &setting = setting::get<bool_setting>(hwnd);
-            *setting.value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
-            post_new_settings();
-        } break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // BOOL setting \ DLGPROC
-
-    INT_PTR setting_bool_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_LBUTTONDOWN, on_lbuttondown_setting_bool);
-            HANDLE_MSG(dlg, WM_LBUTTONDBLCLK, on_lbuttondown_setting_bool);
-            HANDLE_MSG(dlg, WM_LBUTTONUP, on_lbuttonup_setting_bool);
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_bool);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // ENUM setting
-    //////////////////////////////////////////////////////////////////////
-
-    //////////////////////////////////////////////////////////////////////
-    // ENUM setting \ WM_COMMAND
-
-    void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        switch(id) {
-        case IDC_COMBO_SETTING_ENUM: {
-            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
-            int sel = ComboBox_GetCurSel(combo_box);
-            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
-            *setting::get<enum_setting>(hwnd).value = v;
-            post_new_settings();
-        } break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // ENUM setting \ DLGPROC
-
-    INT_PTR setting_enum_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_enum);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // COLOR setting
-    //////////////////////////////////////////////////////////////////////
-
-    //////////////////////////////////////////////////////////////////////
-    // COLOR setting \ WM_DRAWITEM
-
-    void on_drawitem_setting_color(HWND hwnd, const DRAWITEMSTRUCT *lpDrawItem)
-    {
-        if(lpDrawItem->CtlID == IDC_BUTTON_SETTING_COLOR) {
-
-            color_setting &setting = setting::get<color_setting>(hwnd);
-
-            uint color = color_to_uint32(*setting.value) & 0xffffff;
-
-            SetDCBrushColor(lpDrawItem->hDC, color);
-
-            SelectObject(lpDrawItem->hDC, GetStockObject(DC_BRUSH));
-
-            Rectangle(lpDrawItem->hDC,
-                      lpDrawItem->rcItem.left,
-                      lpDrawItem->rcItem.top,
-                      lpDrawItem->rcItem.right,
-                      lpDrawItem->rcItem.bottom);
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // COLOR setting \ WM_COMMAND
-
-    void on_command_setting_color(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        color_setting &setting = setting::get<color_setting>(hwnd);
-
-        switch(id) {
-
-        case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
-
-            std::string title = localize(setting.string_resource_id);
-            uint new_color = color_to_uint32(*setting.value);
-            if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
-                *setting.value = color_from_uint32(new_color);
-                setting.update_controls();
-                InvalidateRect(hwnd, null, true);
-                post_new_settings();
-            }
-        } break;
-
-        case IDC_EDIT_SETTING_COLOR: {
-
-            switch(codeNotify) {
-
-            case EN_CHANGE: {
-
-                HWND edit_control = GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR);
-                int len = GetWindowTextLengthA(edit_control);
-                if(len > 0) {
-                    std::string txt;
-                    txt.resize(len + 1llu);
-                    GetWindowTextA(edit_control, txt.data(), len + 1);
-                    txt.pop_back();
-                    uint32 new_color{};
-                    if(SUCCEEDED(color_from_string(txt, new_color))) {
-                        *setting.value = color_from_uint32(new_color);
-                        InvalidateRect(hwnd, null, true);
-                        post_new_settings();
-                    }
-                }
-            } break;
-            }
-        } break;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // COLOR setting \ DLGPROC
-
-    INT_PTR setting_color_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-
-            HANDLE_MSG(dlg, WM_DRAWITEM, on_drawitem_setting_color);
-            HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_color);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // RANGED setting
-    //////////////////////////////////////////////////////////////////////
-
-    //////////////////////////////////////////////////////////////////////
-    // RANGED setting \ WM_HSCROLL
-
-    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
-    {
-        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
-        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-        ranged_setting &ranged = setting::get<ranged_setting>(hwnd);
-        *ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
-        HWND edit = GetDlgItem(hwnd, IDC_EDIT_SETTING_RANGED);
-        Edit_SetText(edit, std::format("{}", *ranged.value).c_str());
-        post_new_settings();
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // RANGED setting \ DLGPROC
-
-    INT_PTR setting_ranged_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        switch(msg) {
-            HANDLE_MSG(dlg, WM_HSCROLL, on_hscroll_setting_ranged);
-        }
-        return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -648,6 +184,8 @@ namespace
         revert_settings = settings;    // for reverting
         dialog_settings = settings;    // currently editing
 
+        // add all the settings controller child dialogs to the page
+
         if(setting_controllers.empty()) {
 
 #undef DECL_SETTING_SEPARATOR
@@ -661,11 +199,11 @@ namespace
 
 #define DECL_SETTING_BOOL(name, string_id, value) \
     setting_controllers.push_back(                \
-        new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, &dialog_settings.name));
+        new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name));
 
 #define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
     setting_controllers.push_back(                      \
-        new color_setting(#name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, &dialog_settings.name));
+        new color_setting(#name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name));
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)         \
     setting_controllers.push_back(new enum_setting(#name,                   \
@@ -673,11 +211,11 @@ namespace
                                                    IDD_DIALOG_SETTING_ENUM, \
                                                    setting_enum_dlgproc,    \
                                                    enum_names,              \
-                                                   reinterpret_cast<uint *>(&dialog_settings.name)));
+                                                   reinterpret_cast<uint &>(dialog_settings.name)));
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) \
     setting_controllers.push_back(new ranged_setting(         \
-        #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, &dialog_settings.name, min, max));
+        #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max));
 
 #define DECL_SETTING_INTERNAL(setting_type, name, ...)
 
@@ -755,6 +293,7 @@ namespace
         switch(id) {
 
         case IDC_BUTTON_SETTINGS_RELAUNCH: {
+
             main_dialog = null;
             EndDialog(hwnd, 0);
             PostMessage(app_window, app::WM_RELAUNCH_AS_ADMIN, 0, 0);
@@ -794,9 +333,13 @@ namespace
 
     BOOL on_initdialog_about(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
+        // get rid of the text caret in the edit box
         HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
-        SetWindowSubclass(about, suppress_cursor_subclass, 0, 0);
+        SetWindowSubclass(about, suppress_caret_subclass, 0, 0);
+
         SendMessage(about, EM_SETREADONLY, 1, 0);
+
+        // populate the about box text
         std::string version{ "Version?" };
         get_app_version(version);
         SetWindowTextA(about,
@@ -820,46 +363,8 @@ namespace
             // copy 'about' text to clipboard
 
         case IDC_BUTTON_ABOUT_COPY: {
-            HWND edit_control = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
 
-            SetLastError(0);
-            int len = GetWindowTextLengthA(edit_control);
-            if(len == 0) {
-                LOG_ERROR("Can't GetWindowTextLength for clipboard: {}", windows_error_message());
-                return;
-            }
-            HANDLE handle = GlobalAlloc(GHND | GMEM_SHARE, static_cast<size_t>(len) + 1);
-            if(handle == null) {
-                LOG_ERROR("Can't GlobalAlloc {} for clipboard: {}", len, windows_error_message());
-                return;
-            }
-            char *buffer = reinterpret_cast<char *>(GlobalLock(handle));
-            if(buffer == null) {
-                LOG_ERROR("Can't GlobalLock clipboard buffer: {}", windows_error_message());
-                return;
-            }
-
-            if(GetWindowTextA(edit_control, buffer, len + 1) == 0) {
-                LOG_ERROR("Can't GetWindowText for clipboard: {}", windows_error_message());
-                return;
-            }
-
-            if(!OpenClipboard(null)) {
-                LOG_ERROR("Can't OpenClipboard: {}", windows_error_message());
-                return;
-            }
-            DEFER(CloseClipboard());
-
-            if(!EmptyClipboard()) {
-                LOG_ERROR("Can't EmptyClipboard: {}", windows_error_message());
-                return;
-            }
-
-            if(!SetClipboardData(CF_TEXT, handle)) {
-                LOG_ERROR("Can't SetClipboardData clipboard: {}", windows_error_message());
-                return;
-            }
-            LOG_INFO("Copied 'About' text to clipboard");
+            copy_window_text_to_clipboard(GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT));
             SetWindowTextW(GetDlgItem(hwnd, IDC_BUTTON_ABOUT_COPY), unicode(localize(IDS_COPIED)).c_str());
 
         } break;
@@ -888,6 +393,8 @@ namespace
 
     BOOL on_initdialog_hotkeys(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
+        // populate the listview with all the hotkeys
+
         HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
 
         RECT listview_rect;
@@ -921,23 +428,27 @@ namespace
         int index = 0;
         for(auto const &a : descriptions) {
 
+            LVITEMA item;
+            mem_clear(&item);
+            item.mask = LVIF_TEXT;
+
             // there should be a string corresponding to the command id
             std::string action_text = a.first;
+
             std::string key_text;
-            if(hotkeys::get_hotkey_text(a.second, key_text) == S_OK) {
-                LVITEMA item;
-                mem_clear(&item);
-                item.mask = LVIF_TEXT;
+            if(SUCCEEDED(hotkeys::get_hotkey_text(a.second, key_text))) {
+
                 item.iItem = index;
                 item.iSubItem = 0;
                 item.pszText = action_text.data();
                 ListView_InsertItem(listview, &item);
-                index += 1;
 
                 item.mask = LVIF_TEXT;
                 item.iSubItem = 1;
                 item.pszText = key_text.data();
                 ListView_SetItem(listview, &item);
+
+                index += 1;
             }
         }
 
@@ -949,10 +460,10 @@ namespace
 
     void on_showwindow_hotkeys(HWND hwnd, BOOL fShow, UINT status)
     {
-        HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
-
         // if being hidden, deselect listview item and hide change button
+
         if(!fShow) {
+            HWND listview = GetDlgItem(hwnd, IDC_LIST_HOTKEYS);
             int selected_item_index = ListView_GetSelectionMark(listview);
             int clear_state = 0;
             ListView_SetItemState(listview, selected_item_index, clear_state, LVIS_SELECTED | LVIS_FOCUSED);
@@ -974,13 +485,15 @@ namespace
 
                 LPNMLISTVIEW nm = reinterpret_cast<LPNMLISTVIEW>(nmhdr);
                 if((nm->uNewState & LVIS_FOCUSED) != 0) {
-                    //
+                    // popupmenu: Edit\Reset
                 }
-                break;
+
             } break;
             }
+
+        } break;
         }
-        }
+
         return 0;
     }
 
@@ -1008,6 +521,7 @@ namespace
     BOOL on_initdialog_main(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         main_dialog = hwnd;
+        settings_should_update = false;
 
         // setup the tab pages
 
@@ -1036,7 +550,7 @@ namespace
             }
         }
 
-        // now the tabs are added, get the inner size of the tab control for adding child pages
+        // now the tabs are added, get the inner size of the tab control for adding dialogs for the pages
         RECT tab_rect;
         GetWindowRect(tab_ctrl, &tab_rect);
         MapWindowPoints(null, hwnd, reinterpret_cast<LPPOINT>(&tab_rect), 2);
@@ -1062,7 +576,6 @@ namespace
         TabCtrl_SetCurSel(tab_ctrl, active_tab_index);
 
         // center dialog in main window rect
-
         HWND app_win = app_window;
         if(app_win == NULL) {
             app_win = GetDesktopWindow();
@@ -1079,8 +592,10 @@ namespace
 
         SetWindowPos(hwnd, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
 
+        // show whichever page is active
         show_current_page(SW_SHOW);
 
+        // uncork the settings notifier for main window
         settings_should_update = true;
 
         return false;
@@ -1092,6 +607,8 @@ namespace
     int on_notify_main(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
         switch(idFrom) {
+
+            // clicked the little arrow on the split button
 
         case IDC_SPLIT_BUTTON_SETTINGS: {
 
@@ -1133,6 +650,8 @@ namespace
             }
         } break;
 
+            // chose a tab
+
         case IDC_SETTINGS_TAB_CONTROL:
 
             switch(nmhdr->code) {
@@ -1155,14 +674,18 @@ namespace
     {
         switch(id) {
 
+            // clicked the split button
+
         case IDC_SPLIT_BUTTON_SETTINGS:
             dialog_settings = revert_settings;
             update_all_settings_controls();
             post_new_settings();
             break;
 
-        case IDCANCEL:    // window closed
-        case IDCLOSE:     // "Close" button clicked
+            // close button clicked (IDCLOSE) or window closed (IDCANCEL from DefDlgProc)
+
+        case IDCANCEL:
+        case IDCLOSE:
             main_dialog = null;
             EndDialog(hwnd, 0);
             break;
@@ -1180,6 +703,8 @@ namespace
             HANDLE_MSG(dlg, WM_NOTIFY, on_notify_main);
             HANDLE_MSG(dlg, WM_COMMAND, on_command_main);
 
+            // new settings from the app (from a hotkey or popup menu)
+
         case app::WM_NEW_SETTINGS: {
             settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
             memcpy(&dialog_settings, new_settings, sizeof(settings_t));
@@ -1189,15 +714,84 @@ namespace
         }
         return 0;
     }
-
-#pragma warning(pop)    // warning(disable : 4100)
 }
 
 //////////////////////////////////////////////////////////////////////
 
-namespace imageview
+namespace imageview::settings_dialog
 {
     //////////////////////////////////////////////////////////////////////
+    // set name text and update controls for a setting_controller
+
+    void setting_controller::setup_controls(HWND hwnd)
+    {
+        window = hwnd;
+        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), unicode(localize(string_resource_id)).c_str());
+        update_controls();
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // common initdialog base for setting_controllers
+
+    BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
+        setting_controller *s = reinterpret_cast<setting_controller *>(lParam);
+        s->setup_controls(hwnd);
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // base dialog proc for setting_controllers
+
+    INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_setting);
+        }
+        return setting_ctlcolor_base(dlg, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // tab pages have white backgrounds - this sets the background of all controls to white
+
+    HBRUSH on_ctl_color_base(HWND hwnd, HDC hdc, HWND hwndChild, int type)
+    {
+        return GetSysColorBrush(COLOR_WINDOW);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // default ctl color for most controls
+
+    INT_PTR setting_ctlcolor_base(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(dlg, WM_CTLCOLORDLG, on_ctl_color_base);
+            HANDLE_MSG(dlg, WM_CTLCOLORSTATIC, on_ctl_color_base);
+            HANDLE_MSG(dlg, WM_CTLCOLORBTN, on_ctl_color_base);
+            HANDLE_MSG(dlg, WM_CTLCOLOREDIT, on_ctl_color_base);
+        }
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // send new settings to the main window from the settings_dialog
+
+    void post_new_settings()
+    {
+        if(settings_should_update) {
+
+            // main window is responsible for freeing this copy of the settings
+            settings_t *settings_copy = new settings_t();
+            memcpy(settings_copy, &dialog_settings, sizeof(settings_t));
+            PostMessage(app_window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // show the settings dialog and activate a tab
 
     HRESULT show_settings_dialog(HWND app_hwnd, uint tab_id)
     {
@@ -1214,6 +808,7 @@ namespace imageview
     }
 
     //////////////////////////////////////////////////////////////////////
+    // call this from the app whenever settings are changed
 
     void update_settings_dialog()
     {
