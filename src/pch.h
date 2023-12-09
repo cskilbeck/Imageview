@@ -141,14 +141,25 @@ using Microsoft::WRL::ComPtr;
 #include "settings.h"
 #include "hotkeys.h"
 #include "scrollbar.h"
+
+#include "app.h"
+
 #include "setting_controller.h"
-#include "settings_page.h"
+
+#include "tab_page.h"
+#include "tab_explorer.h"
+#include "tab_hotkeys.h"
+#include "tab_about.h"
+#include "tab_relaunch.h"
+#include "tab_settings.h"
+
 #include "settings_dialog.h"
+
 #include "setting_separator.h"
 #include "setting_bool.h"
 #include "setting_enum.h"
 #include "setting_color.h"
 #include "setting_ranged.h"
+
 #include "d3d.h"
 #include "recent_files.h"
-#include "app.h"

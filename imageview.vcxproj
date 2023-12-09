@@ -236,6 +236,8 @@
     <ClInclude Include="src\drag_drop.h" />
     <ClInclude Include="src\file.h" />
     <ClInclude Include="src\font_loader.h" />
+    <ClInclude Include="src\tab_explorer.h" />
+    <ClInclude Include="src\tab_hotkeys.h" />
     <ClInclude Include="src\hotkeys.h" />
     <ClInclude Include="src\image.h" />
     <ClInclude Include="src\log.h" />
@@ -246,7 +248,6 @@
     <ClInclude Include="src\settings.h" />
     <ClInclude Include="src\settings_fields.h" />
     <ClInclude Include="src\settings_dialog.h" />
-    <ClInclude Include="src\settings_page.h" />
     <ClInclude Include="src\setting_bool.h" />
     <ClInclude Include="src\setting_color.h" />
     <ClInclude Include="src\setting_controller.h" />
@@ -254,6 +255,10 @@
     <ClInclude Include="src\setting_ranged.h" />
     <ClInclude Include="src\setting_separator.h" />
     <ClInclude Include="src\shader_constants.h" />
+    <ClInclude Include="src\tab_about.h" />
+    <ClInclude Include="src\tab_page.h" />
+    <ClInclude Include="src\tab_relaunch.h" />
+    <ClInclude Include="src\tab_settings.h" />
     <ClInclude Include="src\thread_pool.h" />
     <ClInclude Include="src\timer.h" />
     <ClInclude Include="src\types.h" />
@@ -279,13 +284,17 @@
     <ClCompile Include="src\scrollbar.cpp" />
     <ClCompile Include="src\settings.cpp" />
     <ClCompile Include="src\settings_dialog.cpp" />
-    <ClCompile Include="src\settings_page.cpp" />
     <ClCompile Include="src\setting_bool.cpp" />
     <ClCompile Include="src\setting_color.cpp" />
     <ClCompile Include="src\setting_controller.cpp" />
     <ClCompile Include="src\setting_enum.cpp" />
     <ClCompile Include="src\setting_ranged.cpp" />
     <ClCompile Include="src\setting_separator.cpp" />
+    <ClCompile Include="src\tab_about.cpp" />
+    <ClCompile Include="src\tab_explorer.cpp" />
+    <ClCompile Include="src\tab_hotkeys.cpp" />
+    <ClCompile Include="src\tab_relaunch.cpp" />
+    <ClCompile Include="src\tab_settings.cpp" />
     <ClCompile Include="src\thread_pool.cpp" />
     <ClCompile Include="src\util.cpp" />
     <ClCompile Include="src\wm_names.cpp" />

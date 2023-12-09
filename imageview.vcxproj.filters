@@ -14,6 +14,18 @@
     <Filter Include="3_src">
       <UniqueIdentifier>{7194a920-2a00-43ef-b096-76dc73fa5cbc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="3_src\setting_controllers">
+      <UniqueIdentifier>{3dd460b5-9f55-431c-95bc-045a2979c9fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="4_include\setting_controllers">
+      <UniqueIdentifier>{a11f33c0-50f9-45ee-a7ac-f01ff23a9c24}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="4_include\tab_pages">
+      <UniqueIdentifier>{4ec3b0c1-9e97-4b1a-a25d-b7845acce063}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3_src\tab_pages">
+      <UniqueIdentifier>{a8db696c-b701-4516-801c-25267341e3da}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resources\resource.h">
@@ -91,26 +103,41 @@
     <ClInclude Include="src\recent_files.h">
       <Filter>4_include</Filter>
     </ClInclude>
-    <ClInclude Include="src\setting_separator.h">
-      <Filter>4_include</Filter>
-    </ClInclude>
     <ClInclude Include="src\setting_bool.h">
-      <Filter>4_include</Filter>
-    </ClInclude>
-    <ClInclude Include="src\setting_enum.h">
-      <Filter>4_include</Filter>
+      <Filter>4_include\setting_controllers</Filter>
     </ClInclude>
     <ClInclude Include="src\setting_color.h">
-      <Filter>4_include</Filter>
-    </ClInclude>
-    <ClInclude Include="src\setting_ranged.h">
-      <Filter>4_include</Filter>
+      <Filter>4_include\setting_controllers</Filter>
     </ClInclude>
     <ClInclude Include="src\setting_controller.h">
-      <Filter>4_include</Filter>
+      <Filter>4_include\setting_controllers</Filter>
     </ClInclude>
-    <ClInclude Include="src\settings_page.h">
-      <Filter>4_include</Filter>
+    <ClInclude Include="src\setting_enum.h">
+      <Filter>4_include\setting_controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\setting_ranged.h">
+      <Filter>4_include\setting_controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\setting_separator.h">
+      <Filter>4_include\setting_controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tab_about.h">
+      <Filter>4_include\tab_pages</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tab_relaunch.h">
+      <Filter>4_include\tab_pages</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tab_settings.h">
+      <Filter>4_include\tab_pages</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tab_hotkeys.h">
+      <Filter>4_include\tab_pages</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tab_explorer.h">
+      <Filter>4_include\tab_pages</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tab_page.h">
+      <Filter>4_include\tab_pages</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -165,26 +192,38 @@
     <ClCompile Include="src\recent_files.cpp">
       <Filter>3_src</Filter>
     </ClCompile>
-    <ClCompile Include="src\setting_separator.cpp">
-      <Filter>3_src</Filter>
-    </ClCompile>
     <ClCompile Include="src\setting_bool.cpp">
-      <Filter>3_src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\setting_enum.cpp">
-      <Filter>3_src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\setting_ranged.cpp">
-      <Filter>3_src</Filter>
+      <Filter>3_src\setting_controllers</Filter>
     </ClCompile>
     <ClCompile Include="src\setting_color.cpp">
-      <Filter>3_src</Filter>
+      <Filter>3_src\setting_controllers</Filter>
     </ClCompile>
     <ClCompile Include="src\setting_controller.cpp">
-      <Filter>3_src</Filter>
+      <Filter>3_src\setting_controllers</Filter>
     </ClCompile>
-    <ClCompile Include="src\settings_page.cpp">
-      <Filter>4_include</Filter>
+    <ClCompile Include="src\setting_enum.cpp">
+      <Filter>3_src\setting_controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_ranged.cpp">
+      <Filter>3_src\setting_controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\setting_separator.cpp">
+      <Filter>3_src\setting_controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tab_settings.cpp">
+      <Filter>3_src\tab_pages</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tab_explorer.cpp">
+      <Filter>3_src\tab_pages</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tab_hotkeys.cpp">
+      <Filter>3_src\tab_pages</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tab_about.cpp">
+      <Filter>3_src\tab_pages</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tab_relaunch.cpp">
+      <Filter>3_src\tab_pages</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

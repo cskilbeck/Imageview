@@ -115,8 +115,7 @@ DECL_SETTING_INTERNAL(bool, first_run, true);
 
 DECL_SETTING_INTERNAL(bool, fullscreen, false);
 
-// when new instance launched, if this is true then check for existing instance and use that instead ('single instance
-// mode')
+// single instance mode
 
 DECL_SETTING_BOOL(reuse_window, IDS_SETTING_NAME_REUSE_WINDOW, true);
 

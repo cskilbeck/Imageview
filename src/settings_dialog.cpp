@@ -25,20 +25,12 @@ namespace
     // all the tabs that can be created
 
     tab_page_t all_tabs[] = {
-        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, dont_care, -1, null },
-        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, dont_care, -1, null },
-        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, hide_if_not_elevated, -1, null },
-        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, hide_if_elevated, -1, null },
-        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, dont_care, -1, null },
+        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, tab_flags_t::dont_care, -1, null },
+        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, tab_flags_t::dont_care, -1, null },
+        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, tab_flags_t::hide_if_not_elevated, -1, null },
+        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, tab_flags_t::hide_if_elevated, -1, null },
+        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, tab_flags_t::dont_care, -1, null },
     };
-
-    //////////////////////////////////////////////////////////////////////
-
-    bool should_hide_tab(tab_page_t const *t)
-    {
-        return (t->flags & hide_if_elevated) != 0 && app::is_elevated ||
-               (t->flags & hide_if_not_elevated) != 0 && !app::is_elevated;
-    }
 
     //////////////////////////////////////////////////////////////////////
     // make the current page shown (after it's activated) or hidden (before it's inactivated)
@@ -54,10 +46,6 @@ namespace
         ShowWindow(active_tabs[tab]->hwnd, show);
         return S_OK;
     }
-
-    //////////////////////////////////////////////////////////////////////
-    // MAIN dialog
-    //////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////
     // MAIN dialog \ WM_INITDIALOG
@@ -80,7 +68,7 @@ namespace
 
             tab_page_t *tab = all_tabs + i;
 
-            if(!should_hide_tab(tab)) {
+            if(!tab->should_hide()) {
 
                 std::string tab_text = localize((uint64)tab->resource_id);
                 TCITEMA tci;
@@ -103,7 +91,7 @@ namespace
 
         for(auto t : active_tabs) {
 
-            if(!should_hide_tab(t)) {
+            if(!t->should_hide()) {
 
                 if(t->resource_id == requested_tab_resource_id) {
                     active_tab_index = t->index;
@@ -226,6 +214,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // MAIN dialog \ WM_DESTROY
 
     void on_destroy_main(HWND hwnd)
     {

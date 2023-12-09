@@ -255,3 +255,18 @@ template <typename InterfaceType> void SafeSet(InterfaceType **currentObject, In
     SafeRelease(&currentObject);
     currentObject = newObject;
 }
+
+//////////////////////////////////////////////////////////////////////
+// These are missing from windowsx.h
+
+#define HANDLE_WM_DPICHANGED(hwnd, wParam, lParam, fn) \
+    ((fn)((hwnd), (UINT)LOWORD(wParam), (UINT)HIWORD(wParam), (RECT const *)(lParam)), 0L)
+
+#define HANDLE_WM_INPUT(hwnd, wParam, lParam, fn) ((fn)((hwnd), (HRAWINPUT)(lParam)), 0L)
+
+#define HANDLE_WM_ENTERSIZEMOVE(hwnd, wParam, lParam, fn) ((fn)((hwnd)), 0L)
+
+#define HANDLE_WM_EXITSIZEMOVE(hwnd, wParam, lParam, fn) ((fn)((hwnd)), 0L)
+
+#define HANDLE_WM_POWERBROADCAST(hwnd, wParam, lParam, fn) \
+    ((fn)((hwnd), (UINT)(wParam), (PPOWERBROADCAST_SETTING)(lParam)))
