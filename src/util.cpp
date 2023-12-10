@@ -221,33 +221,48 @@ namespace imageview
     }
 
     //////////////////////////////////////////////////////////////////////
-    // AARRGGBB or RRGGBB (in which case AA is set of 0xFF)
+    // RRGGBBAA
+
+    std::string color_to_string(uint32 color)
+    {
+        static constexpr char const *hex = "0123456789ABCDEF";
+        std::string c;
+        c.reserve(8);
+        for(int i = 0; i < 8; ++i) {
+            c.push_back(hex[color & 0xf]);
+            color >>= 4;
+        }
+        return c;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // RRGGBBAA or RRGGBB (in which case your get RRGGBBFF)
 
     HRESULT color_from_string(std::string const &text, uint32 &color)
     {
         uint32 new_color = 0;
 
         if(text.size() == 6) {
-            new_color = 0xff;
+            new_color = 0xff000000;
 
         } else if(text.size() != 8) {
             return E_INVALIDARG;
         }
 
         for(auto c : text) {
-            new_color <<= 4;
+            new_color >>= 4;
             if(c >= '0' && c <= '9') {
-                new_color |= c - '0';
+                new_color |= (c - '0') << 28;
             } else {
                 c = static_cast<char>(tolower(c));
                 if(c >= 'a' && c <= 'f') {
-                    new_color |= (c - 'a') + 10;
+                    new_color |= ((c - 'a') + 10) << 28;
                 } else {
                     return E_INVALIDARG;
                 }
             }
         }
-        color = color_swap_red_blue(new_color);
+        color = new_color;
         return S_OK;
     }
 

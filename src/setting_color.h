@@ -9,13 +9,14 @@ namespace imageview::settings_dialog
 
     struct color_setting : setting_controller
     {
-        color_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, vec4 &b)
+        color_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, uint32 &b)
             : setting_controller(n, s, dlg_id, dlg_proc), value(b)
         {
         }
 
+        void setup_controls(HWND hwnd) override;
         void update_controls() override;
 
-        vec4 &value;
+        uint32 &value;
     };
 }

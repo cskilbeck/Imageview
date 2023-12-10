@@ -2,17 +2,14 @@
 // TO DO
 
 // settings / keyboard shortcuts dialog \
-//      ranged edit control text
 //      mutual exclude mouse buttons
-
-// show message or progress indicator if file load is slow?
 
 // remove all traces of ImageView from this PC (remove file associations, delete settings from registry, optionally
 //       delete the exe as well)
 
 // file type association / handler thing overlay grid as well as background checkerboard
 
-// crosshairs when zoomed in look ass
+// crosshairs when zoomed in
 
 // flip/rotate
 
@@ -38,14 +35,6 @@
 //      cache
 //      scanner
 
-// glitched selection outline dash thing sometimes...?
-
-//////////////////////////////////////////////////////////////////////
-// MAYBE
-
-// draw everything in a single pass (background color, selection rect, crosshairs, copy-flash etc)
-//
-
 #include "pch.h"
 #include <dcomp.h>
 
@@ -55,6 +44,7 @@
 #include "shader_inc/ps_solid.h"
 #include "shader_inc/ps_spinner.h"
 #include "shader_inc/ps_drawgrid.h"
+#include "shader_inc/ps_draw_everything.h"
 
 LOG_CONTEXT("app");
 
@@ -262,6 +252,7 @@ namespace
     ComPtr<IDCompositionVisual> directcomposition_visual;
 #endif
 
+    ComPtr<ID3D11PixelShader> main_shader;
     ComPtr<ID3D11PixelShader> pixel_shader;
     ComPtr<ID3D11PixelShader> grid_shader;
     ComPtr<ID3D11PixelShader> rect_shader;
@@ -1227,12 +1218,15 @@ namespace
 
         CHK_HR(
             d3d_device->CreatePixelShader(ps_drawimage_shaderbin, sizeof(ps_drawimage_shaderbin), null, &pixel_shader));
+        CHK_HR(d3d_device->CreatePixelShader(
+            ps_draw_everything_shaderbin, sizeof(ps_draw_everything_shaderbin), null, &main_shader));
         CHK_HR(d3d_device->CreatePixelShader(ps_drawrect_shaderbin, sizeof(ps_drawrect_shaderbin), null, &rect_shader));
         CHK_HR(d3d_device->CreatePixelShader(ps_drawgrid_shaderbin, sizeof(ps_drawgrid_shaderbin), null, &grid_shader));
         CHK_HR(d3d_device->CreatePixelShader(ps_solid_shaderbin, sizeof(ps_solid_shaderbin), null, &solid_shader));
         CHK_HR(
             d3d_device->CreatePixelShader(ps_spinner_shaderbin, sizeof(ps_spinner_shaderbin), null, &spinner_shader));
 
+        D3D_SET_NAME(main_shader);
         D3D_SET_NAME(pixel_shader);
         D3D_SET_NAME(rect_shader);
         D3D_SET_NAME(grid_shader);
@@ -1243,6 +1237,12 @@ namespace
         sampler_desc.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
         sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
         sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
+        sampler_desc.BorderColor[0] = 0.0f;
+        sampler_desc.BorderColor[1] = 0.0f;
+        sampler_desc.BorderColor[2] = 0.0f;
+        sampler_desc.BorderColor[3] = 0.0f;
+        sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+        sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
 
         CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
         D3D_SET_NAME(sampler_state);
@@ -2425,39 +2425,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // clear the backbuffer
-
-    void clear()
-    {
-        d3d_context->ClearRenderTargetView(rendertarget_view.Get(),
-                                           reinterpret_cast<float const *>(&settings.border_color));
-
-        d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
-
-        DXGI_SWAP_CHAIN_DESC desc;
-        swap_chain->GetDesc(&desc);
-
-        float width = static_cast<float>(desc.BufferDesc.Width);
-        float height = static_cast<float>(desc.BufferDesc.Height);
-
-        CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
-
-        d3d_context->RSSetViewports(1, &viewport);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // push shader_constants to GPU
-
-    HRESULT update_constants()
-    {
-        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-        CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
-        memcpy(mapped_subresource.pData, &shader_constants, sizeof(shader_const_t));
-        d3d_context->Unmap(constant_buffer.Get(), 0);
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // draw some text with a box round it
 
     HRESULT draw_string(std::string const &text,
@@ -2544,14 +2511,19 @@ namespace
             CHK_HR(create_resources());
         }
 
-        clear();
-
         if(image_texture.Get() != null) {
 
-            vec2 scale = div_point(vec2{ 2, 2 }, vec2{ (float)window_width, (float)window_height });
+            d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
-            auto get_scale = [&scale](vec2 f) { return mul_point({ f.x, -f.y }, scale); };
-            auto get_offset = [&scale](vec2 f) { return vec2{ f.x * scale.x - 1, 1 - (f.y * scale.y) }; };
+            DXGI_SWAP_CHAIN_DESC desc;
+            swap_chain->GetDesc(&desc);
+
+            float width = static_cast<float>(desc.BufferDesc.Width);
+            float height = static_cast<float>(desc.BufferDesc.Height);
+
+            CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
+
+            d3d_context->RSSetViewports(1, &viewport);
 
             vec2 grid_pos{ 0, 0 };
 
@@ -2567,37 +2539,94 @@ namespace
                 grid_pos = sub_point(g2, vec2::mod(current_rect.top_left(), g2));
             }
 
+            shader_constants.top_left = { current_rect.x, current_rect.y };
+            shader_constants.bottom_right = { current_rect.x + current_rect.w - 1,
+                                              current_rect.y + current_rect.h - 1 };
+
             if(settings.grid_enabled) {
-                shader_constants.grid_color[0] = settings.grid_color_1;
-                shader_constants.grid_color[1] = settings.grid_color_2;
-                shader_constants.grid_color[2] = settings.grid_color_2;
-                shader_constants.grid_color[3] = settings.grid_color_1;
+                vec4 g1 = color_from_uint32(settings.grid_color_1);
+                vec4 g2 = color_from_uint32(settings.grid_color_2);
+                shader_constants.grid_color[0] = g1;
+                shader_constants.grid_color[1] = g2;
+                shader_constants.grid_color[2] = g2;
+                shader_constants.grid_color[3] = g1;
             } else {
-                shader_constants.grid_color[0] = settings.background_color;
-                shader_constants.grid_color[1] = settings.background_color;
-                shader_constants.grid_color[2] = settings.background_color;
-                shader_constants.grid_color[3] = settings.background_color;
+                vec4 bg = color_from_uint32(settings.background_color);
+                shader_constants.grid_color[0] = bg;
+                shader_constants.grid_color[1] = bg;
+                shader_constants.grid_color[2] = bg;
+                shader_constants.grid_color[3] = bg;
             }
 
-            vec4 select_fill = settings.select_fill_color;
-            select_fill = XMVectorSetW(select_fill, static_cast<float>(settings.select_fill_alpha) / 255.0f);
-
-            shader_constants.select_color[0] = select_fill;
-            shader_constants.select_color[1] = settings.select_outline_color1;
-            shader_constants.select_color[2] = settings.select_outline_color2;
+            shader_constants.background_color = color_from_uint32(settings.background_color);
 
             vec2 top_left = vec2::floor(current_rect.top_left());
             vec2 rect_size = vec2::floor(current_rect.size());
 
-            shader_constants.scale = get_scale(rect_size);
-            shader_constants.offset = get_offset(top_left);
+            vec2 texture_scale{ window_width / current_rect.w, window_height / current_rect.h };
+            vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
+
+            shader_constants.uv_scale = texture_scale;
+            shader_constants.uv_offset = mul_point(uv_offset, texture_scale);
 
             shader_constants.grid_size = gs;
             shader_constants.grid_offset = grid_pos;
 
-            CHK_HR(update_constants());
+            memset(shader_constants.inner_select_rect, 0, sizeof(shader_constants.inner_select_rect));
+            memset(shader_constants.outer_select_rect, 0, sizeof(shader_constants.outer_select_rect));
 
-            ///// common state
+            vec2 select_tl = vec2::min(select_anchor, select_current);
+            vec2 select_br = vec2::max(select_anchor, select_current);
+
+            if(select_active) {
+
+                using F = double;    // or float
+
+                F crtlx = current_rect.x;
+                F crtly = current_rect.y;
+
+                F sltlx = floor(select_tl.x) * current_rect.w / texture_width + crtlx;
+                F sltly = floor(select_tl.y) * current_rect.h / texture_height + crtly;
+                F slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + crtlx;
+                F slbry = floor(select_br.y + 1) * current_rect.h / texture_height + crtly;
+
+                auto &isr = shader_constants.inner_select_rect;
+                auto &osr = shader_constants.outer_select_rect;
+
+                isr[0] = (int)round(sltlx);
+                isr[1] = (int)round(sltly);
+                isr[2] = (int)round(slbrx);
+                isr[3] = (int)round(slbry);
+
+                osr[0] = isr[0] - settings.select_border_width;
+                osr[1] = isr[1] - settings.select_border_width;
+                osr[2] = isr[2] + settings.select_border_width;
+                osr[3] = isr[3] + settings.select_border_width;
+
+                shader_constants.frame = frame_count;
+
+                shader_constants.dash_length = settings.dash_length;
+
+                // flash the selection color white for 1/3rd of a second when they copy
+                float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
+                vec4 copy_flash_color = vec4{ 1, 1, 1, 0.5f };
+
+                vec4 select_fill = color_from_uint32(settings.select_fill_color);
+
+                shader_constants.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
+
+                vec4 oc1 = color_from_uint32(settings.select_outline_color1);
+                vec4 oc2 = color_from_uint32(settings.select_outline_color2);
+                shader_constants.select_outline_color[0] = oc1;
+                shader_constants.select_outline_color[1] = oc2;
+                shader_constants.select_outline_color[2] = oc2;
+                shader_constants.select_outline_color[3] = oc1;
+            }
+
+            D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+            CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
+            memcpy(mapped_subresource.pData, &shader_constants, sizeof(shader_const_t));
+            d3d_context->Unmap(constant_buffer.Get(), 0);
 
             d3d_context->RSSetState(rasterizer_state.Get());
             d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
@@ -2605,143 +2634,11 @@ namespace
             d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
             d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
 
-            ///// draw grid
-
-            d3d_context->OMSetBlendState(null, null, 0xffffffff);
-            d3d_context->PSSetShader(grid_shader.Get(), null, 0);
-            d3d_context->Draw(4, 0);
-
-            ///// draw image
-
             d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
-            d3d_context->PSSetShader(pixel_shader.Get(), null, 0);
+            d3d_context->PSSetShader(main_shader.Get(), null, 0);
             d3d_context->PSSetShaderResources(0, 1, image_texture_view.GetAddressOf());
             d3d_context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
             d3d_context->Draw(4, 0);
-
-            ///// drag selection rectangle
-
-            vec2 sa = select_anchor;
-            vec2 sc = select_current;
-
-            if(select_active) {
-
-                // convert selection to screen coords
-
-                vec2 s_tl = vec2::min(sa, sc);
-                vec2 s_br = vec2::max(sa, sc);
-
-                // using doubles here because large images
-                // at some zoom levels cause rounding errors
-                // which this doesn't completely fix but
-                // it makes it better (less shimmering on
-                // select rectangle position when zooming)
-
-                double xs = (double)rect_size.x / (double)texture_width;
-                double ys = (double)rect_size.y / (double)texture_height;
-
-                double tx = floorf(s_tl.x + 0) * xs + top_left.x;
-                double ty = floorf(s_tl.y + 0) * ys + top_left.y;
-                double bx = floorf(s_br.x + 1) * xs + top_left.x;
-                double by = floorf(s_br.y + 1) * ys + top_left.y;
-
-                s_tl = { (float)tx, (float)ty };
-                s_br = { (float)bx, (float)by };
-
-                float sbw = (float)settings.select_border_width;
-
-                float select_l = floorf(std::max(top_left.x, s_tl.x)) - sbw;
-                float select_t = floorf(std::max(top_left.y, s_tl.y)) - sbw;
-
-                float select_r = floorf(std::min(top_left.x + rect_size.x - 1, s_br.x)) + sbw;
-                float select_b = floorf(std::min(top_left.y + rect_size.y - 1, s_br.y)) + sbw;
-
-                // always draw at least something
-                float select_w = std::max(1.0f, select_r - select_l + 0.5f);
-                float select_h = std::max(1.0f, select_b - select_t + 0.5f);
-
-                // border width clamp if rectangle is too small
-                uint min_s = static_cast<uint>(std::min(select_w, select_h)) - settings.select_border_width * 2;
-                uint min_t = std::min(settings.select_border_width, min_s);
-
-                uint select_border_width = std::max(1u, min_t);
-
-                shader_constants.select_border_width = select_border_width;
-
-                shader_constants.scale = get_scale({ select_w, select_h });
-                shader_constants.offset = get_offset({ select_l, select_t });
-
-                // set rect coords for the pixel shader
-                shader_constants.rect_f[0] = (int)select_l;
-                shader_constants.rect_f[1] = (int)select_t;
-                shader_constants.rect_f[2] = (int)select_r - 1;
-                shader_constants.rect_f[3] = (int)select_b - 1;
-
-                shader_constants.frame = frame_count;
-
-                shader_constants.dash_length = settings.dash_length - 1;
-                shader_constants.half_dash_length = settings.dash_length / 2;
-
-                // flash the selection color when they copy
-                float f = (float)std::min(1.0, (m_timer.current_time - copy_timestamp) / 0.12);
-
-                shader_constants.select_color[0] = XMVectorLerp(vec4{ 1, 1, 1, 0.5f }, select_fill, f);
-
-                CHK_HR(update_constants());
-
-                d3d_context->PSSetShader(rect_shader.Get(), null, 0);
-                d3d_context->Draw(4, 0);
-            }
-
-            ///// draw crosshairs when alt key is held down
-
-            if(crosshairs_active) {
-
-                d3d_context->PSSetShader(grid_shader.Get(), null, 0);
-
-                shader_constants.grid_color[0] = settings.crosshair_color1;
-                shader_constants.grid_color[3] = settings.crosshair_color1;
-                shader_constants.grid_color[1] = settings.crosshair_color2;
-                shader_constants.grid_color[2] = settings.crosshair_color2;
-
-                float crosshair_grid_size = (float)settings.dash_length;
-                shader_constants.grid_size = crosshair_grid_size / 2;
-
-                vec2 g2{ crosshair_grid_size, crosshair_grid_size };
-
-                // get top left and bottom right screen pos of texel under mouse curser
-                vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-                vec2 sp1 = texture_to_screen_pos(p);
-                vec2 sp2 = sub_point(add_point(sp1, texel_size()), { 1, 1 });
-
-                if(fabsf(sp1.x - sp2.x) < 1.0f) {
-                    sp2.x = sp1.x + 1;
-                }
-                if(fabsf(sp1.y - sp2.y) < 1.0f) {
-                    sp2.y = sp1.y + 1;
-                }
-
-                // draw a vertical crosshair line
-
-                float blip = (float)((frame_count >> 0) % settings.dash_length);
-                grid_pos = sub_point(g2, vec2::mod({ sp1.x + blip, sp1.y + blip }, g2));
-
-                shader_constants.grid_offset = { 0, grid_pos.y };
-                shader_constants.offset = get_offset({ sp1.x, 0 });
-                shader_constants.scale = get_scale({ sp2.x - sp1.x, (float)window_height });
-                CHK_HR(update_constants());
-                d3d_context->Draw(4, 0);
-
-                // draw a horizontal crosshair line
-
-                shader_constants.grid_offset = { grid_pos.x, 0 };
-                shader_constants.offset = get_offset({ 0, sp1.y });
-                shader_constants.scale = get_scale({ (float)window_width, sp2.y - sp1.y });
-                CHK_HR(update_constants());
-                d3d_context->Draw(4, 0);
-            }
-
-            ///// draw text
 
             d2d_render_target->BeginDraw();
 
@@ -2761,24 +2658,19 @@ namespace
             }
 
             if(select_active) {
-                vec2 tl = vec2::min(sa, sc);
-                vec2 br = vec2::max(sa, sc);
-                vec2 s_tl = texture_to_screen_pos_unclamped(tl);
-                vec2 s_br = texture_to_screen_pos_unclamped({ br.x + 1, br.y + 1 });
-                s_tl.x -= dpi_scale(12);
-                s_tl.y -= dpi_scale(8);
-                s_br.x += dpi_scale(12);
-                s_br.y += dpi_scale(8);
-                POINT s_dim{ (int)(floorf(br.x) - floorf(tl.x)) + 1, (int)(floorf(br.y) - floorf(tl.y)) + 1 };
-                draw_string(std::format("X {} Y {}", (int)tl.x, (int)tl.y),
+                vec2 offset{ dpi_scale(18.0f), dpi_scale(12.0f) };
+                vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
+                vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
+                draw_string(std::format("X {} Y {}", (int)s_tl.x, (int)s_tl.y),
                             small_text_format.Get(),
                             s_tl,
                             { 1, 1 },
                             1.0f,
                             2,
                             2);
-                draw_string(
-                    std::format("W {} H {}", s_dim.x, s_dim.y), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+                float sw = floor(select_br.x) - floorf(select_tl.x) + 1;
+                float sh = floorf(select_br.y) - floorf(select_tl.y) + 1;
+                draw_string(std::format("W {} H {}", sw, sh), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
             }
 
             if(!current_message.empty()) {
@@ -3044,17 +2936,19 @@ namespace
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
-            uint32 bg_color = color_to_uint32(settings.background_color);
+            uint32 bg_color = settings.background_color;
             if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
-                settings.background_color = color_from_uint32(bg_color);
+                bg_color = bg_color & 0xffffff;
+                settings.background_color = (settings.background_color & 0xff000000) | bg_color;
                 settings_dialog::update_settings_dialog();
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
-            uint32 border_color = color_to_uint32(settings.border_color);
+            uint32 border_color = settings.border_color;
             if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
-                settings.border_color = color_from_uint32(border_color);
+                border_color = border_color & 0xffffff;
+                settings.border_color = (settings.border_color & 0xff000000) | border_color;
                 settings_dialog::update_settings_dialog();
             }
         } break;

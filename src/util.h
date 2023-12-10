@@ -25,6 +25,7 @@ namespace imageview
     vec4 color_from_uint32(uint32 color);
     uint32 color_swap_red_blue(uint32 color);
     HRESULT color_from_string(std::string const &hex_text, uint32 &color);
+    std::string color_to_string(uint32 color);
 
     //////////////////////////////////////////////////////////////////////
     // app admin

@@ -5,5 +5,6 @@ SamplerState mysampler : register(s0);
 
 float4 main(vs_out input) : SV_TARGET
 {
-    return mytexture.Sample(mysampler, input.texcoord);
+    float2 tc = input.texcoord * uv_scale + uv_offset;
+    return mytexture.Sample(mysampler, tc);
 }

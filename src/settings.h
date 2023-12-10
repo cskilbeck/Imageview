@@ -74,10 +74,10 @@ struct settings_t
         default_value                                     \
     }
 
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
-    vec4 name                                           \
-    {                                                   \
-        r, g, b, a                                      \
+#define DECL_SETTING_COLOR(name, string_id, argb) \
+    uint32 name                                   \
+    {                                             \
+        argb                                      \
     }
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_map, value) \

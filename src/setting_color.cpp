@@ -3,14 +3,34 @@
 
 #include "pch.h"
 
+LOG_CONTEXT("COLOR");
+
 namespace imageview::settings_dialog
 {
     //////////////////////////////////////////////////////////////////////
 
+    void color_setting::setup_controls(HWND hwnd)
+    {
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
+        SendMessage(slider, TBM_SETRANGEMAX, false, 255);
+        SendMessage(slider, TBM_SETRANGEMIN, false, 0);
+
+        uint alpha = value >> 24;
+
+        uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+
+        if(current != alpha) {
+            SendMessage(slider, TBM_SETPOS, true, alpha);
+        }
+
+        setting_controller::setup_controls(hwnd);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     void color_setting::update_controls()
     {
-        uint32 color = color_swap_red_blue(color_to_uint32(value));
-        std::string hex = std::format("{:06x}", color & 0xffffff);
+        std::string hex = color_to_string(value);
         make_uppercase(hex);
         SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
     }
@@ -26,9 +46,7 @@ namespace imageview::settings_dialog
 
             color_setting &setting = setting_controller::get<color_setting>(hwnd);
 
-            uint color = color_to_uint32(setting.value) & 0xffffff;
-
-            SetDCBrushColor(lpDrawItem->hDC, color);
+            SetDCBrushColor(lpDrawItem->hDC, setting.value & 0xffffff);
 
             SelectObject(lpDrawItem->hDC, GetStockObject(DC_BRUSH));
 
@@ -54,9 +72,10 @@ namespace imageview::settings_dialog
         case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
 
             std::string title = localize(setting.string_resource_id);
-            uint new_color = color_to_uint32(setting.value);
+            uint new_color = setting.value;
             if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
-                setting.value = color_from_uint32(new_color);
+                new_color = new_color & 0xffffff;
+                setting.value = (setting.value & 0xff000000) | new_color;
                 setting.update_controls();
             }
         } break;
@@ -77,8 +96,8 @@ namespace imageview::settings_dialog
                     GetWindowTextA(edit_control, txt.data(), len + 1);
                     txt.pop_back();
                     uint32 new_color{};
-                    if(SUCCEEDED(color_from_string(txt, new_color))) {
-                        setting.value = color_from_uint32(new_color);
+                    if(SUCCEEDED(color_swap_red_blue(color_from_string(txt, new_color)))) {
+                        setting.value = new_color;
                         InvalidateRect(hwnd, null, true);
                         post_new_settings();
                     }
@@ -90,6 +109,19 @@ namespace imageview::settings_dialog
     }
 
     //////////////////////////////////////////////////////////////////////
+    // COLOR setting \ WM_HSCROLL
+
+    void on_hscroll_setting_color(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    {
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
+        uint new_alpha = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+        color_setting &setting = setting_controller::get<color_setting>(hwnd);
+        LOG_DEBUG("{}", new_alpha);
+        setting.value = (setting.value & 0xffffff) | (new_alpha << 24);
+        setting.update_controls();
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // COLOR setting \ DLGPROC
 
     INT_PTR setting_color_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -98,6 +130,7 @@ namespace imageview::settings_dialog
 
             HANDLE_MSG(dlg, WM_DRAWITEM, on_drawitem_setting_color);
             HANDLE_MSG(dlg, WM_COMMAND, on_command_setting_color);
+            HANDLE_MSG(dlg, WM_HSCROLL, on_hscroll_setting_color);
         }
         return setting_base_dlgproc(dlg, msg, wParam, lParam);
     }

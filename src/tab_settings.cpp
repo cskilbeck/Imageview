@@ -83,8 +83,8 @@ namespace
     setting_controllers.push_back(                \
         new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name));
 
-#define DECL_SETTING_COLOR(name, string_id, r, g, b, a) \
-    setting_controllers.push_back(                      \
+#define DECL_SETTING_COLOR(name, string_id, argb) \
+    setting_controllers.push_back(                \
         new color_setting(#name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name));
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)         \

@@ -125,6 +125,8 @@
 #define IDC_SLIDER_SETTING_RANGED       1019
 #define IDC_SPLIT_BUTTON_SETTINGS       1023
 #define IDC_STATIC_SETTING_NAME         1024
+#define IDC_SLIDER1                     1025
+#define IDC_SLIDER_SETTING_COLOR        1025
 #define ID_RECENT_FILE_00               30000
 #define ID_RECENT_FILE_01               30001
 #define ID_RECENT_FILE_02               30002
@@ -181,7 +183,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        195
 #define _APS_NEXT_COMMAND_VALUE         40088
-#define _APS_NEXT_CONTROL_VALUE         1025
+#define _APS_NEXT_CONTROL_VALUE         1026
 #define _APS_NEXT_SYMED_VALUE           112
 #endif
 #endif

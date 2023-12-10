@@ -28,4 +28,3 @@ float4 main(vs_out input) : SV_TARGET
     float x = 1 - min(minimum_distance(glowing_line_s, glowing_line_e, input.position.xy) / 12, 1);
     return float4(x, x, x, x);
 }
-
