@@ -2481,11 +2481,9 @@ namespace
             CHK_HR(create_resources());
         }
 
-        if(image_texture.Get() != null) {
+        d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
-            d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
-
-            DXGI_SWAP_CHAIN_DESC desc;
+        DXGI_SWAP_CHAIN_DESC desc;
             swap_chain->GetDesc(&desc);
 
             float width = static_cast<float>(desc.BufferDesc.Width);
@@ -2493,7 +2491,14 @@ namespace
 
             CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
 
-            d3d_context->RSSetViewports(1, &viewport);
+        d3d_context->RSSetViewports(1, &viewport);
+
+        if(image_texture.Get() == null) {
+
+            vec4 border_color = color_from_uint32(settings.border_color);
+            d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float *>(&border_color));
+
+        } else {
 
             vec2 grid_pos{ 0, 0 };
 
