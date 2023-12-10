@@ -3,9 +3,8 @@
     float2 uv_scale;
     float2 uv_offset;
 
+    // color outside the image
     float4 border_color;
-
-    int4 rect_f;
 
     // top left/bottom right of the image rectangle in screen coordinate
     float2 top_left;
@@ -23,25 +22,23 @@
     // selection overlay color
     float4 select_color;
 
-    // selection outline grid colors
+    // selection outline grid colors in a 2x2 checkerboard
     float4 select_outline_color[4];
 
-    // colors for the crosshairs
+    // colors for the crosshairs in a 2x2 checkerboard
     float4 line_color[4];
 
     // grid offset is {0,0} for 'floating', otherwise based on image position
     float2 grid_offset;
 
-    float2 glowing_line_s;
-    float2 glowing_line_e;
-
-    float grid_size;
+    // grid size in screen pixels
+    uint grid_size;
 
     // current frame for animating select outline/crosshairs
     int frame;
 
     // dash line length for select outline/crosshairs
-    int dash_length;
+    uint dash_length;
 
     // selection outline width in pixels
     int select_border_width;

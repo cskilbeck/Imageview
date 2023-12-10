@@ -39,11 +39,6 @@
 #include <dcomp.h>
 
 #include "shader_inc/vs_rectangle.h"
-#include "shader_inc/ps_drawimage.h"
-#include "shader_inc/ps_drawrect.h"
-#include "shader_inc/ps_solid.h"
-#include "shader_inc/ps_spinner.h"
-#include "shader_inc/ps_drawgrid.h"
 #include "shader_inc/ps_draw_everything.h"
 
 LOG_CONTEXT("app");
@@ -253,11 +248,6 @@ namespace
 #endif
 
     ComPtr<ID3D11PixelShader> main_shader;
-    ComPtr<ID3D11PixelShader> pixel_shader;
-    ComPtr<ID3D11PixelShader> grid_shader;
-    ComPtr<ID3D11PixelShader> rect_shader;
-    ComPtr<ID3D11PixelShader> solid_shader;
-    ComPtr<ID3D11PixelShader> spinner_shader;
     ComPtr<ID3D11VertexShader> vertex_shader;
 
     ComPtr<ID3D11ShaderResourceView> image_texture_view;
@@ -1214,23 +1204,13 @@ namespace
 
         CHK_HR(d3d_device->CreateVertexShader(
             vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
+
         D3D_SET_NAME(vertex_shader);
 
-        CHK_HR(
-            d3d_device->CreatePixelShader(ps_drawimage_shaderbin, sizeof(ps_drawimage_shaderbin), null, &pixel_shader));
         CHK_HR(d3d_device->CreatePixelShader(
             ps_draw_everything_shaderbin, sizeof(ps_draw_everything_shaderbin), null, &main_shader));
-        CHK_HR(d3d_device->CreatePixelShader(ps_drawrect_shaderbin, sizeof(ps_drawrect_shaderbin), null, &rect_shader));
-        CHK_HR(d3d_device->CreatePixelShader(ps_drawgrid_shaderbin, sizeof(ps_drawgrid_shaderbin), null, &grid_shader));
-        CHK_HR(d3d_device->CreatePixelShader(ps_solid_shaderbin, sizeof(ps_solid_shaderbin), null, &solid_shader));
-        CHK_HR(
-            d3d_device->CreatePixelShader(ps_spinner_shaderbin, sizeof(ps_spinner_shaderbin), null, &spinner_shader));
 
         D3D_SET_NAME(main_shader);
-        D3D_SET_NAME(pixel_shader);
-        D3D_SET_NAME(rect_shader);
-        D3D_SET_NAME(grid_shader);
-        D3D_SET_NAME(solid_shader);
 
         D3D11_SAMPLER_DESC sampler_desc{ CD3D11_SAMPLER_DESC(D3D11_DEFAULT) };
 
@@ -2528,7 +2508,7 @@ namespace
             vec2 grid_pos{ 0, 0 };
 
             float gm = (1 << settings.grid_multiplier) / 4.0f;
-            float gs = settings.grid_size * current_rect.w / texture_width * gm;
+            uint gs = static_cast<uint>(settings.grid_size * current_rect.w / texture_width * gm);
 
             if(gs < 4) {
                 gs = 0;
@@ -2569,7 +2549,7 @@ namespace
             shader_constants.uv_scale = texture_scale;
             shader_constants.uv_offset = mul_point(uv_offset, texture_scale);
 
-            shader_constants.grid_size = std::max(2.0f, gs - 1.0f);
+            shader_constants.grid_size = std::max(2u, gs - 1u);
             shader_constants.grid_offset = grid_pos;
 
             memset(shader_constants.inner_select_rect, 0, sizeof(shader_constants.inner_select_rect));

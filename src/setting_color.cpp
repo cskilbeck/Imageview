@@ -123,7 +123,6 @@ namespace imageview::settings_dialog
         if(setting.alpha) {
             HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
             uint new_alpha = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-            LOG_DEBUG("{}", new_alpha);
             setting.value = (setting.value & 0xffffff) | (new_alpha << 24);
             setting.update_controls();
         }

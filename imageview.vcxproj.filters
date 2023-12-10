@@ -240,22 +240,7 @@
     </Manifest>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="shaders\ps_drawgrid.hlsl">
-      <Filter>2_shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\ps_drawimage.hlsl">
-      <Filter>2_shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\ps_drawrect.hlsl">
-      <Filter>2_shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\ps_solid.hlsl">
-      <Filter>2_shaders</Filter>
-    </FxCompile>
     <FxCompile Include="shaders\vs_rectangle.hlsl">
-      <Filter>2_shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\ps_spinner.hlsl">
       <Filter>2_shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ps_draw_everything.hlsl">

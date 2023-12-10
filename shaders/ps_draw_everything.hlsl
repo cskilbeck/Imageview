@@ -5,29 +5,25 @@ SamplerState mysampler : register(s0);
 
 float4 main(vs_out input) : SV_TARGET
 {
-    float2 xy = fmod(floor((input.position.xy + grid_offset) / grid_size), 2);
-    float4 checkerboard = grid_color[xy.x + (xy.y * 2)];
+    int2 p = int2(input.position.x, input.position.y);
 
     float4 background = border_color;
-    float4 overlay = float4(0, 0, 0, 0);
 
-    float px = input.position.x;
-    float py = input.position.y;
-
-    int outline = ((px + py + frame) / dash_length) % 2;
-
-    if (px >= top_left.x && py >= top_left.y && px < bottom_right.x && py < bottom_right.y)
+    if (p.x >= top_left.x && p.y >= top_left.y && p.x < bottom_right.x && p.y < bottom_right.y)
     {
-        background = checkerboard;
+        int2 xy = (p + grid_offset) / grid_size % 2;
+        background = grid_color[xy.x + (xy.y * 2)];;
     }
 
-    if (px >= inner_select_rect.x && py >= inner_select_rect.y && px < inner_select_rect.z && py < inner_select_rect.w)
+    float4 overlay = float4(0, 0, 0, 0);
+
+    if (p.x >= inner_select_rect.x && p.y >= inner_select_rect.y && p.x < inner_select_rect.z && p.y < inner_select_rect.w)
     {
         overlay = select_color;
     }
-    else if (px >= outer_select_rect.x && py >= outer_select_rect.y && px < outer_select_rect.z && py < outer_select_rect.w)
+    else if (p.x >= outer_select_rect.x && p.y >= outer_select_rect.y && p.x < outer_select_rect.z && p.y < outer_select_rect.w)
     {
-        overlay = select_outline_color[outline];
+        overlay = select_outline_color[((uint) (p.x + p.y + frame) / dash_length) % 2];
     }
 
     float4 pixel = mytexture.Sample(mysampler, input.texcoord * uv_scale + uv_offset);

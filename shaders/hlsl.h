@@ -1,5 +1,5 @@
 cbuffer constants
-#include "..\src\shader_constants.h"
+#include "../src/shader_constants.h"
 
     struct vs_out
 {
