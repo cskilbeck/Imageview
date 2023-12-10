@@ -1,30 +1,20 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
 
-// settings / keyboard shortcuts dialog \
-//      mutual exclude mouse buttons
-
-// remove all traces of ImageView from this PC (remove file associations, delete settings from registry, optionally
-//       delete the exe as well)
-
-// file type association / handler thing overlay grid as well as background checkerboard
-
-// crosshairs when zoomed in
-
+// shortcut editor
+// mutual exclude mouse buttons
+// SetCursor not always being called when it should
+// crosshairs
 // flip/rotate
+// colorspace / SRGB / HDR
+// overlay grid
+// file type association / handler thing
+// remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
 
 // accessibility is broken in the settings dialog
 
-// colorspace wrong in png or heif (they're different, either way) / colorspace error when decoding heif
-
-// handle SRGB / premultiplied alpha correctly in image decoder
-
-// HDR (requires windows version 10 1703?)
-
 // fix the cache
-
 // fix all the leaks
-
 // proper error handling/reporting
 
 // ?folder scanning broken after on_command_line from external?
@@ -43,7 +33,7 @@
 
 LOG_CONTEXT("app");
 
-// To register your application as a handler for the 'public' file extensions it supports:
+// To register an application as a handler for the 'public' file extensions it supports:
 
 // Create these registry keys
 
@@ -186,7 +176,7 @@ namespace
     // admin for showing a message
     std::string current_message;
     double message_timestamp{ 0 };
-    double message_fade_time{ 0 };
+    float message_fade_time{ 0 };
 
     vec2 small_label_size{ 0, 0 };
     float small_label_padding{ 2.0f };
@@ -442,7 +432,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
 
-    void set_message(std::string const &message, double fade_time)
+    void set_message(std::string const &message, float fade_time)
     {
         current_message = message;
         message_timestamp = m_timer.wall_time();
@@ -2654,11 +2644,12 @@ namespace
             }
 
             if(!current_message.empty()) {
-                float message_alpha = 0.0f;
-                if(message_fade_time != 0.0f) {
-                    message_alpha = (float)((m_timer.wall_time() - message_timestamp) / message_fade_time);
-                }
-                if(message_alpha <= 1) {
+
+                float elapsed = static_cast<float>(m_timer.wall_time() - message_timestamp);
+
+                if(elapsed < message_fade_time) {
+
+                    float message_alpha = elapsed / std::max(0.1f, message_fade_time);
 
                     message_alpha = 1 - powf(message_alpha, 16);
 
@@ -3267,7 +3258,7 @@ namespace
         }
 
         if(!get_mouse_buttons(settings.select_button) && select_active) {
-            check_selection_hover(vec2(static_cast<float>(x), static_cast<float>(y)));
+            check_selection_hover(vec2(POINT{ x, y }));
         } else if(selection_hover == selection_hover_t::sel_hover_outside) {
             set_mouse_cursor(null);
         }
