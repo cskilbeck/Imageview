@@ -72,11 +72,11 @@ namespace
             filter_specs.clear();
 
             for(auto &spec : slots) {
-                make_lowercase(spec.second.filter);
+                spec.second.filter = make_lowercase(spec.second.filter);
                 filter_specs.push_back({ spec.second.description.c_str(), spec.second.filter.c_str() });
             }
 
-            make_lowercase(all_image_files.filter);
+            all_image_files.filter = make_lowercase(all_image_files.filter);
             filter_specs.push_back({ all_image_files.description.c_str(), all_image_files.filter.c_str() });
         }
         num_filter_specs = static_cast<uint>(filter_specs.size());
@@ -169,6 +169,7 @@ namespace imageview::dialog
     HRESULT select_color(HWND window, uint32 &color, char const *title)
     {
         static COLORREF custom_colors[16];
+        uint32 alpha = color & 0xff000000;
 
         std::wstring unicode_title = unicode(title);
         CHOOSECOLORW cc{ 0 };
@@ -182,7 +183,7 @@ namespace imageview::dialog
         if(!ChooseColorW(&cc)) {
             return E_ABORT;
         }
-        color = cc.rgbResult;
+        color = cc.rgbResult | alpha;
         return S_OK;
     }
 }

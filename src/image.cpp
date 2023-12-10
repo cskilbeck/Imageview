@@ -489,7 +489,7 @@ namespace imageview::image
             extension = extension.substr(1);
         }
 
-        make_uppercase(extension);
+        extension = make_uppercase(extension);
 
         decltype(image::formats.begin()) found;
 
@@ -671,7 +671,7 @@ namespace imageview::image
             ext = extension;
         }
 
-        make_uppercase(ext);
+        ext = make_uppercase(ext);
 
         decltype(image::formats.begin()) found;
 

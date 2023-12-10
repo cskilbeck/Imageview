@@ -10,11 +10,11 @@ DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_BACKGROUND);
 
 // border color beyond image bounds
 
-DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0xff203040);
+DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0x203040, false);
 
 // bg color shows through image alpha
 
-DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xffff00ff);
+DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xff00ff, false);
 
 //////////////////////////////////////////////////////////////////////
 // grid
@@ -27,8 +27,8 @@ DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
 
 // grid colors
 
-DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0xff202020);
-DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0xff505050);
+DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x202020, false);
+DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x505050, false);
 
 // grid size in pixels
 
@@ -49,12 +49,12 @@ DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_SELECT);
 
 // selection rectangle fill color
 
-DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0x80200080);
+DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0x80200080, true);
 
 // selection outline colors (line alternates)
 
-DECL_SETTING_COLOR(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 0xff000000);
-DECL_SETTING_COLOR(select_outline_color2, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2, 0xffffffff);
+DECL_SETTING_COLOR(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 0xff000000, true);
+DECL_SETTING_COLOR(select_outline_color2, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2, 0xffffffff, true);
 
 // how far mouse has to move after clicking select button to consider a selection active
 
@@ -74,8 +74,8 @@ DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 64);
 
 // crosshair line colors
 
-DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0xff000000);
-DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0xffffffff);
+DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0xff000000, true);
+DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0xffffffff, true);
 
 //////////////////////////////////////////////////////////////////////
 // mouse buttons

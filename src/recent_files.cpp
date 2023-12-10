@@ -78,8 +78,7 @@ namespace imageview::recent_files
                     // ho hum, all files have .lnk extension
                     // strip that first
 
-                    std::wstring stripped{ full_path };
-                    make_lowercase(stripped);
+                    std::wstring stripped = make_lowercase(full_path);
 
                     if(stripped.ends_with(L".lnk")) {
                         stripped = stripped.substr(0, stripped.size() - 4);

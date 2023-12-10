@@ -3,8 +3,7 @@
     float2 uv_scale;
     float2 uv_offset;
 
-    // actually the border color
-    float4 background_color;
+    float4 border_color;
 
     int4 rect_f;
 

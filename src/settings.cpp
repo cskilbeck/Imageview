@@ -58,7 +58,7 @@ HRESULT settings_t::serialize(serialize_action action, char const *key)
 
 #define DECL_SETTING_BOOL(name, string_id, value) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_COLOR(name, string_id, argb) SERIALIZE_SETTING(name)
+#define DECL_SETTING_COLOR(name, string_id, argb, alpha) SERIALIZE_SETTING(name)
 
 #define DECL_SETTING_ENUM(type, name, string_id, enum_names, value) SERIALIZE_SETTING(name)
 

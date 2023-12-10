@@ -8,7 +8,7 @@ float4 main(vs_out input) : SV_TARGET
     float2 xy = fmod(floor((input.position.xy + grid_offset) / grid_size), 2);
     float4 checkerboard = grid_color[xy.x + (xy.y * 2)];
 
-    float4 background = background_color;
+    float4 background = border_color;
     float4 overlay = float4(0, 0, 0, 0);
 
     float px = input.position.x;

@@ -2534,11 +2534,6 @@ namespace
                 gs = 0;
             }
 
-            if(settings.fixed_grid) {
-                vec2 g2{ 2.0f * gs, 2.0f * gs };
-                grid_pos = sub_point(g2, vec2::mod(current_rect.top_left(), g2));
-            }
-
             shader_constants.top_left = { current_rect.x, current_rect.y };
             shader_constants.bottom_right = { current_rect.x + current_rect.w - 1,
                                               current_rect.y + current_rect.h - 1 };
@@ -2558,7 +2553,7 @@ namespace
                 shader_constants.grid_color[3] = bg;
             }
 
-            shader_constants.background_color = color_from_uint32(settings.background_color);
+            shader_constants.border_color = color_from_uint32(settings.border_color);
 
             vec2 top_left = vec2::floor(current_rect.top_left());
             vec2 rect_size = vec2::floor(current_rect.size());
@@ -2566,10 +2561,15 @@ namespace
             vec2 texture_scale{ window_width / current_rect.w, window_height / current_rect.h };
             vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
 
+            if(settings.fixed_grid) {
+                vec2 g2{ 2.0f * gs, 2.0f * gs };
+                grid_pos = { -current_rect.x, -current_rect.y };
+            }
+
             shader_constants.uv_scale = texture_scale;
             shader_constants.uv_offset = mul_point(uv_offset, texture_scale);
 
-            shader_constants.grid_size = gs;
+            shader_constants.grid_size = std::max(2.0f, gs - 1.0f);
             shader_constants.grid_offset = grid_pos;
 
             memset(shader_constants.inner_select_rect, 0, sizeof(shader_constants.inner_select_rect));
@@ -2936,19 +2936,15 @@ namespace
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
-            uint32 bg_color = settings.background_color;
-            if(SUCCEEDED(dialog::select_color(window, bg_color, "Choose background color"))) {
-                bg_color = bg_color & 0xffffff;
-                settings.background_color = (settings.background_color & 0xff000000) | bg_color;
+            if(SUCCEEDED(dialog::select_color(
+                   window, settings.background_color, localize(IDS_SETTING_NAME_BACKGROUND_COLOR).c_str()))) {
                 settings_dialog::update_settings_dialog();
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
-            uint32 border_color = settings.border_color;
-            if(SUCCEEDED(dialog::select_color(window, border_color, "Choose border color"))) {
-                border_color = border_color & 0xffffff;
-                settings.border_color = (settings.border_color & 0xff000000) | border_color;
+            if(SUCCEEDED(dialog::select_color(
+                   window, settings.border_color, localize(IDS_SETTING_NAME_BORDER_COLOR).c_str()))) {
                 settings_dialog::update_settings_dialog();
             }
         } break;

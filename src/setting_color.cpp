@@ -12,15 +12,19 @@ namespace imageview::settings_dialog
     void color_setting::setup_controls(HWND hwnd)
     {
         HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
-        SendMessage(slider, TBM_SETRANGEMAX, false, 255);
-        SendMessage(slider, TBM_SETRANGEMIN, false, 0);
+        if(!alpha) {
+            ShowWindow(slider, SW_HIDE);
+        } else {
+            SendMessage(slider, TBM_SETRANGEMAX, false, 255);
+            SendMessage(slider, TBM_SETRANGEMIN, false, 0);
 
-        uint alpha = value >> 24;
+            uint cur_alpha = value >> 24;
 
-        uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+            uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
 
-        if(current != alpha) {
-            SendMessage(slider, TBM_SETPOS, true, alpha);
+            if(current != cur_alpha) {
+                SendMessage(slider, TBM_SETPOS, true, cur_alpha);
+            }
         }
 
         setting_controller::setup_controls(hwnd);
@@ -30,8 +34,13 @@ namespace imageview::settings_dialog
 
     void color_setting::update_controls()
     {
-        std::string hex = color_to_string(value);
-        make_uppercase(hex);
+        std::string hex;
+        if(alpha) {
+            hex = color32_to_string(value);
+        } else {
+            hex = color24_to_string(value);
+        }
+        hex = make_uppercase(hex);
         SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
     }
 
@@ -72,10 +81,7 @@ namespace imageview::settings_dialog
         case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
 
             std::string title = localize(setting.string_resource_id);
-            uint new_color = setting.value;
-            if(dialog::select_color(GetParent(hwnd), new_color, title.c_str()) == S_OK) {
-                new_color = new_color & 0xffffff;
-                setting.value = (setting.value & 0xff000000) | new_color;
+            if(dialog::select_color(GetParent(hwnd), setting.value, title.c_str()) == S_OK) {
                 setting.update_controls();
             }
         } break;
@@ -96,7 +102,7 @@ namespace imageview::settings_dialog
                     GetWindowTextA(edit_control, txt.data(), len + 1);
                     txt.pop_back();
                     uint32 new_color{};
-                    if(SUCCEEDED(color_swap_red_blue(color_from_string(txt, new_color)))) {
+                    if(SUCCEEDED(color_from_string(txt, new_color))) {
                         setting.value = new_color;
                         InvalidateRect(hwnd, null, true);
                         post_new_settings();
@@ -113,12 +119,14 @@ namespace imageview::settings_dialog
 
     void on_hscroll_setting_color(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
-        uint new_alpha = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
         color_setting &setting = setting_controller::get<color_setting>(hwnd);
-        LOG_DEBUG("{}", new_alpha);
-        setting.value = (setting.value & 0xffffff) | (new_alpha << 24);
-        setting.update_controls();
+        if(setting.alpha) {
+            HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
+            uint new_alpha = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+            LOG_DEBUG("{}", new_alpha);
+            setting.value = (setting.value & 0xffffff) | (new_alpha << 24);
+            setting.update_controls();
+        }
     }
 
     //////////////////////////////////////////////////////////////////////

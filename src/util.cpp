@@ -197,72 +197,92 @@ namespace imageview
 
     uint32 color_to_uint32(vec4 color)
     {
-        using namespace DirectX::PackedVector;
-        XMCOLOR col;
-        XMStoreColor(&col, color);
-        return color_swap_red_blue(col);
+        uint r = static_cast<uint>(XMVectorGetX(color) * 255.0f);
+        uint g = static_cast<uint>(XMVectorGetY(color) * 255.0f);
+        uint b = static_cast<uint>(XMVectorGetZ(color) * 255.0f);
+        uint a = static_cast<uint>(XMVectorGetW(color) * 255.0f);
+        return (a << 24) | (b << 16) | (g << 8) | r;
     }
 
     //////////////////////////////////////////////////////////////////////
 
     vec4 color_from_uint32(uint32 color)
     {
-        uint32 swapped = color_swap_red_blue(color);
-        using namespace DirectX::PackedVector;
-        return XMLoadColor(reinterpret_cast<XMCOLOR const *>(&swapped));
+        uint a = (color >> 24) & 0xff;
+        uint b = (color >> 16) & 0xff;
+        uint g = (color >> 8) & 0xff;
+        uint r = (color >> 0) & 0xff;
+        return { r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f };
     }
 
     //////////////////////////////////////////////////////////////////////
-    // ARGB -> ABGR (and vice versa)
 
-    uint32 color_swap_red_blue(uint32 color)
+    static constexpr char const *hex_digits = "0123456789ABCDEF";
+
+    std::string color32_to_string(uint32 color)
     {
-        return ((color & 0x00ff0000) >> 16) | ((color & 0x000000ff) << 16) | color & 0xff00ff00;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // RRGGBBAA
-
-    std::string color_to_string(uint32 color)
-    {
-        static constexpr char const *hex = "0123456789ABCDEF";
         std::string c;
         c.reserve(8);
-        for(int i = 0; i < 8; ++i) {
-            c.push_back(hex[color & 0xf]);
-            color >>= 4;
+        for(uint i = 0; i < 4; ++i) {
+            c.push_back(hex_digits[(color >> 4) & 0x0f]);
+            c.push_back(hex_digits[color & 0x0f]);
+            color >>= 8;
         }
         return c;
     }
 
     //////////////////////////////////////////////////////////////////////
-    // RRGGBBAA or RRGGBB (in which case your get RRGGBBFF)
+
+    std::string color24_to_string(uint32 color)
+    {
+        std::string c;
+        c.reserve(6);
+        for(uint i = 0; i < 3; ++i) {
+            c.push_back(hex_digits[(color >> 4) & 0x0f]);
+            c.push_back(hex_digits[color & 0x0f]);
+            color >>= 8;
+        }
+        return c;
+    }
+
+    //////////////////////////////////////////////////////////////////////
 
     HRESULT color_from_string(std::string const &text, uint32 &color)
     {
+        auto nibble_from_char = [](int c, int &x) {
+            if(c >= '0' && c <= '9') {
+                x = c - '0';
+            } else {
+                c = tolower(c);
+                if(c >= 'a' && c <= 'f') {
+                    x = (c - 'a') + 10;
+                } else {
+                    return false;
+                }
+            }
+            return true;
+        };
+
         uint32 new_color = 0;
+        uint32 alpha = 0;
 
         if(text.size() == 6) {
-            new_color = 0xff000000;
+            alpha = 0xff000000;
 
         } else if(text.size() != 8) {
             return E_INVALIDARG;
         }
 
-        for(auto c : text) {
-            new_color >>= 4;
-            if(c >= '0' && c <= '9') {
-                new_color |= (c - '0') << 28;
-            } else {
-                c = static_cast<char>(tolower(c));
-                if(c >= 'a' && c <= 'f') {
-                    new_color |= ((c - 'a') + 10) << 28;
-                } else {
-                    return E_INVALIDARG;
-                }
+        uint shift[8] = { 4, 0, 12, 8, 20, 16, 28, 24 };
+
+        for(size_t i = 0; i < text.size(); ++i) {
+            int x;
+            if(!nibble_from_char(text[i], x)) {
+                return E_INVALIDARG;
             }
+            new_color |= x << shift[i];
         }
-        color = new_color;
+        color = new_color | alpha;
         return S_OK;
     }
 

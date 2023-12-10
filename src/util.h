@@ -23,9 +23,9 @@ namespace imageview
 
     uint32 color_to_uint32(vec4 color);
     vec4 color_from_uint32(uint32 color);
-    uint32 color_swap_red_blue(uint32 color);
     HRESULT color_from_string(std::string const &hex_text, uint32 &color);
-    std::string color_to_string(uint32 color);
+    std::string color32_to_string(uint32 color);
+    std::string color24_to_string(uint32 color);
 
     //////////////////////////////////////////////////////////////////////
     // app admin
@@ -60,20 +60,22 @@ namespace imageview
     //////////////////////////////////////////////////////////////////////
     // upper/lower case - these are not valid for many unicode pages!
 
-    template <typename T> void make_lowercase(T &str)
+    template <typename T> T make_lowercase(T const &str)
     {
-        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
-            return static_cast<T::value_type>(::tolower(x));
-        });
+        T n{ str };
+        std::transform(
+            n.begin(), n.end(), n.begin(), [](T::value_type x) { return static_cast<T::value_type>(::tolower(x)); });
+        return n;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    template <typename T> void make_uppercase(T &str)
+    template <typename T> T make_uppercase(T const &str)
     {
-        std::transform(str.begin(), str.end(), str.begin(), [](T::value_type x) {
-            return static_cast<T::value_type>(::toupper(x));
-        });
+        T n{ str };
+        std::transform(
+            n.begin(), n.end(), n.begin(), [](T::value_type x) { return static_cast<T::value_type>(::toupper(x)); });
+        return n;
     }
 
     //////////////////////////////////////////////////////////////////////
