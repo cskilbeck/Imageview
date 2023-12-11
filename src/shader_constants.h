@@ -7,8 +7,8 @@
     float4 border_color;
 
     // top left/bottom right of the image rectangle in screen coordinate
-    float2 top_left;
-    float2 bottom_right;
+    int2 top_left;
+    int2 bottom_right;
 
     // grid colors in a 2x2 checkerboard pattern
     float4 grid_color[4];
@@ -18,6 +18,8 @@
 
     // selection rectangle expanded to contain the outline which may be >1 wide
     int4 outer_select_rect;
+
+    float4 grid_overlay_color;
 
     // selection overlay color
     float4 select_color;
@@ -31,8 +33,13 @@
     // grid offset is {0,0} for 'floating', otherwise based on image position
     float2 grid_offset;
 
+    float2 overlay_grid_offset;
+    float2 overlay_grid_scale;
+
+    float2 overlay_grid_size;
+
     // grid size in screen pixels
-    uint grid_size;
+    float grid_size;
 
     // current frame for animating select outline/crosshairs
     int frame;

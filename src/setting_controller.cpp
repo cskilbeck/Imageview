@@ -34,7 +34,7 @@ namespace imageview::settings_dialog
     void setting_controller::setup_controls(HWND hwnd)
     {
         window = hwnd;
-        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), unicode(localize(string_resource_id)).c_str());
+        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), unicode(name()).c_str());
         update_controls();
     }
 

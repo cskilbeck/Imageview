@@ -3,14 +3,11 @@
 
 #include "pch.h"
 
-namespace imageview::settings_dialog
+namespace
 {
-    //////////////////////////////////////////////////////////////////////
-
-    void bool_setting::update_controls()
-    {
-        Button_SetCheck(GetDlgItem(window, IDC_CHECK_SETTING_BOOL), value ? BST_CHECKED : BST_UNCHECKED);
-    }
+    using imageview::settings_dialog::bool_setting;
+    using imageview::settings_dialog::post_new_settings;
+    using imageview::settings_dialog::setting_controller;
 
     //////////////////////////////////////////////////////////////////////
     // BOOL setting \ WM_COMMAND
@@ -44,6 +41,16 @@ namespace imageview::settings_dialog
     void on_lbuttonup_setting_bool(HWND hwnd, int x, int y, UINT keyFlags)
     {
         SendMessage(GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL), WM_LBUTTONUP, 0, 0);
+    }
+}
+
+namespace imageview::settings_dialog
+{
+    //////////////////////////////////////////////////////////////////////
+
+    void bool_setting::update_controls()
+    {
+        Button_SetCheck(GetDlgItem(window, IDC_CHECK_SETTING_BOOL), value ? BST_CHECKED : BST_UNCHECKED);
     }
 
     //////////////////////////////////////////////////////////////////////

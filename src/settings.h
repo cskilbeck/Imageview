@@ -66,7 +66,7 @@ enum mouse_button_t : int
 struct settings_t
 {
 
-#define DECL_SETTING_SEPARATOR(string_id)
+#define DECL_SETTING_SECTION(string_id)
 
 #define DECL_SETTING_BOOL(name, string_id, default_value) \
     bool name                                             \

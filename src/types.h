@@ -31,3 +31,4 @@ using uint = uint32;
 using float4 = vec4;
 using float2 = imageview::vec2;
 using int4 = int[4];
+using int2 = int[2];

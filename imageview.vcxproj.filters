@@ -118,7 +118,7 @@
     <ClInclude Include="src\setting_ranged.h">
       <Filter>4_include\setting_controllers</Filter>
     </ClInclude>
-    <ClInclude Include="src\setting_separator.h">
+    <ClInclude Include="src\setting_section.h">
       <Filter>4_include\setting_controllers</Filter>
     </ClInclude>
     <ClInclude Include="src\tab_about.h">
@@ -207,7 +207,7 @@
     <ClCompile Include="src\setting_ranged.cpp">
       <Filter>3_src\setting_controllers</Filter>
     </ClCompile>
-    <ClCompile Include="src\setting_separator.cpp">
+    <ClCompile Include="src\setting_section.cpp">
       <Filter>3_src\setting_controllers</Filter>
     </ClCompile>
     <ClCompile Include="src\tab_settings.cpp">

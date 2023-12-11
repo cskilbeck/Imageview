@@ -3,6 +3,29 @@
 
 #include "pch.h"
 
+namespace
+{
+    using namespace imageview::settings_dialog;
+
+    //////////////////////////////////////////////////////////////////////
+    // ENUM setting \ WM_COMMAND
+
+    void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        switch(id) {
+
+        case IDC_COMBO_SETTING_ENUM: {
+
+            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+            int sel = ComboBox_GetCurSel(combo_box);
+            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
+            setting_controller::get<enum_setting>(hwnd).value = v;
+            post_new_settings();
+        } break;
+        }
+    }
+}
+
 namespace imageview::settings_dialog
 {
     // big sigh - these are for mapping enums to strings for the combo boxes
@@ -83,24 +106,6 @@ namespace imageview::settings_dialog
                 break;
             }
             index += 1;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // ENUM setting \ WM_COMMAND
-
-    void on_command_setting_enum(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
-    {
-        switch(id) {
-
-        case IDC_COMBO_SETTING_ENUM: {
-
-            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
-            int sel = ComboBox_GetCurSel(combo_box);
-            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
-            setting_controller::get<enum_setting>(hwnd).value = v;
-            post_new_settings();
-        } break;
         }
     }
 

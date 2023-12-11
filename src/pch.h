@@ -155,7 +155,7 @@ using Microsoft::WRL::ComPtr;
 
 #include "settings_dialog.h"
 
-#include "setting_separator.h"
+#include "setting_section.h"
 #include "setting_bool.h"
 #include "setting_enum.h"
 #include "setting_color.h"

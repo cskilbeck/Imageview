@@ -5,44 +5,10 @@
 
 LOG_CONTEXT("COLOR");
 
-namespace imageview::settings_dialog
+namespace
 {
-    //////////////////////////////////////////////////////////////////////
-
-    void color_setting::setup_controls(HWND hwnd)
-    {
-        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
-        if(!alpha) {
-            ShowWindow(slider, SW_HIDE);
-        } else {
-            SendMessage(slider, TBM_SETRANGEMAX, false, 255);
-            SendMessage(slider, TBM_SETRANGEMIN, false, 0);
-
-            uint cur_alpha = value >> 24;
-
-            uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-
-            if(current != cur_alpha) {
-                SendMessage(slider, TBM_SETPOS, true, cur_alpha);
-            }
-        }
-
-        setting_controller::setup_controls(hwnd);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void color_setting::update_controls()
-    {
-        std::string hex;
-        if(alpha) {
-            hex = color32_to_string(value);
-        } else {
-            hex = color24_to_string(value);
-        }
-        hex = make_uppercase(hex);
-        SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
-    }
+    using namespace imageview;
+    using namespace imageview::settings_dialog;
 
     //////////////////////////////////////////////////////////////////////
     // COLOR setting \ WM_DRAWITEM
@@ -126,6 +92,46 @@ namespace imageview::settings_dialog
             setting.value = (setting.value & 0xffffff) | (new_alpha << 24);
             setting.update_controls();
         }
+    }
+}
+
+namespace imageview::settings_dialog
+{
+    //////////////////////////////////////////////////////////////////////
+
+    void color_setting::setup_controls(HWND hwnd)
+    {
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
+        if(!alpha) {
+            ShowWindow(slider, SW_HIDE);
+        } else {
+            SendMessage(slider, TBM_SETRANGEMAX, false, 255);
+            SendMessage(slider, TBM_SETRANGEMIN, false, 0);
+
+            uint cur_alpha = value >> 24;
+
+            uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+
+            if(current != cur_alpha) {
+                SendMessage(slider, TBM_SETPOS, true, cur_alpha);
+            }
+        }
+
+        setting_controller::setup_controls(hwnd);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void color_setting::update_controls()
+    {
+        std::string hex;
+        if(alpha) {
+            hex = color32_to_string(value);
+        } else {
+            hex = color24_to_string(value);
+        }
+        hex = make_uppercase(hex);
+        SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
     }
 
     //////////////////////////////////////////////////////////////////////

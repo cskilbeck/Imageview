@@ -3,6 +3,27 @@
 
 #include "pch.h"
 
+namespace
+{
+    using namespace imageview::settings_dialog;
+
+    //////////////////////////////////////////////////////////////////////
+    // RANGED setting \ WM_HSCROLL
+
+    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    {
+        // slider was slid
+
+        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
+        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+        ranged_setting &ranged = setting_controller::get<ranged_setting>(hwnd);
+        ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
+        HWND edit = GetDlgItem(hwnd, IDC_EDIT_SETTING_RANGED);
+        Edit_SetText(edit, std::format("{}", ranged.value).c_str());
+        post_new_settings();
+    }
+}
+
 namespace imageview::settings_dialog
 {
     //////////////////////////////////////////////////////////////////////
@@ -23,22 +44,6 @@ namespace imageview::settings_dialog
         HWND edit = GetDlgItem(window, IDC_EDIT_SETTING_RANGED);
         Edit_SetText(edit, std::format("{}", value).c_str());
         SendMessage(slider, TBM_SETPOS, true, value);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // RANGED setting \ WM_HSCROLL
-
-    void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
-    {
-        // slider was slid
-
-        HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
-        uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-        ranged_setting &ranged = setting_controller::get<ranged_setting>(hwnd);
-        ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
-        HWND edit = GetDlgItem(hwnd, IDC_EDIT_SETTING_RANGED);
-        Edit_SetText(edit, std::format("{}", ranged.value).c_str());
-        post_new_settings();
     }
 
     //////////////////////////////////////////////////////////////////////

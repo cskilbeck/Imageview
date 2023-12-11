@@ -3,15 +3,15 @@
 
 // shortcut editor
 // mutual exclude mouse buttons
+// file type association / handler thing
+// remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
+
 // SetCursor not always being called when it should
+
 // crosshairs
 // flip/rotate
 // colorspace / SRGB / HDR
 // overlay grid
-// file type association / handler thing
-// remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
-
-// accessibility is broken in the settings dialog
 
 // fix the cache
 // fix all the leaks
@@ -221,7 +221,7 @@ namespace
     struct shader_const_t
 #include "shader_constants.h"
 #pragma pack(pop)
-        shader_constants;
+        shader;
 
     // all the com pointers
 
@@ -1409,8 +1409,6 @@ namespace
         UINT cf_png = RegisterClipboardFormat("PNG");
         UINT cf_filename = RegisterClipboardFormat(CFSTR_FILENAMEW);
 
-        bool got_clipboard = false;
-
         image::image_file &f = clipboard_image_file;
         f.is_clipboard = true;
         f.bytes.clear();
@@ -1420,13 +1418,12 @@ namespace
         if(IsClipboardFormatAvailable(cf_png)) {
 
             CHK_HR(append_clipboard_to_buffer(f.bytes, cf_png));
-            got_clipboard = true;
 
         } else if(IsClipboardFormatAvailable(CF_DIB)) {
 
             f.bytes.resize(sizeof(BITMAPFILEHEADER));
+
             CHK_HR(append_clipboard_to_buffer(f.bytes, CF_DIB));
-            got_clipboard = true;
 
             BITMAPFILEHEADER *b = reinterpret_cast<BITMAPFILEHEADER *>(f.bytes.data());
             BITMAPINFOHEADER *i = reinterpret_cast<BITMAPINFOHEADER *>(b + 1);
@@ -1439,7 +1436,7 @@ namespace
             }
         }
 
-        if(got_clipboard) {
+        if(!f.bytes.empty()) {
             select_active = false;
             f.filename = "Clipboard";
             f.hresult = S_OK;
@@ -2484,12 +2481,12 @@ namespace
         d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
         DXGI_SWAP_CHAIN_DESC desc;
-            swap_chain->GetDesc(&desc);
+        swap_chain->GetDesc(&desc);
 
-            float width = static_cast<float>(desc.BufferDesc.Width);
-            float height = static_cast<float>(desc.BufferDesc.Height);
+        float width = static_cast<float>(desc.BufferDesc.Width);
+        float height = static_cast<float>(desc.BufferDesc.Height);
 
-            CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
+        CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
 
         d3d_context->RSSetViewports(1, &viewport);
 
@@ -2502,33 +2499,32 @@ namespace
 
             vec2 grid_pos{ 0, 0 };
 
-            float gm = (1 << settings.grid_multiplier) / 4.0f;
-            uint gs = static_cast<uint>(settings.grid_size * current_rect.w / texture_width * gm);
+            shader.top_left[0] = static_cast<int>(current_rect.x);
+            shader.top_left[1] = static_cast<int>(current_rect.y);
 
-            if(gs < 4) {
-                gs = 0;
-            }
+            shader.bottom_right[0] = static_cast<int>(current_rect.x + current_rect.w - 1);
+            shader.bottom_right[1] = static_cast<int>(current_rect.y + current_rect.h - 1);
 
-            shader_constants.top_left = { current_rect.x, current_rect.y };
-            shader_constants.bottom_right = { current_rect.x + current_rect.w - 1,
-                                              current_rect.y + current_rect.h - 1 };
+            vec4 g1;
+            vec4 g2;
 
             if(settings.grid_enabled) {
-                vec4 g1 = color_from_uint32(settings.grid_color_1);
-                vec4 g2 = color_from_uint32(settings.grid_color_2);
-                shader_constants.grid_color[0] = g1;
-                shader_constants.grid_color[1] = g2;
-                shader_constants.grid_color[2] = g2;
-                shader_constants.grid_color[3] = g1;
+
+                g1 = color_from_uint32(settings.grid_color_1);
+                g2 = color_from_uint32(settings.grid_color_2);
+
             } else {
-                vec4 bg = color_from_uint32(settings.background_color);
-                shader_constants.grid_color[0] = bg;
-                shader_constants.grid_color[1] = bg;
-                shader_constants.grid_color[2] = bg;
-                shader_constants.grid_color[3] = bg;
+
+                g1 = color_from_uint32(settings.background_color);
+                g2 = g1;
             }
 
-            shader_constants.border_color = color_from_uint32(settings.border_color);
+            shader.grid_color[0] = g1;
+            shader.grid_color[1] = g2;
+            shader.grid_color[2] = g2;
+            shader.grid_color[3] = g1;
+
+            shader.border_color = color_from_uint32(settings.border_color);
 
             vec2 top_left = vec2::floor(current_rect.top_left());
             vec2 rect_size = vec2::floor(current_rect.size());
@@ -2537,50 +2533,65 @@ namespace
             vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
 
             if(settings.fixed_grid) {
-                vec2 g2{ 2.0f * gs, 2.0f * gs };
                 grid_pos = { -current_rect.x, -current_rect.y };
             }
 
-            shader_constants.uv_scale = texture_scale;
-            shader_constants.uv_offset = mul_point(uv_offset, texture_scale);
+            shader.overlay_grid_scale = div_point(texture_size(), current_rect.size());
+            shader.overlay_grid_offset =
+                mul_point({ -1, -1 }, mul_point(shader.overlay_grid_scale, current_rect.top_left()));
 
-            shader_constants.grid_size = std::max(2u, gs - 1u);
-            shader_constants.grid_offset = grid_pos;
+            shader.grid_overlay_color = { 0, 0, 0, 0 };
+            if(shader.overlay_grid_scale.x < 4 && shader.overlay_grid_scale.y < 4) {
+                // shader.grid_overlay_color = color_from_uint32(settings.overlay_grid_color);
+            }
+            shader.overlay_grid_scale = div_point(texture_size(), current_rect.size());
 
-            memset(shader_constants.inner_select_rect, 0, sizeof(shader_constants.inner_select_rect));
-            memset(shader_constants.outer_select_rect, 0, sizeof(shader_constants.outer_select_rect));
+
+            shader.overlay_grid_size = { static_cast<float>(settings.overlay_grid_width),
+                                         static_cast<float>(settings.overlay_grid_height) };
+
+            shader.uv_scale = texture_scale;
+            shader.uv_offset = mul_point(uv_offset, texture_scale);
+
+            float gm = (1 << settings.grid_multiplier) / 4.0f;
+            // uint gs = static_cast<uint>(settings.grid_size * current_rect.w / texture_width * gm);
+            float gs = floor(settings.grid_size * gm);
+
+            if(gs < 4) {
+                gs = 0;
+            }
+
+            shader.grid_size = gs;
+            shader.grid_offset = grid_pos;
+
+            memset(shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
+            memset(shader.outer_select_rect, 0, sizeof(shader.outer_select_rect));
 
             vec2 select_tl = vec2::min(select_anchor, select_current);
             vec2 select_br = vec2::max(select_anchor, select_current);
 
             if(select_active) {
 
-                using F = double;    // or float
+                // select_anchor, current are in texels, convert to screen coordinates
 
-                F crtlx = current_rect.x;
-                F crtly = current_rect.y;
+                float sltlx = floor(select_tl.x) * current_rect.w / texture_width + current_rect.x;
+                float sltly = floor(select_tl.y) * current_rect.h / texture_height + current_rect.y;
+                float slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + current_rect.x;
+                float slbry = floor(select_br.y + 1) * current_rect.h / texture_height + current_rect.y;
 
-                F sltlx = floor(select_tl.x) * current_rect.w / texture_width + crtlx;
-                F sltly = floor(select_tl.y) * current_rect.h / texture_height + crtly;
-                F slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + crtlx;
-                F slbry = floor(select_br.y + 1) * current_rect.h / texture_height + crtly;
+                shader.inner_select_rect[0] = static_cast<int>(round(sltlx));
+                shader.inner_select_rect[1] = static_cast<int>(round(sltly));
+                shader.inner_select_rect[2] = static_cast<int>(floor(slbrx));
+                shader.inner_select_rect[3] = static_cast<int>(floor(slbry));
 
-                auto &isr = shader_constants.inner_select_rect;
-                auto &osr = shader_constants.outer_select_rect;
+                shader.outer_select_rect[0] = shader.inner_select_rect[0] - settings.select_border_width;
+                shader.outer_select_rect[1] = shader.inner_select_rect[1] - settings.select_border_width;
+                shader.outer_select_rect[2] = shader.inner_select_rect[2] + settings.select_border_width;
+                shader.outer_select_rect[3] = shader.inner_select_rect[3] + settings.select_border_width;
 
-                isr[0] = (int)round(sltlx);
-                isr[1] = (int)round(sltly);
-                isr[2] = (int)round(slbrx);
-                isr[3] = (int)round(slbry);
+                shader.frame = frame_count;
 
-                osr[0] = isr[0] - settings.select_border_width;
-                osr[1] = isr[1] - settings.select_border_width;
-                osr[2] = isr[2] + settings.select_border_width;
-                osr[3] = isr[3] + settings.select_border_width;
-
-                shader_constants.frame = frame_count;
-
-                shader_constants.dash_length = settings.dash_length;
+                shader.dash_length = settings.dash_length;
 
                 // flash the selection color white for 1/3rd of a second when they copy
                 float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
@@ -2588,19 +2599,19 @@ namespace
 
                 vec4 select_fill = color_from_uint32(settings.select_fill_color);
 
-                shader_constants.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
+                shader.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
 
                 vec4 oc1 = color_from_uint32(settings.select_outline_color1);
                 vec4 oc2 = color_from_uint32(settings.select_outline_color2);
-                shader_constants.select_outline_color[0] = oc1;
-                shader_constants.select_outline_color[1] = oc2;
-                shader_constants.select_outline_color[2] = oc2;
-                shader_constants.select_outline_color[3] = oc1;
+                shader.select_outline_color[0] = oc1;
+                shader.select_outline_color[1] = oc2;
+                shader.select_outline_color[2] = oc2;
+                shader.select_outline_color[3] = oc1;
             }
 
             D3D11_MAPPED_SUBRESOURCE mapped_subresource;
             CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
-            memcpy(mapped_subresource.pData, &shader_constants, sizeof(shader_const_t));
+            memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
             d3d_context->Unmap(constant_buffer.Get(), 0);
 
             d3d_context->RSSetState(rasterizer_state.Get());
@@ -2636,7 +2647,7 @@ namespace
                 vec2 offset{ dpi_scale(18.0f), dpi_scale(12.0f) };
                 vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
                 vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
-                draw_string(std::format("X {} Y {}", (int)s_tl.x, (int)s_tl.y),
+                draw_string(std::format("X {} Y {}", (int)select_tl.x, (int)select_tl.y),
                             small_text_format.Get(),
                             s_tl,
                             { 1, 1 },
@@ -3764,27 +3775,31 @@ namespace imageview::app
                                         app::instance,
                                         null));
 
-        // pump messages
-
         CHK_HR(hotkeys::load());
 
         MSG msg;
-        mem_clear(&msg);
+        msg.message = WM_NULL;
 
-        do {
+        while(msg.message != WM_QUIT) {
+
             if(PeekMessageA(&msg, null, 0, 0, PM_REMOVE)) {
+
                 if(!TranslateAcceleratorA(window, hotkeys::accelerators, &msg)) {
+
                     TranslateMessage(&msg);
                     DispatchMessageA(&msg);
                 }
+
             } else {
+
                 HRESULT hr = update();
                 if(FAILED(hr)) {
+
                     error_message_box(localize(IDS_FATAL_ERROR), hr);
-                    ExitProcess(0);
+                    break;
                 }
             }
-        } while(msg.message != WM_QUIT);
+        }
 
         // window has been destroyed, save settings and clean up
 

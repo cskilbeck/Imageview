@@ -6,7 +6,7 @@
 //////////////////////////////////////////////////////////////////////
 // background colors { r,g,b,a }
 
-DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_BACKGROUND);
+DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_BACKGROUND);
 
 // border color beyond image bounds
 
@@ -19,7 +19,7 @@ DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xff00ff
 //////////////////////////////////////////////////////////////////////
 // grid
 
-DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_GRID);
+DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_GRID);
 
 // grid on or off
 
@@ -29,6 +29,13 @@ DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
 
 DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x202020, false);
 DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x505050, false);
+
+// overlay grid
+
+DECL_SETTING_COLOR(overlay_grid_color, IDS_SETTING_NAME_OVERLAY_GRID_COLOR, 0x80808080, true);
+
+DECL_SETTING_RANGED(overlay_grid_width, IDS_SETTING_NAME_OVERLAY_GRID_WIDTH, 8, 2, 512);
+DECL_SETTING_RANGED(overlay_grid_height, IDS_SETTING_NAME_OVERLAY_GRID_HEIGHT, 8, 2, 512);
 
 // grid size in pixels
 
@@ -45,7 +52,7 @@ DECL_SETTING_RANGED(grid_multiplier, IDS_SETTING_NAME_GRID_MULTIPLIER, 2, 1, 4);
 //////////////////////////////////////////////////////////////////////
 // select
 
-DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_SELECT);
+DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_SELECT);
 
 // selection rectangle fill color
 
@@ -80,7 +87,7 @@ DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0xffffff
 //////////////////////////////////////////////////////////////////////
 // mouse buttons
 
-DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_MOUSE);
+DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_MOUSE);
 
 // which mouse button for interactive zoom
 
@@ -101,7 +108,7 @@ DECL_SETTING_ENUM(mouse_button_t, menu_button, IDS_SETTING_NAME_MENU_BUTTON, enu
 //////////////////////////////////////////////////////////////////////
 // window
 
-DECL_SETTING_SEPARATOR(IDS_SETTING_SEPARATOR_WINDOW);
+DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_WINDOW);
 
 // has it ever been run before? if not, use some sensible defaults for window pos
 

@@ -16,6 +16,7 @@ namespace
         info.prev_scroll_pos[bar] = pos;
         if(move[bar] != 0) {
             ScrollWindow(info.hwnd, move[SB_HORZ], move[SB_VERT], NULL, NULL);
+            LOG_DEBUG("Scrolling to {} (delta {},{})", pos, move[0], move[1]);
         }
     }
 }
@@ -24,40 +25,35 @@ namespace imageview
 {
     //////////////////////////////////////////////////////////////////////
 
-    void update_scrollbars(scroll_info &info, HWND window, RECT const &rc)
+    void update_scrollbars(scroll_info &info, HWND window, RECT const &rc, SIZE const &sz)
     {
-        info.page_rect = rc;
         info.hwnd = window;
-        info.prev_scroll_pos[SB_HORZ] = 0;
-        info.prev_scroll_pos[SB_VERT] = 0;
-
-        RECT client_rect;
-        GetClientRect(info.hwnd, &client_rect);
 
         SCROLLINFO si;
         si.cbSize = sizeof(SCROLLINFO);
-        si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE;
-        si.nPos = 0;
-        si.nTrackPos = 0;
+        si.fMask = SIF_PAGE | SIF_RANGE | SIF_POS;
+
+        // horizontal
+        si.nPos = info.prev_scroll_pos[SB_HORZ];
+        si.nPage = rect_width(rc) + 1;
         si.nMin = 0;
+        si.nMax = sz.cx;
+        SetScrollInfo(info.hwnd, SB_HORZ, &si, true);
+        GetScrollInfo(info.hwnd, SB_HORZ, &si);
+        int xpos = si.nPos;
 
-        int page_width = rect_width(info.page_rect);
-        int client_width = rect_width(client_rect);
+        // vertical
+        si.nPos = info.prev_scroll_pos[SB_VERT];
+        si.nPage = rect_height(rc) + 1;
+        si.nMin = 0;
+        si.nMax = sz.cy;
+        SetScrollInfo(info.hwnd, SB_VERT, &si, true);
+        GetScrollInfo(info.hwnd, SB_VERT, &si);
+        int ypos = si.nPos;
 
-        if(page_width < client_width) {
-            si.nMax = client_width;
-            si.nPage = page_width;
-            SetScrollInfo(info.hwnd, SB_HORZ, &si, FALSE);
-        }
-
-        int page_height = rect_height(info.page_rect);
-        int client_height = rect_height(client_rect);
-
-        if(page_height < client_height) {
-            si.nMax = client_height;
-            si.nPage = page_height;
-            SetScrollInfo(info.hwnd, SB_VERT, &si, FALSE);
-        }
+        ScrollWindow(info.hwnd, -xpos, -ypos, null, null);
+        info.prev_scroll_pos[SB_HORZ] = xpos;
+        info.prev_scroll_pos[SB_VERT] = ypos;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -72,7 +68,7 @@ namespace imageview
         int page = static_cast<int>(si.nPage);
         int line = page * 10 / 100;
         int new_pos = std::clamp(si.nPos + line * lines, si.nMin, max_pos);
-        SetScrollPos(info.hwnd, bar, new_pos, TRUE);
+        SetScrollPos(info.hwnd, bar, new_pos, true);
         update_window_pos(info, bar, new_pos);
     }
 
@@ -123,7 +119,7 @@ namespace imageview
             new_pos = si.nPos;
             break;
         }
-        SetScrollPos(info.hwnd, bar, new_pos, TRUE);
+        SetScrollPos(info.hwnd, bar, new_pos, true);
         update_window_pos(info, bar, new_pos);
     }
 }

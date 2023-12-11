@@ -3,6 +3,8 @@
 
 #include "pch.h"
 
+LOG_CONTEXT("Settings");
+
 namespace
 {
     using namespace imageview;
@@ -49,6 +51,41 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+
+    void update_sections(HWND hwnd)
+    {
+        HWND tab_ctrl;
+        HWND parent = GetParent(hwnd);
+        tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
+
+        RECT tab_rect;
+        GetWindowRect(tab_ctrl, &tab_rect);
+        TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
+
+        // stack the sections
+
+        int total_height = 0;
+        for(auto const s : section_setting::sections) {
+
+            int height = s->banner_height;
+
+            if(s->expanded) {
+                height = s->expanded_height;
+            }
+
+            SetWindowPos(s->window, null, 0, total_height, rect_width(tab_rect), height, SWP_NOZORDER | SWP_SHOWWINDOW);
+
+            total_height += height;
+        }
+
+        // size the window to fit within the tab control exactly
+
+        SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
+
+        update_scrollbars(settings_scroll, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_VSCROLL
 
     void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
@@ -66,43 +103,58 @@ namespace
 
         settings_should_update = false;
 
-        // add all the settings controller child dialogs to the page
+        // create the list of settings controllers
+        setting_controllers.clear();
+        section_setting::sections.clear();
 
-        if(setting_controllers.empty()) {
-
-#undef DECL_SETTING_SEPARATOR
+#undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_COLOR
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define DECL_SETTING_SEPARATOR(string_id) setting_controllers.push_back(new separator_setting(string_id))
+#define DECL_SETTING_SECTION(string_id)          \
+    {                                            \
+        auto s = new section_setting(string_id); \
+        setting_controllers.push_back(s);        \
+    }
 
-#define DECL_SETTING_BOOL(name, string_id, value) \
-    setting_controllers.push_back(                \
-        new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name));
+#define DECL_SETTING_BOOL(name, string_id, value)                                                                    \
+    {                                                                                                                \
+        auto b =                                                                                                     \
+            new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name); \
+        setting_controllers.push_back(b);                                                                            \
+    }
 
-#define DECL_SETTING_COLOR(name, string_id, argb, alpha) \
-    setting_controllers.push_back(new color_setting(     \
-        #name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha));
+#define DECL_SETTING_COLOR(name, string_id, argb, alpha)                                                     \
+    {                                                                                                        \
+        auto c = new color_setting(                                                                          \
+            #name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha); \
+        setting_controllers.push_back(c);                                                                    \
+    }
 
-#define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)         \
-    setting_controllers.push_back(new enum_setting(#name,                   \
-                                                   string_id,               \
-                                                   IDD_DIALOG_SETTING_ENUM, \
-                                                   setting_enum_dlgproc,    \
-                                                   enum_names,              \
-                                                   reinterpret_cast<uint &>(dialog_settings.name)));
+#define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)                \
+    {                                                                              \
+        auto e = new enum_setting(#name,                                           \
+                                  string_id,                                       \
+                                  IDD_DIALOG_SETTING_ENUM,                         \
+                                  setting_enum_dlgproc,                            \
+                                  enum_names,                                      \
+                                  reinterpret_cast<uint &>(dialog_settings.name)); \
+        setting_controllers.push_back(e);                                          \
+    }
 
-#define DECL_SETTING_RANGED(name, string_id, value, min, max) \
-    setting_controllers.push_back(new ranged_setting(         \
-        #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max));
+#define DECL_SETTING_RANGED(name, string_id, value, min, max)                                                     \
+    {                                                                                                             \
+        auto r = new ranged_setting(                                                                              \
+            #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max); \
+        setting_controllers.push_back(r);                                                                         \
+    }
 
 #define DECL_SETTING_INTERNAL(setting_type, name, ...)
 
 #include "settings_fields.h"
-        }
 
         // get parent tab window rect
         HWND main_dialog = GetParent(hwnd);
@@ -117,27 +169,58 @@ namespace
 
         auto dpi_scale = [=](int x) { return static_cast<int>(x * dpi / 96.0f); };
 
-        int const top_margin = dpi_scale(12);
         int const inner_margin = dpi_scale(3);
-        int const bottom_margin = dpi_scale(12);
+        // int const bottom_margin = dpi_scale(12);
 
-        int cur_height = top_margin;
+        // create the sections and populate them
 
         for(auto const s : setting_controllers) {
-            HWND setting = CreateDialogParamA(
-                app::instance, MAKEINTRESOURCE(s->dialog_resource_id), hwnd, s->dlg_proc, reinterpret_cast<LPARAM>(s));
-            RECT r;
-            GetWindowRect(setting, &r);
-            SetWindowPos(
-                setting, null, 0, cur_height, rect_width(tab_rect), rect_height(r), SWP_NOZORDER | SWP_SHOWWINDOW);
-            cur_height += rect_height(r) + inner_margin;
+
+            // if it's a new section, parent should be hwnd, else parent should be the current section
+            if(s->is_section_header()) {
+
+                section_setting *cur_section = reinterpret_cast<section_setting *>(s);
+
+                HWND section_window = CreateDialogParamA(app::instance,
+                                                         MAKEINTRESOURCE(s->dialog_resource_id),
+                                                         hwnd,
+                                                         s->dlg_proc,
+                                                         reinterpret_cast<LPARAM>(s));
+
+                RECT rc;
+                GetWindowRect(section_window, &rc);
+
+                cur_section->banner_height = rect_height(rc);
+                cur_section->expanded_height = cur_section->banner_height;
+
+            } else {
+
+                section_setting *cur_section = section_setting::sections.back();
+
+                HWND controller_window = CreateDialogParamA(app::instance,
+                                                            MAKEINTRESOURCE(s->dialog_resource_id),
+                                                            cur_section->window,
+                                                            s->dlg_proc,
+                                                            reinterpret_cast<LPARAM>(s));
+
+                // stack the setting_controller within the section
+                SetWindowPos(controller_window,
+                             null,
+                             0,
+                             cur_section->expanded_height,
+                             0,
+                             0,
+                             SWP_NOZORDER | SWP_NOSIZE | SWP_SHOWWINDOW);
+
+                RECT rc;
+                GetWindowRect(controller_window, &rc);
+                int height = rect_height(rc);
+
+                cur_section->expanded_height += height + inner_margin;
+            }
         }
 
-        cur_height += bottom_margin;
-
-        // make this window big enough to contain the settings
-        SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), cur_height, SWP_NOZORDER | SWP_NOMOVE);
-        update_scrollbars(settings_scroll, hwnd, tab_rect);
+        update_sections(hwnd);
 
         // uncork the settings notifier
         settings_should_update = true;
@@ -151,6 +234,13 @@ namespace
     void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
         scroll_window(settings_scroll, SB_VERT, -zDelta / WHEEL_DELTA);
+    }
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS page \ WM_COMMAND (but faked from section button)
+
+    void on_command_settings(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    {
+        update_sections(hwnd);
     }
 }
 
@@ -166,6 +256,7 @@ namespace imageview::settings_dialog
             HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_settings);
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
             HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
+            HANDLE_MSG(hWnd, WM_COMMAND, on_command_settings);
         }
         return ctlcolor_base(hWnd, msg, wParam, lParam);
     }

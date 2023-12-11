@@ -45,6 +45,11 @@ namespace imageview
             return { floorf(a.x), floorf(a.y) };
         }
 
+        static vec2 ceil(vec2 const &a)
+        {
+            return { ceilf(a.x), ceilf(a.y) };
+        }
+
         static vec2 round(vec2 const &a)
         {
             return { roundf(a.x), roundf(a.y) };

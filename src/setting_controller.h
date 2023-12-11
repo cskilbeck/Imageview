@@ -36,6 +36,16 @@ namespace imageview::settings_dialog
             T *p = reinterpret_cast<T *>(GetWindowLongPtrA(w, GWLP_USERDATA));
             return *p;
         }
+
+        std::string name() const
+        {
+            return imageview::localize(string_resource_id);
+        }
+
+        virtual bool is_section_header() const
+        {
+            return false;
+        }
     };
 
     // this for everybody to make all controls have the correct background color
