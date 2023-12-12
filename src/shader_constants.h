@@ -33,11 +33,6 @@
     // grid offset is {0,0} for 'floating', otherwise based on image position
     float2 grid_offset;
 
-    float2 overlay_grid_offset;
-    float2 overlay_grid_scale;
-
-    float2 overlay_grid_size;
-
     // grid size in screen pixels
     float grid_size;
 

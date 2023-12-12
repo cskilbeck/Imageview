@@ -5,6 +5,11 @@
 // mutual exclude mouse buttons
 // file type association / handler thing
 // remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
+// get all the mouse handling stuff out of update() and into mouse move handler
+
+// Rename grid -> checkerboard
+// Remove grid multiplier setting
+// Remove overlay grid remnants
 
 // SetCursor not always being called when it should
 
@@ -26,7 +31,6 @@
 //      scanner
 
 #include "pch.h"
-#include <dcomp.h>
 
 #include "shader_inc/vs_rectangle.h"
 #include "shader_inc/ps_draw_everything.h"
@@ -310,10 +314,11 @@ namespace
         }
     };
 
-    // selection admin
-    bool selecting{ false };              // dragging new selection rectangle
+    bool selecting{ false };         // dragging new selection rectangle
+    bool drag_selection{ false };    // dragging the existing selection rectangle
+    bool grabbing_selection{ false };
+
     bool select_active{ false };          // a defined selection rectangle exists
-    bool drag_selection{ false };         // dragging the existing selection rectangle
     selection_hover_t selection_hover;    // where on the selection rectangle being hovered
     vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
     vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
@@ -2026,6 +2031,35 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // select nothing
+
+    void select_none()
+    {
+        drag_selection = false;
+        grabbing_selection = false;
+        select_active = false;
+        set_mouse_cursor(null);
+        SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // select the whole image
+
+    void select_all()
+    {
+        if(image_texture.Get() != null) {
+            drag_select_pos = { 0, 0 };
+            select_anchor = { 0, 0 };
+            select_current = sub_point(texture_size(), { 1, 1 });
+            selection_size = sub_point(select_current, select_anchor);
+            select_active = true;
+            selecting = false;
+            drag_selection = false;
+            grabbing_selection = false;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // find where on the selection the mouse is hovering
     //    sets selection_hover
     //    sets mouse cursor appropriately
@@ -2100,11 +2134,11 @@ namespace
             if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
 
                 // texel they were on when they grabbed the selection
+                grabbing_selection = true;
                 drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
-                drag_selection = true;
             }
 
-            if(!drag_selection && image_texture.Get() != null) {
+            if(!grabbing_selection && image_texture.Get() != null) {
 
                 select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
                 select_current = select_anchor;
@@ -2197,14 +2231,20 @@ namespace
 
         } else if(btn == settings.select_button) {
 
-            drag_selection = false;
+            if(grabbing_selection) {
+                select_none();
+            } else {
 
-            // when selection is finalized, select_anchor is top left, select_current is bottom right
-            vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
-            vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
-            select_anchor = tl;
-            select_current = br;
-            selection_size = sub_point(br, tl);
+                drag_selection = false;
+                grabbing_selection = false;
+
+                // when selection is finalized, select_anchor is top left, select_current is bottom right
+                vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
+                vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
+                select_anchor = tl;
+                select_current = br;
+                selection_size = sub_point(br, tl);
+            }
         }
     }
 
@@ -2361,22 +2401,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // select the whole image
-
-    void select_all()
-    {
-        if(image_texture.Get() != null) {
-            drag_select_pos = { 0, 0 };
-            select_anchor = { 0, 0 };
-            select_current = sub_point(texture_size(), { 1, 1 });
-            selection_size = sub_point(select_current, select_anchor);
-            select_active = true;
-            selecting = false;
-            drag_selection = false;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
 
     void reset_settings()
     {
@@ -2466,6 +2490,173 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // setup shader data
+
+    void setup_shader()
+    {
+        vec2 grid_pos{ 0, 0 };
+
+        shader.top_left[0] = static_cast<int>(current_rect.x);
+        shader.top_left[1] = static_cast<int>(current_rect.y);
+
+        shader.bottom_right[0] = static_cast<int>(current_rect.x + current_rect.w - 1);
+        shader.bottom_right[1] = static_cast<int>(current_rect.y + current_rect.h - 1);
+
+        vec4 g1;
+        vec4 g2;
+
+        if(settings.grid_enabled) {
+
+            g1 = color_from_uint32(settings.grid_color_1);
+            g2 = color_from_uint32(settings.grid_color_2);
+
+        } else {
+
+            g1 = color_from_uint32(settings.background_color);
+            g2 = g1;
+        }
+
+        shader.grid_color[0] = g1;
+        shader.grid_color[1] = g2;
+        shader.grid_color[2] = g2;
+        shader.grid_color[3] = g1;
+
+        shader.border_color = color_from_uint32(settings.border_color);
+
+        vec2 top_left = vec2::floor(current_rect.top_left());
+        vec2 rect_size = vec2::floor(current_rect.size());
+
+        vec2 texture_scale{ window_width / current_rect.w, window_height / current_rect.h };
+        vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
+
+        if(!settings.fixed_grid) {
+            grid_pos = { -current_rect.x, -current_rect.y };
+        }
+
+        shader.uv_scale = texture_scale;
+        shader.uv_offset = mul_point(uv_offset, texture_scale);
+
+        float gm = (1 << settings.grid_multiplier) / 4.0f;
+        // uint gs = static_cast<uint>(settings.grid_size * current_rect.w / texture_width * gm);
+        float gs = floor(settings.grid_size * gm);
+
+        if(gs < 4) {
+            gs = 0;
+        }
+
+        shader.grid_size = gs;
+        shader.grid_offset = grid_pos;
+
+        memset(shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
+        memset(shader.outer_select_rect, 0, sizeof(shader.outer_select_rect));
+
+        vec2 select_tl = vec2::min(select_anchor, select_current);
+        vec2 select_br = vec2::max(select_anchor, select_current);
+
+        if(select_active) {
+
+            // select_anchor, current are in texels, convert to screen coordinates
+
+            float sltlx = floor(select_tl.x) * current_rect.w / texture_width + current_rect.x;
+            float sltly = floor(select_tl.y) * current_rect.h / texture_height + current_rect.y;
+            float slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + current_rect.x;
+            float slbry = floor(select_br.y + 1) * current_rect.h / texture_height + current_rect.y;
+
+            shader.inner_select_rect[0] = static_cast<int>(floor(sltlx));
+            shader.inner_select_rect[1] = static_cast<int>(floor(sltly));
+            shader.inner_select_rect[2] = static_cast<int>(floor(slbrx - 1));
+            shader.inner_select_rect[3] = static_cast<int>(floor(slbry - 1));
+
+            shader.outer_select_rect[0] = shader.inner_select_rect[0] - settings.select_border_width;
+            shader.outer_select_rect[1] = shader.inner_select_rect[1] - settings.select_border_width;
+            shader.outer_select_rect[2] = shader.inner_select_rect[2] + settings.select_border_width;
+            shader.outer_select_rect[3] = shader.inner_select_rect[3] + settings.select_border_width;
+
+            shader.frame = frame_count;
+
+            shader.dash_length = settings.dash_length;
+
+            // flash the selection color white for 1/3rd of a second when they copy
+            float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
+            vec4 copy_flash_color = vec4{ 1, 1, 1, 0.5f };
+
+            vec4 select_fill = color_from_uint32(settings.select_fill_color);
+
+            shader.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
+
+            vec4 oc1 = color_from_uint32(settings.select_outline_color1);
+            vec4 oc2 = color_from_uint32(settings.select_outline_color2);
+            shader.select_outline_color[0] = oc1;
+            shader.select_outline_color[1] = oc2;
+            shader.select_outline_color[2] = oc2;
+            shader.select_outline_color[3] = oc1;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // draw text overlays after drawing the image
+
+    HRESULT draw_text_overlays()
+    {
+        vec2 select_tl = vec2::min(select_anchor, select_current);
+        vec2 select_br = vec2::max(select_anchor, select_current);
+
+        d2d_render_target->BeginDraw();
+
+        if(crosshairs_active) {
+            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+            std::string text{ std::format("X {} Y {}", (int)p.x, (int)p.y) };
+            vec2 screen_pos = texture_to_screen_pos(p);
+            screen_pos.x -= dpi_scale(12);
+            screen_pos.y += dpi_scale(8);
+            draw_string(
+                text, small_text_format.Get(), screen_pos, { 1, 0 }, 1.0f, small_label_padding, small_label_padding);
+        }
+
+        if(select_active) {
+            vec2 offset{ dpi_scale(18.0f), dpi_scale(12.0f) };
+            vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
+            vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
+            draw_string(std::format("X {} Y {}", (int)select_tl.x, (int)select_tl.y),
+                        small_text_format.Get(),
+                        s_tl,
+                        { 1, 1 },
+                        1.0f,
+                        2,
+                        2);
+            float sw = floor(select_br.x) - floorf(select_tl.x) + 1;
+            float sh = floorf(select_br.y) - floorf(select_tl.y) + 1;
+            draw_string(std::format("W {} H {}", sw, sh), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+        }
+
+        if(!current_message.empty()) {
+
+            float elapsed = static_cast<float>(m_timer.wall_time() - message_timestamp);
+
+            if(elapsed < message_fade_time) {
+
+                float message_alpha = elapsed / std::max(0.1f, message_fade_time);
+
+                message_alpha = 1 - powf(message_alpha, 16);
+
+                vec2 pos{ dpi_scale(16.0f), window_height - dpi_scale(12.0f) };
+
+                draw_string(std::format("{}", current_message),
+                            large_text_format.Get(),
+                            pos,
+                            { 0.0f, 1.0f },
+                            message_alpha,
+                            dpi_scale(3.0f),
+                            dpi_scale(3.0f));
+            }
+        }
+
+        CHK_HR(d2d_render_target->EndDraw());
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // render a frame
 
     HRESULT render()
@@ -2497,117 +2688,7 @@ namespace
 
         } else {
 
-            vec2 grid_pos{ 0, 0 };
-
-            shader.top_left[0] = static_cast<int>(current_rect.x);
-            shader.top_left[1] = static_cast<int>(current_rect.y);
-
-            shader.bottom_right[0] = static_cast<int>(current_rect.x + current_rect.w - 1);
-            shader.bottom_right[1] = static_cast<int>(current_rect.y + current_rect.h - 1);
-
-            vec4 g1;
-            vec4 g2;
-
-            if(settings.grid_enabled) {
-
-                g1 = color_from_uint32(settings.grid_color_1);
-                g2 = color_from_uint32(settings.grid_color_2);
-
-            } else {
-
-                g1 = color_from_uint32(settings.background_color);
-                g2 = g1;
-            }
-
-            shader.grid_color[0] = g1;
-            shader.grid_color[1] = g2;
-            shader.grid_color[2] = g2;
-            shader.grid_color[3] = g1;
-
-            shader.border_color = color_from_uint32(settings.border_color);
-
-            vec2 top_left = vec2::floor(current_rect.top_left());
-            vec2 rect_size = vec2::floor(current_rect.size());
-
-            vec2 texture_scale{ window_width / current_rect.w, window_height / current_rect.h };
-            vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
-
-            if(settings.fixed_grid) {
-                grid_pos = { -current_rect.x, -current_rect.y };
-            }
-
-            shader.overlay_grid_scale = div_point(texture_size(), current_rect.size());
-            shader.overlay_grid_offset =
-                mul_point({ -1, -1 }, mul_point(shader.overlay_grid_scale, current_rect.top_left()));
-
-            shader.grid_overlay_color = { 0, 0, 0, 0 };
-            if(shader.overlay_grid_scale.x < 4 && shader.overlay_grid_scale.y < 4) {
-                // shader.grid_overlay_color = color_from_uint32(settings.overlay_grid_color);
-            }
-            shader.overlay_grid_scale = div_point(texture_size(), current_rect.size());
-
-
-            shader.overlay_grid_size = { static_cast<float>(settings.overlay_grid_width),
-                                         static_cast<float>(settings.overlay_grid_height) };
-
-            shader.uv_scale = texture_scale;
-            shader.uv_offset = mul_point(uv_offset, texture_scale);
-
-            float gm = (1 << settings.grid_multiplier) / 4.0f;
-            // uint gs = static_cast<uint>(settings.grid_size * current_rect.w / texture_width * gm);
-            float gs = floor(settings.grid_size * gm);
-
-            if(gs < 4) {
-                gs = 0;
-            }
-
-            shader.grid_size = gs;
-            shader.grid_offset = grid_pos;
-
-            memset(shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
-            memset(shader.outer_select_rect, 0, sizeof(shader.outer_select_rect));
-
-            vec2 select_tl = vec2::min(select_anchor, select_current);
-            vec2 select_br = vec2::max(select_anchor, select_current);
-
-            if(select_active) {
-
-                // select_anchor, current are in texels, convert to screen coordinates
-
-                float sltlx = floor(select_tl.x) * current_rect.w / texture_width + current_rect.x;
-                float sltly = floor(select_tl.y) * current_rect.h / texture_height + current_rect.y;
-                float slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + current_rect.x;
-                float slbry = floor(select_br.y + 1) * current_rect.h / texture_height + current_rect.y;
-
-                shader.inner_select_rect[0] = static_cast<int>(round(sltlx));
-                shader.inner_select_rect[1] = static_cast<int>(round(sltly));
-                shader.inner_select_rect[2] = static_cast<int>(floor(slbrx));
-                shader.inner_select_rect[3] = static_cast<int>(floor(slbry));
-
-                shader.outer_select_rect[0] = shader.inner_select_rect[0] - settings.select_border_width;
-                shader.outer_select_rect[1] = shader.inner_select_rect[1] - settings.select_border_width;
-                shader.outer_select_rect[2] = shader.inner_select_rect[2] + settings.select_border_width;
-                shader.outer_select_rect[3] = shader.inner_select_rect[3] + settings.select_border_width;
-
-                shader.frame = frame_count;
-
-                shader.dash_length = settings.dash_length;
-
-                // flash the selection color white for 1/3rd of a second when they copy
-                float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
-                vec4 copy_flash_color = vec4{ 1, 1, 1, 0.5f };
-
-                vec4 select_fill = color_from_uint32(settings.select_fill_color);
-
-                shader.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
-
-                vec4 oc1 = color_from_uint32(settings.select_outline_color1);
-                vec4 oc2 = color_from_uint32(settings.select_outline_color2);
-                shader.select_outline_color[0] = oc1;
-                shader.select_outline_color[1] = oc2;
-                shader.select_outline_color[2] = oc2;
-                shader.select_outline_color[3] = oc1;
-            }
+            setup_shader();
 
             D3D11_MAPPED_SUBRESOURCE mapped_subresource;
             CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
@@ -2626,69 +2707,12 @@ namespace
             d3d_context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
             d3d_context->Draw(4, 0);
 
-            d2d_render_target->BeginDraw();
-
-            if(crosshairs_active) {
-                vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-                std::string text{ std::format("X {} Y {}", (int)p.x, (int)p.y) };
-                vec2 screen_pos = texture_to_screen_pos(p);
-                screen_pos.x -= dpi_scale(12);
-                screen_pos.y += dpi_scale(8);
-                draw_string(text,
-                            small_text_format.Get(),
-                            screen_pos,
-                            { 1, 0 },
-                            1.0f,
-                            small_label_padding,
-                            small_label_padding);
-            }
-
-            if(select_active) {
-                vec2 offset{ dpi_scale(18.0f), dpi_scale(12.0f) };
-                vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
-                vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
-                draw_string(std::format("X {} Y {}", (int)select_tl.x, (int)select_tl.y),
-                            small_text_format.Get(),
-                            s_tl,
-                            { 1, 1 },
-                            1.0f,
-                            2,
-                            2);
-                float sw = floor(select_br.x) - floorf(select_tl.x) + 1;
-                float sh = floorf(select_br.y) - floorf(select_tl.y) + 1;
-                draw_string(std::format("W {} H {}", sw, sh), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
-            }
-
-            if(!current_message.empty()) {
-
-                float elapsed = static_cast<float>(m_timer.wall_time() - message_timestamp);
-
-                if(elapsed < message_fade_time) {
-
-                    float message_alpha = elapsed / std::max(0.1f, message_fade_time);
-
-                    message_alpha = 1 - powf(message_alpha, 16);
-
-                    vec2 pos{ dpi_scale(16.0f), window_height - dpi_scale(12.0f) };
-
-                    draw_string(std::format("{}", current_message),
-                                large_text_format.Get(),
-                                pos,
-                                { 0.0f, 1.0f },
-                                message_alpha,
-                                dpi_scale(3.0f),
-                                dpi_scale(3.0f));
-                }
-            }
-
-            CHK_HR(d2d_render_target->EndDraw());
+            draw_text_overlays();
         }
 
         CHK_HR(present());
 
         return S_OK;
-
-        // if we copied into the copy texture, put it into the clipboard now
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2727,10 +2751,11 @@ namespace
             has_been_zoomed_or_dragged = true;
         }
 
-        selecting = get_mouse_buttons(settings.select_button) && image_texture.Get() != null;
+        selecting = get_mouse_buttons(settings.select_button) && image_texture.Get() != null && !grabbing_selection;
 
         if(selecting && !get_mouse_buttons(settings.zoom_button)) {
 
+            // get this out of update and into mouse move handler...
             if(drag_selection) {
 
                 vec2 mouse{ cur_mouse_pos };
@@ -2902,9 +2927,7 @@ namespace
             break;
 
         case ID_SELECT_NONE:
-            select_active = false;
-            set_mouse_cursor(null);
-            SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
+            select_none();
             break;
 
         case ID_VIEW_ALPHA:
@@ -3262,6 +3285,15 @@ namespace
             if(get_mouse_buttons(i)) {
                 mouse_offset[i] = add_point(mouse_offset[i], sub_point(cur_mouse_pos, mouse_pos[i]));
                 mouse_pos[i] = cur_mouse_pos;
+            }
+        }
+
+        if(grabbing_selection) {
+            vec2 diff = vec2(sub_point(mouse_click[settings.select_button], pos));
+            float len = vec2::length(diff);
+            if(len > dpi_scale(settings.select_start_distance)) {
+                drag_selection = true;
+                grabbing_selection = false;
             }
         }
 
