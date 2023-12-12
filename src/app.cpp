@@ -3799,11 +3799,11 @@ namespace imageview::app
 
         // right, register window class
 
-        HICON icon = LoadIcon(app::instance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
-        HCURSOR cursor = LoadCursor(null, IDC_ARROW);
+        HICON icon = LoadIconA(app::instance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
+        HCURSOR cursor = LoadCursorA(null, IDC_ARROW);
 
         WNDCLASSEXA wcex = {};
-        wcex.cbSize = sizeof(WNDCLASSEXW);
+        wcex.cbSize = sizeof(WNDCLASSEXA);
         wcex.style = CS_HREDRAW | CS_VREDRAW;
         wcex.lpfnWndProc = WndProc;
         wcex.hInstance = app::instance;

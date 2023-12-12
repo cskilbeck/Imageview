@@ -16,7 +16,6 @@ namespace
         info.prev_scroll_pos[bar] = pos;
         if(move[bar] != 0) {
             ScrollWindow(info.hwnd, move[SB_HORZ], move[SB_VERT], NULL, NULL);
-            LOG_DEBUG("Scrolling to {} (delta {},{})", pos, move[0], move[1]);
         }
     }
 }
