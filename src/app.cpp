@@ -346,8 +346,8 @@ namespace
     int texture_height{ 0 };
 
     // zoom limits in pixels
-    float min_zoom{ 8 };
-    float max_zoom{ 512 };
+    float min_zoom{ 8 };      // min size of entire image
+    float max_zoom{ 192 };    // max size of 1 pixel
 
     // frame/wall timer for animation
     timer_t m_timer;
@@ -2249,6 +2249,25 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // set max zoom to 1/10th of monitor largest dimension
+
+    void set_max_zoom(RECT const *r)
+    {
+        HMONITOR m = MonitorFromPoint(rect_midpoint(*r), MONITOR_DEFAULTTOPRIMARY);
+        if(m != null) {
+            MONITORINFO mi;
+            mi.cbSize = sizeof(mi);
+            if(GetMonitorInfo(m, &mi)) {
+                long w = rect_width(mi.rcMonitor);
+                long h = rect_height(mi.rcMonitor);
+                long dimension = std::max(w, h);
+                max_zoom = floor(dimension / 10.0f);
+                LOG_DEBUG("max_zoom set to {} (monitor is {}x{})", max_zoom, w, h);
+            }
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // zoom in or out, focusing on a point
 
     void do_zoom(POINT pos, int delta)
@@ -3389,6 +3408,8 @@ namespace
 
     void OnDpiChanged(HWND hwnd, UINT xdpi, UINT ydpi, RECT const *new_rect)
     {
+        set_max_zoom(new_rect);
+
         if(!ignore_dpi_for_a_moment) {
 
             uint new_dpi = xdpi;
@@ -3459,8 +3480,18 @@ namespace
 
     void OnShowWindow(HWND hwnd, BOOL fShow, UINT status)
     {
-        if(app::is_elevated && window_show_count == 0) {
-            PostMessage(hwnd, WM_COMMAND, ID_FILE_SETTINGS_EXPLORER, (LPARAM)hwnd);
+        // first time being shown?
+        if(window_show_count == 0) {
+
+            // init max zoom
+            RECT wr;
+            GetWindowRect(hwnd, &wr);
+            set_max_zoom(&wr);
+
+            // and pop the settings app to the explorer page if running elevated
+            if(app::is_elevated) {
+                PostMessage(hwnd, WM_COMMAND, ID_FILE_SETTINGS_EXPLORER, (LPARAM)hwnd);
+            }
         }
         window_show_count += 1;
     }

@@ -132,6 +132,13 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
+    inline POINT rect_midpoint(RECT const &r)
+    {
+        return { (r.left + r.right) / 2, (r.top + r.bottom) / 2 };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     inline int rect_width(RECT const &r)
     {
         return r.right - r.left;
