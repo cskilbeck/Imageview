@@ -20,7 +20,10 @@ namespace
         CHK_HR(shellLink->QueryInterface(IID_IPersistFile, reinterpret_cast<LPVOID *>(persistFile.GetAddressOf())));
         DEFER(persistFile->Release());
 
-        CHK_HR(persistFile->Load(shortcut_filename.c_str(), STGM_READ));
+        // silently fail because many permissions failures are not interesting
+        if(FAILED(persistFile->Load(shortcut_filename.c_str(), STGM_READ))) {
+            return S_FALSE;
+        }
 
         WCHAR target_path[MAX_PATH];
         CHK_HR(shellLink->GetPath(target_path, MAX_PATH, 0, SLGP_UNCPRIORITY));
@@ -72,27 +75,30 @@ namespace imageview::recent_files
             if(f != INVALID_HANDLE_VALUE) {
                 do {
 
+                    std::wstring path = std::format(L"{}\\{}", recent_file_path, find_data.cFileName);
+
                     std::wstring full_path;
-                    path_from_shortcut(std::format(L"{}\\{}", recent_file_path, find_data.cFileName), full_path);
 
-                    // ho hum, all files have .lnk extension
-                    // strip that first
+                    if(path_from_shortcut(path, full_path) == S_OK) {
+                        // ho hum, all files have .lnk extension
+                        // strip that first
 
-                    std::wstring stripped = make_lowercase(full_path);
+                        std::wstring stripped = make_lowercase(full_path);
 
-                    if(stripped.ends_with(L".lnk")) {
-                        stripped = stripped.substr(0, stripped.size() - 4);
-                    }
+                        if(stripped.ends_with(L".lnk")) {
+                            stripped = stripped.substr(0, stripped.size() - 4);
+                        }
 
-                    std::string extension;
-                    file::get_extension(utf8(stripped), extension);
+                        std::string extension;
+                        file::get_extension(utf8(stripped), extension);
 
-                    bool supported;
-                    image::is_file_extension_supported(extension, supported);
+                        bool supported;
+                        image::is_file_extension_supported(extension, supported);
 
-                    if(supported) {
-                        LOG_DEBUG(L"POINTS AT {}", full_path);
-                        all_files.emplace(full_path, find_data.ftLastAccessTime);
+                        if(supported) {
+                            LOG_DEBUG(L"POINTS AT {}", full_path);
+                            all_files.emplace(full_path, find_data.ftLastAccessTime);
+                        }
                     }
 
                 } while(FindNextFileW(f, &find_data));

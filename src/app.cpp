@@ -1053,6 +1053,120 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // get texture size as a vec2
+
+    vec2 texture_size()
+    {
+        return { (float)texture_width, (float)texture_height };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // get window size as a vec2
+
+    vec2 window_size()
+    {
+        return { (float)window_width, (float)window_height };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // get size of a texel in window pixels
+
+    vec2 texel_size()
+    {
+        return div_point(current_rect.size(), texture_size());
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // convert a texel pos to a window pixel pos
+
+    vec2 texels_to_pixels(vec2 pos)
+    {
+        return mul_point(pos, texel_size());
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // clamp a texel pos to the texture dimensions
+
+    vec2 clamp_to_texture(vec2 pos)
+    {
+        vec2 t = texture_size();
+        return vec2{ std::clamp(pos.x, 0.0f, t.x - 1), std::clamp(pos.y, 0.0f, t.y - 1) };
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // convert a window pixel pos to a texel pos
+
+    vec2 screen_to_texture_pos(vec2 pos)
+    {
+        vec2 relative_pos = sub_point(pos, current_rect.top_left());
+        return div_point(relative_pos, texel_size());
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // convert a window pos to texel pos
+
+    vec2 screen_to_texture_pos(POINT pos)
+    {
+        return screen_to_texture_pos(vec2(pos));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // convert texel pos to window pixel pos with clamp to texture
+
+    vec2 texture_to_screen_pos(vec2 pos)
+    {
+        return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(clamp_to_texture(pos))));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // convert texel pos to window pixel pos without clamp
+
+    vec2 texture_to_screen_pos_unclamped(vec2 pos)
+    {
+        return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(pos)));
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // set the mouse cursor and track it
+
+    void set_mouse_cursor(HCURSOR c)
+    {
+        if(c == null) {
+            c = LoadCursor(null, IDC_ARROW);
+        }
+        current_mouse_cursor = c;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // select nothing
+
+    void clear_selection()
+    {
+        drag_selection = false;
+        grabbing_selection = false;
+        select_active = false;
+        set_mouse_cursor(null);
+        SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // select the whole image
+
+    void select_all()
+    {
+        if(image_texture.Get() != null) {
+            drag_select_pos = { 0, 0 };
+            select_anchor = { 0, 0 };
+            select_current = sub_point(texture_size(), { 1, 1 });
+            selection_size = sub_point(select_current, select_anchor);
+            select_active = true;
+            selecting = false;
+            drag_selection = false;
+            grabbing_selection = false;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // reset the zoom mode to one of `reset_zoom_mode`
 
     void reset_zoom(zoom_mode_t mode)
@@ -1442,7 +1556,7 @@ namespace
         }
 
         if(!f.bytes.empty()) {
-            select_active = false;
+            clear_selection();
             f.filename = "Clipboard";
             f.hresult = S_OK;
             f.index = -1;
@@ -1708,80 +1822,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // get texture size as a vec2
-
-    vec2 texture_size()
-    {
-        return { (float)texture_width, (float)texture_height };
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // get window size as a vec2
-
-    vec2 window_size()
-    {
-        return { (float)window_width, (float)window_height };
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // get size of a texel in window pixels
-
-    vec2 texel_size()
-    {
-        return div_point(current_rect.size(), texture_size());
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // convert a texel pos to a window pixel pos
-
-    vec2 texels_to_pixels(vec2 pos)
-    {
-        return mul_point(pos, texel_size());
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // clamp a texel pos to the texture dimensions
-
-    vec2 clamp_to_texture(vec2 pos)
-    {
-        vec2 t = texture_size();
-        return vec2{ std::clamp(pos.x, 0.0f, t.x - 1), std::clamp(pos.y, 0.0f, t.y - 1) };
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // convert a window pixel pos to a texel pos
-
-    vec2 screen_to_texture_pos(vec2 pos)
-    {
-        vec2 relative_pos = sub_point(pos, current_rect.top_left());
-        return div_point(relative_pos, texel_size());
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // convert a window pos to texel pos
-
-    vec2 screen_to_texture_pos(POINT pos)
-    {
-        return screen_to_texture_pos(vec2(pos));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // convert texel pos to window pixel pos with clamp to texture
-
-    vec2 texture_to_screen_pos(vec2 pos)
-    {
-        return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(clamp_to_texture(pos))));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // convert texel pos to window pixel pos without clamp
-
-    vec2 texture_to_screen_pos_unclamped(vec2 pos)
-    {
-        return add_point(current_rect.top_left(), texels_to_pixels(vec2::floor(pos)));
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // this is a mess, but kinda necessarily so
 
     HRESULT get_startup_rect_and_style(RECT *r, DWORD *style, DWORD *ex_style)
@@ -2020,46 +2060,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // set the mouse cursor and track it
-
-    void set_mouse_cursor(HCURSOR c)
-    {
-        if(c == null) {
-            c = LoadCursor(null, IDC_ARROW);
-        }
-        current_mouse_cursor = c;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // select nothing
-
-    void select_none()
-    {
-        drag_selection = false;
-        grabbing_selection = false;
-        select_active = false;
-        set_mouse_cursor(null);
-        SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // select the whole image
-
-    void select_all()
-    {
-        if(image_texture.Get() != null) {
-            drag_select_pos = { 0, 0 };
-            select_anchor = { 0, 0 };
-            select_current = sub_point(texture_size(), { 1, 1 });
-            selection_size = sub_point(select_current, select_anchor);
-            select_active = true;
-            selecting = false;
-            drag_selection = false;
-            grabbing_selection = false;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // find where on the selection the mouse is hovering
     //    sets selection_hover
     //    sets mouse cursor appropriately
@@ -2232,7 +2232,7 @@ namespace
         } else if(btn == settings.select_button) {
 
             if(grabbing_selection) {
-                select_none();
+                clear_selection();
             } else {
 
                 drag_selection = false;
@@ -2946,7 +2946,7 @@ namespace
             break;
 
         case ID_SELECT_NONE:
-            select_none();
+            clear_selection();
             break;
 
         case ID_VIEW_ALPHA:
@@ -3087,9 +3087,6 @@ namespace
 
         // if there was no file load requested on the command line
         // and auto-paste is on, try to paste an image from the clipboard
-        if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
-            return on_paste();
-        }
         setup_window_text();
         return TRUE;
     }
@@ -3802,7 +3799,8 @@ namespace imageview::app
         HICON icon = LoadIconA(app::instance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
         HCURSOR cursor = LoadCursorA(null, IDC_ARROW);
 
-        WNDCLASSEXA wcex = {};
+        WNDCLASSEXA wcex;
+        mem_clear(&wcex);
         wcex.cbSize = sizeof(WNDCLASSEXA);
         wcex.style = CS_HREDRAW | CS_VREDRAW;
         wcex.lpfnWndProc = WndProc;
@@ -3839,6 +3837,10 @@ namespace imageview::app
                                         null));
 
         CHK_HR(hotkeys::load());
+
+        if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
+            on_paste();
+        }
 
         MSG msg;
         msg.message = WM_NULL;
