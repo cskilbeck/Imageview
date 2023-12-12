@@ -76,6 +76,10 @@ DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 64);
 DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0xff000000, true);
 DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0xffffffff, true);
 
+// crosshair dash length
+
+DECL_SETTING_RANGED(crosshair_dash_length, IDS_SETTING_NAME_CROSSHAIR_DASH_LENGTH, 8, 4, 64);
+
 //////////////////////////////////////////////////////////////////////
 // mouse buttons
 

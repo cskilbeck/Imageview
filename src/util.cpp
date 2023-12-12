@@ -445,4 +445,28 @@ namespace imageview
 
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT copy_string_to_clipboard(std::string const &string)
+    {
+        SetLastError(0);
+
+        HANDLE handle;
+        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, string.size() + 1));
+
+        char *buffer;
+        CHK_NULL(buffer = reinterpret_cast<char *>(GlobalLock(handle)));
+        DEFER(GlobalUnlock(handle));
+
+        memcpy(buffer, string.c_str(), string.size() + 1);
+
+        CHK_BOOL(OpenClipboard(null));
+        DEFER(CloseClipboard());
+
+        CHK_BOOL(EmptyClipboard());
+        CHK_BOOL(SetClipboardData(CF_TEXT, handle));
+
+        return S_OK;
+    }
 }

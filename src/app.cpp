@@ -6,6 +6,7 @@
 // file type association / handler thing
 // remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
 // get all the mouse handling stuff out of update() and into mouse move handler
+// UTF16 everywhere
 
 // Rename grid -> checkerboard
 // Remove grid multiplier setting
@@ -13,7 +14,6 @@
 
 // SetCursor not always being called when it should
 
-// crosshairs
 // flip/rotate
 // colorspace / SRGB / HDR
 // overlay grid
@@ -183,7 +183,9 @@ namespace
     float message_fade_time{ 0 };
 
     vec2 small_label_size{ 0, 0 };
-    float small_label_padding{ 2.0f };
+    float label_pad{ 2.0f };
+
+    std::string rgb_pixel_text;
 
     uint64 cache_in_use{ 0 };
     std::mutex cache_mutex;
@@ -1371,7 +1373,7 @@ namespace
 
         CHK_HR(create_text_formats());
 
-        CHK_HR(measure_string("X 9999 Y 9999", small_text_format.Get(), small_label_padding, small_label_size));
+        CHK_HR(measure_string("X 9999 Y 9999", small_text_format.Get(), label_pad, small_label_size));
 
         return S_OK;
     }
@@ -2515,6 +2517,25 @@ namespace
     {
         vec2 grid_pos{ 0, 0 };
 
+        shader.frame = -frame_count;
+
+        shader.crosshairs = { -1, -1 };
+
+        if(crosshairs_active) {
+
+            vec4 oc1 = color_from_uint32(settings.crosshair_color1);
+            vec4 oc2 = color_from_uint32(settings.crosshair_color2);
+
+            shader.crosshair_color[0] = oc1;
+            shader.crosshair_color[1] = oc2;
+
+            shader.crosshair_dash_length = settings.crosshair_dash_length;
+
+            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+            vec2 ts = mul_point(texel_size(), { 0.5f, 0.5f });
+            shader.crosshairs = add_point(texture_to_screen_pos(p), ts);
+        }
+
         shader.top_left[0] = static_cast<int>(current_rect.x);
         shader.top_left[1] = static_cast<int>(current_rect.y);
 
@@ -2591,10 +2612,15 @@ namespace
             shader.outer_select_rect[2] = shader.inner_select_rect[2] + settings.select_border_width;
             shader.outer_select_rect[3] = shader.inner_select_rect[3] + settings.select_border_width;
 
-            shader.frame = frame_count;
-
             shader.dash_length = settings.dash_length;
 
+            vec4 oc1 = color_from_uint32(settings.select_outline_color1);
+            vec4 oc2 = color_from_uint32(settings.select_outline_color2);
+
+            shader.select_outline_color[0] = oc1;
+            shader.select_outline_color[1] = oc2;
+
+            shader.dash_length = settings.dash_length;
             // flash the selection color white for 1/3rd of a second when they copy
             float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
             vec4 copy_flash_color = vec4{ 1, 1, 1, 0.5f };
@@ -2602,13 +2628,6 @@ namespace
             vec4 select_fill = color_from_uint32(settings.select_fill_color);
 
             shader.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
-
-            vec4 oc1 = color_from_uint32(settings.select_outline_color1);
-            vec4 oc2 = color_from_uint32(settings.select_outline_color2);
-            shader.select_outline_color[0] = oc1;
-            shader.select_outline_color[1] = oc2;
-            shader.select_outline_color[2] = oc2;
-            shader.select_outline_color[3] = oc1;
         }
     }
 
@@ -2617,26 +2636,38 @@ namespace
 
     HRESULT draw_text_overlays()
     {
-        vec2 select_tl = vec2::min(select_anchor, select_current);
-        vec2 select_br = vec2::max(select_anchor, select_current);
-
         d2d_render_target->BeginDraw();
 
         if(crosshairs_active) {
+
             vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-            std::string text{ std::format("X {} Y {}", (int)p.x, (int)p.y) };
+
+            image::image_t const &img = current_file->img;
+            byte const *pixel = img.pixels + img.row_pitch * (uint)p.y + (uint)p.x * 4;
+
             vec2 screen_pos = texture_to_screen_pos(p);
-            screen_pos.x -= dpi_scale(12);
-            screen_pos.y += dpi_scale(8);
-            draw_string(
-                text, small_text_format.Get(), screen_pos, { 1, 0 }, 1.0f, small_label_padding, small_label_padding);
+            screen_pos.x += texel_size().x / 2 - dpi_scale(label_pad * 3);
+            screen_pos.y -= dpi_scale(4);
+
+            std::string text{ std::format("{},{}", (int)p.x, (int)p.y) };
+            draw_string(text, small_text_format.Get(), screen_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
+
+            // pixels are BGRA, show as RGBA
+            rgb_pixel_text = std::format("{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
+
+            screen_pos.x += dpi_scale(label_pad * 6);
+            draw_string(rgb_pixel_text, small_text_format.Get(), screen_pos, { 0, 1 }, 1.0f, label_pad, label_pad);
         }
 
         if(select_active) {
+
+            vec2 select_tl = vec2::min(select_anchor, select_current);
+            vec2 select_br = vec2::max(select_anchor, select_current);
+
             vec2 offset{ dpi_scale(18.0f), dpi_scale(12.0f) };
             vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
             vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
-            draw_string(std::format("X {} Y {}", (int)select_tl.x, (int)select_tl.y),
+            draw_string(std::format("{},{}", (int)select_tl.x, (int)select_tl.y),
                         small_text_format.Get(),
                         s_tl,
                         { 1, 1 },
@@ -2645,7 +2676,7 @@ namespace
                         2);
             float sw = floor(select_br.x) - floorf(select_tl.x) + 1;
             float sh = floorf(select_br.y) - floorf(select_tl.y) + 1;
-            draw_string(std::format("W {} H {}", sw, sh), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+            draw_string(std::format("{}x{}", sw, sh), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
         }
 
         if(!current_message.empty()) {
@@ -2739,6 +2770,8 @@ namespace
 
     HRESULT update()
     {
+        crosshairs_active = (GetKeyState(VK_MENU) & 0x8000) != 0;
+
         m_timer.update();
 
         float delta_t = static_cast<float>(std::min(m_timer.delta(), 0.25));
@@ -2927,6 +2960,12 @@ namespace
 
         case ID_COPY:
             on_copy();
+            break;
+
+        case ID_COPY_RGB:
+            if(crosshairs_active && SUCCEEDED(copy_string_to_clipboard(rgb_pixel_text))) {
+                set_message(std::format("Copied {}", rgb_pixel_text), 3);
+            }
             break;
 
         case ID_ZOOM_RESET:
@@ -3504,13 +3543,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void OnSysKey(HWND hwnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
-    {
-        crosshairs_active = fDown;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
     LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
 #if defined(_DEBUG) && 0
@@ -3562,8 +3594,6 @@ namespace
             HANDLE_MSG(hwnd, WM_EXITSIZEMOVE, OnExitSizeMove);
             HANDLE_MSG(hwnd, WM_POWERBROADCAST, OnPowerBroadcast);
             HANDLE_MSG(hwnd, WM_SYSCOMMAND, OnSysCommand);
-            HANDLE_MSG(hwnd, WM_SYSKEYDOWN, OnSysKey);
-            HANDLE_MSG(hwnd, WM_SYSKEYUP, OnSysKey);
 
             //////////////////////////////////////////////////////////////////////
 
@@ -3691,9 +3721,7 @@ namespace imageview::app
     HRESULT load_image_file(std::string const &filepath)
     {
         if(!file::exists(filepath)) {
-            std::string msg(filepath);
-            msg = msg.substr(0, msg.find_first_of("\r\n\t"));
-            set_message(std::format("{} {}", localize(IDS_CANT_LOAD_FILE), msg), 2.0f);
+            set_message(std::format("{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2.0f);
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);

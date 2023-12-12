@@ -25,10 +25,15 @@
     float4 select_color;
 
     // selection outline grid colors in a 2x2 checkerboard
-    float4 select_outline_color[4];
+    float4 select_outline_color[2];
+
+    float4 crosshair_color[2];
 
     // colors for the crosshairs in a 2x2 checkerboard
     float4 line_color[4];
+
+    // x,y in pixels of crosshairs (set to -1,-1 to deactivate)
+    float2 crosshairs;
 
     // grid offset is {0,0} for 'floating', otherwise based on image position
     float2 grid_offset;
@@ -41,6 +46,8 @@
 
     // dash line length for select outline/crosshairs
     uint dash_length;
+
+    uint crosshair_dash_length;
 
     // selection outline width in pixels
     int select_border_width;

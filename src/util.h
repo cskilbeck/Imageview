@@ -34,6 +34,7 @@ namespace imageview
     float get_window_dpi(HWND w);
     std::string get_app_filename();
     HRESULT get_app_version(std::string &version);
+    HRESULT copy_string_to_clipboard(std::string const &string);
 
     //////////////////////////////////////////////////////////////////////
 

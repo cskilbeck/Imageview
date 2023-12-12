@@ -178,6 +178,7 @@ BEGIN
     IDS_SETTING_NAME_OVERLAY_GRID_HEIGHT "Grid height"
     IDS_SETTING_NAME_OVERLAY_GRID_COLOR "Grid color"
     IDS_SETTING_SEPARATOR_FILES "Files"
+    IDS_SETTING_NAME_CROSSHAIR_DASH_LENGTH "Crosshair dash length"
 END
 
 #endif    // English (Neutral) resources
@@ -313,6 +314,7 @@ BEGIN
     "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
+    "C",            ID_COPY_RGB,            VIRTKEY, ALT, NOINVERT
 END
 
 
