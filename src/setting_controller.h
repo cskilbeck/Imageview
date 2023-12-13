@@ -55,4 +55,6 @@ namespace imageview::settings_ui
     BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam);
 
     INT_PTR setting_base_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
+
+    LRESULT CALLBACK slider_subclass_handler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR);
 }

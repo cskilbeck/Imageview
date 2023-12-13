@@ -15,7 +15,7 @@ namespace imageview::settings_ui
             , banner_height(0)
             , current_height(0)
             , target_height(0)
-            , value(v)
+            , expanded(v)
         {
         }
 
@@ -34,7 +34,7 @@ namespace imageview::settings_ui
         int banner_height;
         int current_height;
         int target_height;
-        bool &value;
+        bool &expanded;
 
         static std::list<section_setting *> sections;
     };

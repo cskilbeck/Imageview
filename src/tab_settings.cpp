@@ -290,7 +290,7 @@ namespace
         for(auto const s : setting_controllers) {
             if(s->is_section_header()) {
                 section_setting *ss = reinterpret_cast<section_setting *>(s);
-                if(ss->value) {
+                if(ss->expanded) {
                     ss->target_height = ss->expanded_height;
                     ss->current_height = ss->expanded_height;
                 }
@@ -326,7 +326,9 @@ namespace
 
     void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
     {
-        show_this_section = reinterpret_cast<section_setting const *>(lparam);
+        if(wparam) {
+            show_this_section = reinterpret_cast<section_setting const *>(lparam);
+        }
         update_sections(hwnd);
     }
 

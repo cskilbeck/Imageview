@@ -34,6 +34,8 @@ namespace imageview::settings_ui
         SendMessage(slider, TBM_SETRANGEMAX, false, max_value);
         SendMessage(slider, TBM_SETRANGEMIN, false, min_value);
         setting_controller::setup_controls(hwnd);
+
+        SetWindowSubclass(slider, slider_subclass_handler, 0, 0);
     }
 
     //////////////////////////////////////////////////////////////////////

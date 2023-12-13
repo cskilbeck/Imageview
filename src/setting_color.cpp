@@ -116,6 +116,7 @@ namespace imageview::settings_ui
                 SendMessage(slider, TBM_SETPOS, true, cur_alpha);
             }
         }
+        SetWindowSubclass(slider, slider_subclass_handler, 0, 0);
 
         setting_controller::setup_controls(hwnd);
     }

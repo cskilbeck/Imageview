@@ -6,6 +6,23 @@
 namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
+    // erk - forward mousewheel messages for sliders to the tab page (parent of parent)
+
+    LRESULT CALLBACK slider_subclass_handler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR, DWORD_PTR)
+    {
+        switch(msg) {
+        case WM_MOUSEWHEEL:
+            // ack!
+            SendMessage(GetParent(GetParent(hwnd)), msg, wparam, lparam);
+            break;
+
+        default:
+            return DefSubclassProc(hwnd, msg, wparam, lparam);
+        }
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // tab pages have white backgrounds - this sets the background of all controls to white
 
     HBRUSH on_ctl_color_base(HWND hwnd, HDC hdc, HWND hwndChild, int type)

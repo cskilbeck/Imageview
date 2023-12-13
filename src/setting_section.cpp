@@ -23,17 +23,18 @@ namespace
 
     void on_lbuttondown_setting_section(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
     {
-        HWND tab = GetParent(hwnd);
         section_setting &setting = setting_controller::get<section_setting>(hwnd);
-        setting.value = !setting.value;
-        LOG_DEBUG("{}", setting.value);
-        if(setting.value) {
+
+        setting.expanded = !setting.expanded;
+
+        if(setting.expanded) {
             setting.target_height = setting.expanded_height;
-            PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
         } else {
             setting.target_height = setting.banner_height;
-            PostMessage(tab, WM_USER, 0, 0);
         }
+
+        HWND tab = GetParent(hwnd);
+        PostMessage(tab, WM_USER, setting.expanded, reinterpret_cast<LPARAM>(&setting));
     }
 }
 
