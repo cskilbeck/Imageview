@@ -2504,35 +2504,11 @@ namespace
 
     void setup_shader()
     {
-        vec2 grid_pos{ 0, 0 };
+        // border / image / checkerboard
 
-        shader.frame = -frame_count;
-
-        shader.crosshairs = { -99999, 99999 };
-
-        if(crosshairs_active) {
-
-            shader.crosshair_width = { settings.crosshair_width / 2.0f, settings.crosshair_width / 2.0f };
-
-            vec4 oc1 = color_from_uint32(settings.crosshair_color1);
-            vec4 oc2 = color_from_uint32(settings.crosshair_color2);
-
-            shader.crosshair_color[0] = oc1;
-            shader.crosshair_color[1] = oc2;
-
-            shader.crosshair_dash_length = settings.crosshair_dash_length;
-
-            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-            vec2 ts = mul_point(texel_size(), { 0.5f, 0.5f });
-
-            shader.crosshairs = add_point(texture_to_screen_pos(p), ts);
-        }
-
-        shader.top_left[0] = static_cast<int>(current_rect.x);
-        shader.top_left[1] = static_cast<int>(current_rect.y);
-
-        shader.bottom_right[0] = static_cast<int>(current_rect.x + current_rect.w - 1);
-        shader.bottom_right[1] = static_cast<int>(current_rect.y + current_rect.h - 1);
+        shader.image_rect = {
+            current_rect.x, current_rect.y, current_rect.x + current_rect.w - 1, current_rect.y + current_rect.h - 1
+        };
 
         vec4 g1;
         vec4 g2;
@@ -2561,6 +2537,8 @@ namespace
         vec2 texture_scale{ window_width / current_rect.w, window_height / current_rect.h };
         vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
 
+        vec2 grid_pos{ 0, 0 };
+
         if(!settings.fixed_grid) {
             grid_pos = { -current_rect.x, -current_rect.y };
         }
@@ -2570,16 +2548,42 @@ namespace
 
         uint gs = settings.grid_size * (1 << settings.grid_multiplier);
 
-        shader.grid_size = static_cast<float>(std::max(4u, gs));
+        shader.grid_size = 1.0f / std::max(4u, gs);
         shader.grid_offset = grid_pos;
 
-        memset(shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
-        memset(shader.outer_select_rect, 0, sizeof(shader.outer_select_rect));
+        // crosshairs
 
-        vec2 select_tl = vec2::min(select_anchor, select_current);
-        vec2 select_br = vec2::max(select_anchor, select_current);
+        shader.crosshair_frame = fmodf(settings.crosshair_dash_anim_speed * frame_count / 10.0f,
+                                       (float)settings.crosshair_dash_length * 2.0f);
+
+        shader.crosshairs = { 0, 0 };
+        shader.crosshair_width = { -1, -1 };
+
+        if(crosshairs_active) {
+
+            shader.crosshair_color[0] = color_from_uint32(settings.crosshair_color1);
+            shader.crosshair_color[1] = color_from_uint32(settings.crosshair_color2);
+
+            shader.crosshair_dash_length = 1.0f / settings.crosshair_dash_length;
+
+            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+            vec2 ts = mul_point(texel_size(), { 0.5f, 0.5f });
+            shader.crosshairs = add_point(texture_to_screen_pos(p), ts);
+
+            shader.crosshair_width = { settings.crosshair_width / 2.0f, settings.crosshair_width / 2.0f };
+        }
+
+        // selection rectangle
+
+        memset(&shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
+        memset(&shader.outer_select_rect, 0, sizeof(shader.outer_select_rect));
+
+        shader.select_frame = fmodf(settings.dash_anim_speed * frame_count / 10.0f, (float)settings.dash_length * 2.0f);
 
         if(select_active) {
+
+            vec2 select_tl = vec2::min(select_anchor, select_current);
+            vec2 select_br = vec2::max(select_anchor, select_current);
 
             // select_anchor, current are in texels, convert to screen coordinates
 
@@ -2588,25 +2592,19 @@ namespace
             float slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + current_rect.x;
             float slbry = floor(select_br.y + 1) * current_rect.h / texture_height + current_rect.y;
 
-            shader.inner_select_rect[0] = static_cast<int>(floor(sltlx));
-            shader.inner_select_rect[1] = static_cast<int>(floor(sltly));
-            shader.inner_select_rect[2] = static_cast<int>(floor(slbrx - 1));
-            shader.inner_select_rect[3] = static_cast<int>(floor(slbry - 1));
+            shader.inner_select_rect = { floor(sltlx), floor(sltly), floor(slbrx - 1), floor(slbry - 1) };
 
-            shader.outer_select_rect[0] = shader.inner_select_rect[0] - settings.select_border_width;
-            shader.outer_select_rect[1] = shader.inner_select_rect[1] - settings.select_border_width;
-            shader.outer_select_rect[2] = shader.inner_select_rect[2] + settings.select_border_width;
-            shader.outer_select_rect[3] = shader.inner_select_rect[3] + settings.select_border_width;
+            shader.outer_select_rect = XMVectorAdd(shader.inner_select_rect,
+                                                   { -(float)settings.select_border_width,
+                                                     -(float)settings.select_border_width,
+                                                     (float)settings.select_border_width,
+                                                     (float)settings.select_border_width });
 
-            shader.dash_length = settings.dash_length;
+            shader.select_dash_length = 1.0f / settings.dash_length;
 
-            vec4 oc1 = color_from_uint32(settings.select_outline_color1);
-            vec4 oc2 = color_from_uint32(settings.select_outline_color2);
+            shader.select_outline_color[0] = color_from_uint32(settings.select_outline_color1);
+            shader.select_outline_color[1] = color_from_uint32(settings.select_outline_color2);
 
-            shader.select_outline_color[0] = oc1;
-            shader.select_outline_color[1] = oc2;
-
-            shader.dash_length = settings.dash_length;
             // flash the selection color white for 1/3rd of a second when they copy
             float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
             vec4 copy_flash_color = vec4{ 1, 1, 1, 0.5f };

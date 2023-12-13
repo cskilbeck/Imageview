@@ -3,47 +3,43 @@
 Texture2D mytexture : register(t0);
 SamplerState mysampler : register(s0);
 
+float in_rect(float2 p, float4 rect)
+{
+    return all(float4(p.x > rect.x, p.y > rect.y, p.x < rect.z, p.y < rect.w));
+}
+
 float4 main(vs_out input) : SV_TARGET
 {
-    float4 pixel = border_color;
-
-    int2 p = input.position.xy;
-    uint anim1 = (uint) (p.x + p.y + frame);
-    uint anim2 = anim1 - top_left.x - top_left.y;
+    float2 p = input.position.xy;
 
     // checkerboard / image
 
-    if (p.x > top_left.x && p.y > top_left.y && p.x < bottom_right.x && p.y < bottom_right.y)
-    {
-        float4 background = 0;
-        float2 uv = input.texcoord * uv_scale + uv_offset;
-        pixel = mytexture.Sample(mysampler, uv);
+    float tl = in_rect(p, image_rect);
+    float2 uv = input.texcoord * uv_scale + uv_offset;
+    float4 pixel = mytexture.Sample(mysampler, uv);
+    int2 xy = int2((p.xy + grid_offset) * grid_size) & int2(1, 1);
+    float4 check = checkerboard_color[xy.x + (xy.y * 2)];
+    float4 background = lerp(border_color, check, tl);
+    pixel = lerp(background, pixel, pixel.a);
 
-        int2 xy = floor(fmod((p + grid_offset) / grid_size, 2));
-        background = checkerboard_color[xy.x + (xy.y * 2)];
+    // selection inner
 
-        pixel = lerp(background, pixel, pixel.a);
-    }
+    float inner = in_rect(p, inner_select_rect);
+    pixel = lerp(pixel, select_color, select_color.a * inner);
 
-    // selection
+    // selection rectangle
 
-    if (p.x > inner_select_rect.x && p.y > inner_select_rect.y && p.x < inner_select_rect.z && p.y < inner_select_rect.w)
-    {
-        pixel = lerp(pixel, select_color, select_color.a);
-    }
-    else if (p.x > outer_select_rect.x && p.y > outer_select_rect.y && p.x < outer_select_rect.z && p.y < outer_select_rect.w)
-    {
-        float4 overlay = select_outline_color[(anim2 / dash_length) % 2];
-        pixel = lerp(pixel, overlay, overlay.a);
-    }
+    float outer = in_rect(p, outer_select_rect);
+    float sel_anim = p.x + p.y - select_frame - image_rect.x - image_rect.y;
+    float4 overlay = select_outline_color[(int) (sel_anim * select_dash_length) & 1];
+    pixel = lerp(pixel, overlay, overlay.a * (outer * (1 - inner)));
 
     // crosshairs
 
-    if (any(abs(p - crosshairs) < crosshair_width))
-    {
-        float4 xhair = crosshair_color[(anim1 / crosshair_dash_length) % 2];
-        pixel = lerp(pixel, xhair, xhair.a);
-    }
+    float cross = any(abs(p - crosshairs) < crosshair_width);
+    float xhair_anim = p.x + p.y - crosshair_frame;
+    float4 xhair = crosshair_color[(int) (xhair_anim * crosshair_dash_length) & 1];
+    pixel = lerp(pixel, xhair, xhair.a * cross);
 
     return pixel;
 }

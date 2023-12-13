@@ -55,6 +55,10 @@ DECL_SETTING_RANGED(select_border_width, IDS_SETTING_NAME_SELECT_BORDER_WIDTH, 2
 
 DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 64);
 
+// speed of selection outline dash
+
+DECL_SETTING_RANGED(dash_anim_speed, IDS_SETTING_NAME_SELECT_DASH_ANIM_SPEED, 10, 0, 100);
+
 //////////////////////////////////////////////////////////////////////
 // crosshair
 
@@ -72,6 +76,10 @@ DECL_SETTING_RANGED(crosshair_dash_length, IDS_SETTING_NAME_CROSSHAIR_DASH_LENGT
 // crosshair dash length
 
 DECL_SETTING_RANGED(crosshair_width, IDS_SETTING_NAME_CROSSHAIR_WIDTH, 2, 1, 16);
+
+// speed of crosshair dash
+
+DECL_SETTING_RANGED(crosshair_dash_anim_speed, IDS_SETTING_NAME_CROSSHAIR_DASH_ANIM_SPEED, 10, 0, 100);
 
 //////////////////////////////////////////////////////////////////////
 // mouse buttons

@@ -181,6 +181,8 @@ BEGIN
     IDS_SETTING_NAME_CROSSHAIR_DASH_LENGTH "Crosshair dash length"
     IDS_SETTING_NAME_CROSSHAIR_WIDTH "Crosshair line width"
     IDS_SETTING_SEPARATOR_CROSSHAIR "Crosshair"
+    IDS_SETTING_NAME_SELECT_DASH_ANIM_SPEED "Dash speed"
+    IDS_SETTING_NAME_CROSSHAIR_DASH_ANIM_SPEED "Dash speed"
 END
 
 #endif    // English (Neutral) resources

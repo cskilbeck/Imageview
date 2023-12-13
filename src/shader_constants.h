@@ -7,19 +7,16 @@
     float4 border_color;
 
     // top left/bottom right of the image rectangle in screen coordinate
-    int2 top_left;
-    int2 bottom_right;
+    float4 image_rect;
 
     // grid colors in a 2x2 checkerboard pattern
     float4 checkerboard_color[4];
 
     // selection rectangle topleft/bottomright in screen coordinates
-    int4 inner_select_rect;
+    float4 inner_select_rect;
 
     // selection rectangle expanded to contain the outline which may be >1 wide
-    int4 outer_select_rect;
-
-    float4 grid_overlay_color;
+    float4 outer_select_rect;
 
     // selection overlay color
     float4 select_color;
@@ -29,9 +26,6 @@
 
     float4 crosshair_color[2];
 
-    // colors for the crosshairs in a 2x2 checkerboard
-    float4 line_color[4];
-
     // x,y in pixels of crosshairs (set to -1,-1 to deactivate)
     float2 crosshairs;
 
@@ -40,17 +34,18 @@
 
     float2 crosshair_width;
 
-    // grid size in screen pixels
+    // 1.0 / grid size in screen pixels
     float grid_size;
 
-    // current frame for animating select outline/crosshairs
-    int frame;
+    // current frame for animating select outline
+    float select_frame;
 
-    // dash line length for select outline/crosshairs
-    uint dash_length;
+    // 1.0 / dash line length for select outline
+    float select_dash_length;
 
-    uint crosshair_dash_length;
+    // current frame for animating crosshair
+    float crosshair_frame;
 
-    // selection outline width in pixels
-    int select_border_width;
+    // 1.0 / dash line length for crosshair
+    float crosshair_dash_length;
 }
