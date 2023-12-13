@@ -29,6 +29,11 @@ namespace imageview::settings_dialog
             return true;
         }
 
+        int height() const
+        {
+            return expanded ? expanded_height : banner_height;
+        }
+
         int expanded_height;
         int banner_height;
         int current_height;

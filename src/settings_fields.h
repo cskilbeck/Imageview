@@ -3,10 +3,36 @@
 #pragma warning(push)
 #pragma warning(disable : 4324)
 
-//////////////////////////////////////////////////////////////////////
-// background colors { r,g,b,a }
+// DECL_SETTING_SECTION(string_id)
+//
+// creates a new settings section in the UI
+// the first DECL_SETTING_xxx must be a SECTION. i.e. every setting must be in a section
 
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_BACKGROUND);
+// DECL_SETTING_BOOL(name, string_id, default_value)
+//
+// a boolean setting
+
+// DECL_SETTING_COLOR(name, string_id, default_rgba_value, alpha_enabled)
+//
+// 32 bit color with optional alpha slider
+// if !alpha_enabled, alpha is fixed at 255
+
+// DECL_SETTING_ENUM(name, string_id, type, enum_names, default_value)
+//
+// ugh, an enum with a reference to a map for the names, see setting_enum.cpp
+
+// DECL_SETTING_RANGED(name, string_id, default_value, min, max)
+//
+// ranged uint
+
+// DECL_SETTING_INTERNAL(name, type, ...)
+//
+// internal setting, not exposed in the UI
+
+//////////////////////////////////////////////////////////////////////
+// background
+
+DECL_SETTING_SECTION(IDS_SETTING_SECTION_BACKGROUND);
 
 // border color beyond image bounds
 
@@ -29,14 +55,14 @@ DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x505050, false);
 
 DECL_SETTING_RANGED(grid_size, IDS_SETTING_NAME_GRID_SIZE, 16, 4, 128);
 
-// grid is fixed to screen coords (true) or floats (fixed to image origin)
+// grid origin is screen origin or image origin
 
 DECL_SETTING_BOOL(fixed_grid, IDS_SETTING_NAME_FIXED_GRID, true);
 
 //////////////////////////////////////////////////////////////////////
-// select
+// selection
 
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_SELECT);
+DECL_SETTING_SECTION(IDS_SETTING_SECTION_SELECT);
 
 // selection rectangle fill color
 
@@ -62,7 +88,7 @@ DECL_SETTING_RANGED(dash_anim_speed, IDS_SETTING_NAME_SELECT_DASH_ANIM_SPEED, 10
 //////////////////////////////////////////////////////////////////////
 // crosshair
 
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_CROSSHAIR);
+DECL_SETTING_SECTION(IDS_SETTING_SECTION_CROSSHAIR);
 
 // crosshair line colors
 
@@ -84,28 +110,28 @@ DECL_SETTING_RANGED(crosshair_dash_anim_speed, IDS_SETTING_NAME_CROSSHAIR_DASH_A
 //////////////////////////////////////////////////////////////////////
 // mouse buttons
 
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_MOUSE);
+DECL_SETTING_SECTION(IDS_SETTING_SECTION_MOUSE);
 
 // which mouse button for interactive zoom
 
-DECL_SETTING_ENUM(mouse_button_t, zoom_button, IDS_SETTING_NAME_ZOOM_BUTTON, enum_mouse_buttons_map, btn_middle);
+DECL_SETTING_ENUM(zoom_button, IDS_SETTING_NAME_ZOOM_BUTTON, mouse_button_t, enum_mouse_buttons_map, btn_middle);
 
 // which mouse button for dragging image
 
-DECL_SETTING_ENUM(mouse_button_t, drag_button, IDS_SETTING_NAME_DRAG_BUTTON, enum_mouse_buttons_map, btn_right);
+DECL_SETTING_ENUM(drag_button, IDS_SETTING_NAME_DRAG_BUTTON, mouse_button_t, enum_mouse_buttons_map, btn_right);
 
 // which mouse button for selection
 
-DECL_SETTING_ENUM(mouse_button_t, select_button, IDS_SETTING_NAME_SELECT_BUTTON, enum_mouse_buttons_map, btn_left);
+DECL_SETTING_ENUM(select_button, IDS_SETTING_NAME_SELECT_BUTTON, mouse_button_t, enum_mouse_buttons_map, btn_left);
 
 // which mouse button for popup menu
 
-DECL_SETTING_ENUM(mouse_button_t, menu_button, IDS_SETTING_NAME_MENU_BUTTON, enum_mouse_buttons_map, btn_right);
+DECL_SETTING_ENUM(menu_button, IDS_SETTING_NAME_MENU_BUTTON, mouse_button_t, enum_mouse_buttons_map, btn_right);
 
 //////////////////////////////////////////////////////////////////////
 // window
 
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_WINDOW);
+DECL_SETTING_SECTION(IDS_SETTING_SECTION_WINDOW);
 
 // single instance mode
 
@@ -113,26 +139,28 @@ DECL_SETTING_BOOL(reuse_window, IDS_SETTING_NAME_REUSE_WINDOW, true);
 
 // either remember fullscreen mode or always revert to: windowed or fullscreen
 
-DECL_SETTING_ENUM(fullscreen_startup_option,
-                  fullscreen_mode,
+DECL_SETTING_ENUM(fullscreen_mode,
                   IDS_SETTING_NAME_STARTUP_FULLSCREEN,
+                  fullscreen_startup_option,
                   enum_fullscreen_startup_map,
                   fullscreen_startup_option::start_remember);
 
-// what happens when you press 'z'
+// current zoom mode
 
-DECL_SETTING_ENUM(zoom_mode_t, zoom_mode, IDS_SETTING_NAME_ZOOM_MODE, enum_zoom_mode_map, zoom_mode_t::shrink_to_fit);
+DECL_SETTING_ENUM(zoom_mode, IDS_SETTING_NAME_ZOOM_MODE, zoom_mode_t, enum_zoom_mode_map, zoom_mode_t::shrink_to_fit);
 
-DECL_SETTING_ENUM(startup_zoom_mode_option,
-                  startup_zoom_mode,
+// default zoom mode at startup
+
+DECL_SETTING_ENUM(startup_zoom_mode,
                   IDS_SETTING_NAME_STARTUP_ZOOM_MODE,
+                  startup_zoom_mode_option,
                   enum_startup_zoom_mode_map,
                   startup_zoom_mode_option::startup_zoom_shrink_to_fit);
 
 //////////////////////////////////////////////////////////////////////
-// others
+// files
 
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_FILES);
+DECL_SETTING_SECTION(IDS_SETTING_SECTION_FILES);
 
 // show either just filename or full path in window titlebar
 
@@ -140,9 +168,9 @@ DECL_SETTING_BOOL(show_full_filename_in_titlebar, IDS_SETTING_NAME_SHOW_FULL_FIL
 
 // how to show filename overlay
 
-DECL_SETTING_ENUM(show_filename_option,
-                  show_filename,
+DECL_SETTING_ENUM(show_filename,
                   IDS_SETTING_NAME_SHOW_FILENAME,
+                  show_filename_option,
                   enum_show_filename_map,
                   show_filename_option::show_filename_briefly);
 
@@ -153,7 +181,7 @@ DECL_SETTING_BOOL(auto_paste, IDS_SETTING_NAME_AUTO_PASTE, true);
 // what to do about exif metadata
 
 DECL_SETTING_ENUM(
-    exif_option, image_rotation_option, IDS_SETTING_NAME_EXIF_OPTION, enum_exif_map, exif_option::exif_option_apply);
+    image_rotation_option, IDS_SETTING_NAME_EXIF_OPTION, exif_option, enum_exif_map, exif_option::exif_option_apply);
 
 // how much memory to use for caching files and decoded images
 // TODO (chs): separate settings for file and uncompressed image caches?
@@ -166,31 +194,30 @@ DECL_SETTING_RANGED(cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 128, 16, 4096
 
 // grid size multiplier, checkerboard is multiplied by 2^grid_multiplier
 
-DECL_SETTING_INTERNAL(uint, grid_multiplier, 1);
+DECL_SETTING_INTERNAL(grid_multiplier, uint, 1);
 
 // how far mouse has to move after clicking select button to consider a selection active
 
-DECL_SETTING_INTERNAL(float, select_start_distance, 4);
+DECL_SETTING_INTERNAL(select_start_distance, float, 4);
 
 // how close in pixels the mouse must be to grab the selection edge
 
-DECL_SETTING_INTERNAL(float, select_border_grab_size, 8);
+DECL_SETTING_INTERNAL(select_border_grab_size, float, 8);
 
 // has it ever been run before? if not, use some sensible defaults for window pos
 
-DECL_SETTING_INTERNAL(bool, first_run, true);
+DECL_SETTING_INTERNAL(first_run, bool, true);
 
 // windowed or fullscreen
 
-DECL_SETTING_INTERNAL(bool, fullscreen, false);
+DECL_SETTING_INTERNAL(fullscreen, bool, false);
 
 // non-fullscreen window placement
 
-DECL_SETTING_INTERNAL(WINDOWPLACEMENT, window_placement, sizeof(WINDOWPLACEMENT));
+DECL_SETTING_INTERNAL(window_placement, WINDOWPLACEMENT, sizeof(WINDOWPLACEMENT));
 
 // last fullscreen rect
 
-DECL_SETTING_INTERNAL(RECT, fullscreen_rect, 0, 0, 0, 0);
-
+DECL_SETTING_INTERNAL(fullscreen_rect, RECT, 0, 0, 0, 0);
 
 #pragma warning(pop)

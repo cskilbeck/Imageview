@@ -26,7 +26,7 @@ namespace
         HWND tab = GetParent(hwnd);
         section_setting &setting = setting_controller::get<section_setting>(hwnd);
         setting.expanded = !setting.expanded;
-        PostMessage(tab, WM_COMMAND, 0, 0);
+        PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
     }
 }
 

@@ -80,7 +80,7 @@ struct settings_t
         argb                                             \
     }
 
-#define DECL_SETTING_ENUM(type, name, string_id, enum_map, value) \
+#define DECL_SETTING_ENUM(name, string_id, type, enum_map, value) \
     type name                                                     \
     {                                                             \
         value                                                     \
@@ -92,7 +92,7 @@ struct settings_t
         value                                                 \
     }
 
-#define DECL_SETTING_INTERNAL(type, name, ...) \
+#define DECL_SETTING_INTERNAL(name, type, ...) \
     type name                                  \
     {                                          \
         __VA_ARGS__                            \

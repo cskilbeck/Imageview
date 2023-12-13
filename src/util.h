@@ -281,3 +281,5 @@ template <typename InterfaceType> void SafeSet(InterfaceType **currentObject, In
 
 #define HANDLE_WM_POWERBROADCAST(hwnd, wParam, lParam, fn) \
     ((fn)((hwnd), (UINT)(wParam), (PPOWERBROADCAST_SETTING)(lParam)))
+
+#define HANDLE_WM_USER(hwnd, wParam, lParam, fn) ((fn)((hwnd), wParam, lParam), 0L)

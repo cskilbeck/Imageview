@@ -52,7 +52,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void update_sections(HWND hwnd)
+    void update_sections(HWND hwnd, section_setting const *show_section)
     {
         HWND tab_ctrl;
         HWND parent = GetParent(hwnd);
@@ -68,18 +68,35 @@ namespace
 
         for(auto const s : section_setting::sections) {
 
-            int height = s->banner_height;
-
-            if(s->expanded) {
-                height = s->expanded_height;
-            }
-
-            total_height += height;
+            total_height += s->height();
         }
 
         // set scrollbars based on total height
 
         update_scrollbars(settings_scroll, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
+
+        // scroll so required section is within view
+        if(show_section != null) {
+
+            // currently visible portion of the whole window
+            int v_top = settings_scroll.pos[SB_VERT];
+            int v_bottom = v_top + rect_height(tab_rect);
+
+            // extent of the required section
+            RECT rc;
+            GetWindowRect(show_section->window, &rc);
+            MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
+
+            // scroll up into view if necessary
+            int top = rc.top + v_top;
+            int bottom = top + show_section->height();
+            int diff = bottom - v_bottom;
+            if(diff > 0) {
+                v_top += diff;
+                SetScrollPos(hwnd, SB_VERT, v_top, true);
+                settings_scroll.pos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
+            }
+        }
 
         // move all the sections based on scrollbar position
 
@@ -90,12 +107,7 @@ namespace
 
         for(auto const s : section_setting::sections) {
 
-            int height = s->banner_height;
-
-            if(s->expanded) {
-                height = s->expanded_height;
-            }
-
+            int height = s->height();
 
             DeferWindowPos(
                 dwp, s->window, null, xpos, ypos, rect_width(tab_rect), height, SWP_NOZORDER | SWP_SHOWWINDOW);
@@ -112,7 +124,7 @@ namespace
     void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
         on_scroll(settings_scroll, hwnd, SB_VERT, code);
-        update_sections(hwnd);
+        update_sections(hwnd, null);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -156,7 +168,7 @@ namespace
         setting_controllers.push_back(c);                                                                    \
     }
 
-#define DECL_SETTING_ENUM(type, name, string_id, enum_names, value)                \
+#define DECL_SETTING_ENUM(name, string_id, type, enum_names, value)                \
     {                                                                              \
         auto e = new enum_setting(#name,                                           \
                                   string_id,                                       \
@@ -174,7 +186,7 @@ namespace
         setting_controllers.push_back(r);                                                                         \
     }
 
-#define DECL_SETTING_INTERNAL(setting_type, name, ...)
+#define DECL_SETTING_INTERNAL(name, type, ...)
 
 #include "settings_fields.h"
 
@@ -249,7 +261,7 @@ namespace
         settings_scroll.pos[SB_HORZ] = 0;
         settings_scroll.pos[SB_VERT] = 0;
 
-        update_sections(hwnd);
+        update_sections(hwnd, null);
 
         // uncork the settings notifier
         settings_should_update = true;
@@ -263,15 +275,15 @@ namespace
     void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
         scroll_window(settings_scroll, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
-        update_sections(hwnd);
+        update_sections(hwnd, null);
     }
 
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_COMMAND (but faked from section button)
 
-    void on_command_settings(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+    void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
     {
-        update_sections(hwnd);
+        update_sections(hwnd, reinterpret_cast<section_setting const *>(lparam));
     }
 }
 
@@ -287,7 +299,7 @@ namespace imageview::settings_dialog
             HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_settings);
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
             HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
-            HANDLE_MSG(hWnd, WM_COMMAND, on_command_settings);
+            HANDLE_MSG(hWnd, WM_USER, on_user_settings);
         }
         return ctlcolor_base(hWnd, msg, wParam, lParam);
     }

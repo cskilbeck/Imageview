@@ -60,11 +60,11 @@ HRESULT settings_t::serialize(serialize_action action, char const *key)
 
 #define DECL_SETTING_COLOR(name, string_id, argb, alpha) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_ENUM(type, name, string_id, enum_names, value) SERIALIZE_SETTING(name)
+#define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) SERIALIZE_SETTING(name)
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_INTERNAL(type, name, ...) SERIALIZE_SETTING(name)
+#define DECL_SETTING_INTERNAL(name, type, ...) SERIALIZE_SETTING(name)
 
 #include "settings_fields.h"
 
