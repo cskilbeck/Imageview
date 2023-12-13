@@ -1,6 +1,6 @@
 #pragma once
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
 

@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////
 // color setting is a button and edit control for the hex
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     INT_PTR setting_color_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
 

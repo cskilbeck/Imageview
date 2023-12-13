@@ -1,6 +1,6 @@
 #pragma once
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     void on_reset_default_settings();
     void on_save_current_settings();

@@ -3,7 +3,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4324)
 
-// DECL_SETTING_SECTION(string_id)
+// DECL_SETTING_SECTION(name, string_id)
 //
 // creates a new settings section in the UI
 // the first DECL_SETTING_xxx must be a SECTION. i.e. every setting must be in a section
@@ -32,11 +32,11 @@
 //////////////////////////////////////////////////////////////////////
 // background
 
-DECL_SETTING_SECTION(IDS_SETTING_SECTION_BACKGROUND);
+DECL_SETTING_SECTION(background_section, IDS_SETTING_SECTION_BACKGROUND);
 
 // border color beyond image bounds
 
-DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0x203040, false);
+DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0x000020, false);
 
 // bg color shows through image alpha
 
@@ -48,8 +48,8 @@ DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
 
 // grid colors
 
-DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x202020, false);
-DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x505050, false);
+DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x101010, false);
+DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x202020, false);
 
 // grid size in pixels
 
@@ -62,16 +62,16 @@ DECL_SETTING_BOOL(fixed_grid, IDS_SETTING_NAME_FIXED_GRID, true);
 //////////////////////////////////////////////////////////////////////
 // selection
 
-DECL_SETTING_SECTION(IDS_SETTING_SECTION_SELECT);
+DECL_SETTING_SECTION(selection_section, IDS_SETTING_SECTION_SELECT);
 
 // selection rectangle fill color
 
-DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0x80200080, true);
+DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0x00008040, true);
 
 // selection outline colors (line alternates)
 
-DECL_SETTING_COLOR(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 0xff000000, true);
-DECL_SETTING_COLOR(select_outline_color2, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2, 0xffffffff, true);
+DECL_SETTING_COLOR(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 0x00000080, true);
+DECL_SETTING_COLOR(select_outline_color2, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2, 0xffffff80, true);
 
 // selection border width (1 or maybe 2, anything bigger likely to cause problems)
 
@@ -88,12 +88,12 @@ DECL_SETTING_RANGED(dash_anim_speed, IDS_SETTING_NAME_SELECT_DASH_ANIM_SPEED, 10
 //////////////////////////////////////////////////////////////////////
 // crosshair
 
-DECL_SETTING_SECTION(IDS_SETTING_SECTION_CROSSHAIR);
+DECL_SETTING_SECTION(crosshair_section, IDS_SETTING_SECTION_CROSSHAIR);
 
 // crosshair line colors
 
-DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0xff000000, true);
-DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0xffffffff, true);
+DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0x800000d0, true);
+DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0x008080d0, true);
 
 // crosshair dash length
 
@@ -110,7 +110,7 @@ DECL_SETTING_RANGED(crosshair_dash_anim_speed, IDS_SETTING_NAME_CROSSHAIR_DASH_A
 //////////////////////////////////////////////////////////////////////
 // mouse buttons
 
-DECL_SETTING_SECTION(IDS_SETTING_SECTION_MOUSE);
+DECL_SETTING_SECTION(mouse_section, IDS_SETTING_SECTION_MOUSE);
 
 // which mouse button for interactive zoom
 
@@ -131,7 +131,7 @@ DECL_SETTING_ENUM(menu_button, IDS_SETTING_NAME_MENU_BUTTON, mouse_button_t, enu
 //////////////////////////////////////////////////////////////////////
 // window
 
-DECL_SETTING_SECTION(IDS_SETTING_SECTION_WINDOW);
+DECL_SETTING_SECTION(window_section, IDS_SETTING_SECTION_WINDOW);
 
 // single instance mode
 
@@ -160,7 +160,7 @@ DECL_SETTING_ENUM(startup_zoom_mode,
 //////////////////////////////////////////////////////////////////////
 // files
 
-DECL_SETTING_SECTION(IDS_SETTING_SECTION_FILES);
+DECL_SETTING_SECTION(files_section, IDS_SETTING_SECTION_FILES);
 
 // show either just filename or full path in window titlebar
 

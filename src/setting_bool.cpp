@@ -5,9 +5,9 @@
 
 namespace
 {
-    using imageview::settings_dialog::bool_setting;
-    using imageview::settings_dialog::post_new_settings;
-    using imageview::settings_dialog::setting_controller;
+    using imageview::settings_ui::bool_setting;
+    using imageview::settings_ui::post_new_settings;
+    using imageview::settings_ui::setting_controller;
 
     //////////////////////////////////////////////////////////////////////
     // BOOL setting \ WM_COMMAND
@@ -44,7 +44,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
 

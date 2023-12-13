@@ -5,7 +5,7 @@
 
 namespace
 {
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // ENUM setting \ WM_COMMAND
@@ -26,7 +26,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     // big sigh - these are for mapping enums to strings for the combo boxes
     // need to be visible to settings_page

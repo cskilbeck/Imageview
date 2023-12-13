@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////
 // enum setting is a combobox
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     using enum_id_map = std::map<uint, uint>;
 

@@ -8,7 +8,7 @@ LOG_CONTEXT("COLOR");
 namespace
 {
     using namespace imageview;
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // COLOR setting \ WM_DRAWITEM
@@ -95,7 +95,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
 

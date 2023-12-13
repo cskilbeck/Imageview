@@ -5,7 +5,7 @@
 
 namespace
 {
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // RANGED setting \ WM_HSCROLL
@@ -24,7 +24,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
 

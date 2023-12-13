@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////
 // bool setting is a checkbox
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     INT_PTR setting_bool_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
 

@@ -20,7 +20,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // RELAUNCH (explorer) page \ DLGPROC

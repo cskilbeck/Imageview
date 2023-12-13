@@ -287,6 +287,18 @@ namespace imageview
     }
 
     //////////////////////////////////////////////////////////////////////
+
+    std::string hex_string_from_bytes(byte const *data, size_t len)
+    {
+        std::string result;
+        result.resize(len * 2);
+        for(size_t i = 0; i < len; ++i) {
+            std::format_to_n(result.begin() + i * 2, 2, "{:02x}", data[i]);
+        }
+        return result;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // get a localized string by id
 
     std::string localize(uint id)

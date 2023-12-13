@@ -6,7 +6,7 @@
 namespace
 {
     using namespace imageview;
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -87,7 +87,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // ABOUT page \ DLGPROC

@@ -1,5 +1,7 @@
 #include "pch.h"
 
+LOG_CONTEXT("settings");
+
 settings_t settings;
 
 settings_t default_settings;
@@ -8,27 +10,26 @@ settings_t default_settings;
 // save or load a setting
 
 HRESULT settings_t::serialize_setting(
-    settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size)
+    serialize_action action, char const *key, char const *name, byte *var, size_t size)
 {
     switch(action) {
 
-    case settings_t::serialize_action::save: {
-        HKEY key;
-        CHK_HR(RegCreateKeyExA(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_WRITE, null, &key, null));
-        DEFER(RegCloseKey(key));
-        CHK_HR(RegSetValueExA(key, name, 0, REG_BINARY, var, size));
+    case serialize_action::save: {
+        HKEY hk;
+        CHK_HR(RegCreateKeyExA(HKEY_CURRENT_USER, key, 0, null, 0, KEY_WRITE, null, &hk, null));
+        DEFER(RegCloseKey(hk));
+        CHK_HR(RegSetValueExA(hk, name, 0, REG_BINARY, var, static_cast<DWORD>(size)));
     } break;
 
-    case settings_t::serialize_action::load: {
-        HKEY key;
-        CHK_HR(RegCreateKeyExA(HKEY_CURRENT_USER, key_name, 0, null, 0, KEY_READ | KEY_QUERY_VALUE, null, &key, null));
-        DEFER(RegCloseKey(key));
+    case serialize_action::load: {
+        HKEY hk;
+        CHK_HR(RegCreateKeyExA(HKEY_CURRENT_USER, key, 0, null, 0, KEY_READ | KEY_QUERY_VALUE, null, &hk, null));
+        DEFER(RegCloseKey(hk));
         DWORD cbsize = 0;
-        if(FAILED(RegQueryValueExA(key, name, null, null, null, &cbsize)) || cbsize != size) {
+        if(FAILED(RegQueryValueExA(hk, name, null, null, null, &cbsize)) || cbsize != size) {
             return S_FALSE;
         }
-        CHK_HR(RegGetValue(
-            HKEY_CURRENT_USER, key_name, name, RRF_RT_REG_BINARY, null, reinterpret_cast<DWORD *>(var), &cbsize));
+        CHK_HR(RegGetValueA(HKEY_CURRENT_USER, key, name, RRF_RT_REG_BINARY, null, var, &cbsize));
     } break;
     }
 
@@ -40,10 +41,6 @@ HRESULT settings_t::serialize_setting(
 
 HRESULT settings_t::serialize(serialize_action action, char const *key)
 {
-    if(key == null) {
-        return E_INVALIDARG;
-    }
-
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_COLOR
@@ -51,14 +48,15 @@ HRESULT settings_t::serialize(serialize_action action, char const *key)
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define SERIALIZE_SETTING(name) \
-    CHK_HR(serialize_setting(action, key, #name, reinterpret_cast<byte *>(&name), static_cast<DWORD>(sizeof(name))))
+#define SERIALIZE_SETTING(name)                                                                                  \
+    LOG_DEBUG("{}: {}", #name, imageview::hex_string_from_bytes(reinterpret_cast<byte *>(&name), sizeof(name))); \
+    CHK_HR(serialize_setting(action, key, #name, reinterpret_cast<byte *>(&name), sizeof(name)))
 
-#define DECL_SETTING_SECTION(string_id)
+#define DECL_SETTING_SECTION(name, string_id) SERIALIZE_SETTING(name)
 
 #define DECL_SETTING_BOOL(name, string_id, value) SERIALIZE_SETTING(name)
 
-#define DECL_SETTING_COLOR(name, string_id, argb, alpha) SERIALIZE_SETTING(name)
+#define DECL_SETTING_COLOR(name, string_id, rgba, alpha) SERIALIZE_SETTING(name)
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) SERIALIZE_SETTING(name)
 

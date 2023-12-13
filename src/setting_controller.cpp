@@ -3,7 +3,7 @@
 
 #include "pch.h"
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // tab pages have white backgrounds - this sets the background of all controls to white

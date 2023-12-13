@@ -3,7 +3,7 @@
 
 #include "pch.h"
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // EXPLORER page \ DLGPROC

@@ -7,7 +7,7 @@ LOG_CONTEXT("SECTION");
 
 namespace
 {
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // SECTION setting \ WM_CTLCOLOR
@@ -25,8 +25,9 @@ namespace
     {
         HWND tab = GetParent(hwnd);
         section_setting &setting = setting_controller::get<section_setting>(hwnd);
-        setting.expanded = !setting.expanded;
-        if(setting.expanded) {
+        setting.value = !setting.value;
+        LOG_DEBUG("{}", setting.value);
+        if(setting.value) {
             setting.target_height = setting.expanded_height;
             PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
         } else {
@@ -36,7 +37,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     std::list<section_setting *> section_setting::sections;
 

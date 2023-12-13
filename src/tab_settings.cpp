@@ -8,7 +8,7 @@ LOG_CONTEXT("Settings");
 namespace
 {
     using namespace imageview;
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // scroll info for the settings page
@@ -174,10 +174,10 @@ namespace
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define DECL_SETTING_SECTION(string_id)          \
-    {                                            \
-        auto s = new section_setting(string_id); \
-        setting_controllers.push_back(s);        \
+#define DECL_SETTING_SECTION(name, string_id)                                 \
+    {                                                                         \
+        auto s = new section_setting(#name, string_id, dialog_settings.name); \
+        setting_controllers.push_back(s);                                     \
     }
 
 #define DECL_SETTING_BOOL(name, string_id, value)                                                                    \
@@ -251,9 +251,12 @@ namespace
                 GetWindowRect(section_window, &rc);
 
                 cur_section->banner_height = rect_height(rc);
-                cur_section->expanded_height = cur_section->banner_height;
-                cur_section->current_height = cur_section->banner_height;
-                cur_section->target_height = cur_section->banner_height;
+
+                int height = cur_section->banner_height;
+
+                cur_section->expanded_height = height;
+                cur_section->current_height = height;
+                cur_section->target_height = height;
 
             } else {
 
@@ -279,6 +282,18 @@ namespace
                 int height = rect_height(rc);
 
                 cur_section->expanded_height += height + inner_margin;
+            }
+        }
+
+        // expand sections which were expanded last time
+
+        for(auto const s : setting_controllers) {
+            if(s->is_section_header()) {
+                section_setting *ss = reinterpret_cast<section_setting *>(s);
+                if(ss->value) {
+                    ss->target_height = ss->expanded_height;
+                    ss->current_height = ss->expanded_height;
+                }
             }
         }
 
@@ -324,7 +339,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ DLGPROC

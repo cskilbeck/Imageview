@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////
 // ranged setting is... more complicated
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     INT_PTR setting_ranged_dlgproc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);
 

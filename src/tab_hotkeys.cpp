@@ -6,7 +6,7 @@
 namespace
 {
     using namespace imageview;
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // HOTKEYS page \ WM_INITDIALOG
@@ -118,7 +118,7 @@ namespace
     }
 }
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // HOTKEYS page \ DLGPROC

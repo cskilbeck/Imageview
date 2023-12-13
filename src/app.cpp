@@ -2979,49 +2979,49 @@ namespace
 
         case ID_VIEW_ALPHA:
             settings.grid_enabled = !settings.grid_enabled;
-            settings_dialog::update_settings_dialog();
+            settings_ui::update_settings_dialog();
             break;
 
         case ID_VIEW_FIXEDGRID:
             settings.fixed_grid = !settings.fixed_grid;
-            settings_dialog::update_settings_dialog();
+            settings_ui::update_settings_dialog();
             break;
 
         case ID_VIEW_GRIDSIZE:
             settings.grid_multiplier = (settings.grid_multiplier + 1) & 7;
-            settings_dialog::update_settings_dialog();
+            settings_ui::update_settings_dialog();
             break;
 
         case ID_VIEW_SETBACKGROUNDCOLOR: {
             if(SUCCEEDED(dialog::select_color(
                    window, settings.background_color, localize(IDS_SETTING_NAME_BACKGROUND_COLOR).c_str()))) {
-                settings_dialog::update_settings_dialog();
+                settings_ui::update_settings_dialog();
             }
         } break;
 
         case ID_VIEW_SETBORDERCOLOR: {
             if(SUCCEEDED(dialog::select_color(
                    window, settings.border_color, localize(IDS_SETTING_NAME_BORDER_COLOR).c_str()))) {
-                settings_dialog::update_settings_dialog();
+                settings_ui::update_settings_dialog();
             }
         } break;
 
         case ID_ZOOM_1:
             settings.zoom_mode = zoom_mode_t::one_to_one;
             reset_zoom(settings.zoom_mode);
-            settings_dialog::update_settings_dialog();
+            settings_ui::update_settings_dialog();
             break;
 
         case ID_ZOOM_FIT:
             settings.zoom_mode = zoom_mode_t::fit_to_window;
             reset_zoom(settings.zoom_mode);
-            settings_dialog::update_settings_dialog();
+            settings_ui::update_settings_dialog();
             break;
 
         case ID_ZOOM_SHRINKTOFIT:
             settings.zoom_mode = zoom_mode_t::shrink_to_fit;
             reset_zoom(settings.zoom_mode);
-            settings_dialog::update_settings_dialog();
+            settings_ui::update_settings_dialog();
             break;
 
         case ID_ZOOM_SELECTION:
@@ -3060,11 +3060,11 @@ namespace
         } break;
 
         case ID_FILE_SETTINGS_EXPLORER: {
-            settings_dialog::show_settings_dialog(window, IDD_DIALOG_SETTINGS_EXPLORER);
+            settings_ui::show_settings_dialog(window, IDD_DIALOG_SETTINGS_EXPLORER);
         } break;
 
         case ID_FILE_SETTINGS: {
-            settings_dialog::show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
+            settings_ui::show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
         } break;
 
         case ID_EXIT:

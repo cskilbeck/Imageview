@@ -58,6 +58,8 @@ namespace imageview
     std::string ascii(wchar const *s, size_t len);
     std::string ascii(wchar const *s);
 
+    std::string hex_string_from_bytes(byte const *data, size_t len);
+
     //////////////////////////////////////////////////////////////////////
     // upper/lower case - these are not valid for many unicode pages!
 

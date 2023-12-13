@@ -10,11 +10,11 @@ LOG_CONTEXT("settings_dlg");
 namespace
 {
     using namespace imageview;
-    using namespace imageview::settings_dialog;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
 
-    HWND main_dialog = null;
+    HWND settings_dlg = null;
 
     //////////////////////////////////////////////////////////////////////
     // which tabs will be shown (some might be hidden)
@@ -52,8 +52,6 @@ namespace
 
     BOOL on_initdialog_main(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        main_dialog = hwnd;
-
         // setup the tab pages
 
         uint requested_tab_resource_id = static_cast<uint>(lParam);
@@ -208,18 +206,11 @@ namespace
 
         case IDCANCEL:
         case IDCLOSE:
-            EndDialog(hwnd, 0);
+            settings_dlg = null;
+            post_new_settings();    // save the sections expanded states
+            DestroyWindow(hwnd);
             break;
         }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // MAIN dialog \ WM_DESTROY
-
-    void on_destroy_main(HWND hwnd)
-    {
-        main_dialog = null;
-        FORWARD_WM_DESTROY(hwnd, DefDlgProc);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -232,7 +223,6 @@ namespace
             HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_main);
             HANDLE_MSG(dlg, WM_NOTIFY, on_notify_main);
             HANDLE_MSG(dlg, WM_COMMAND, on_command_main);
-            HANDLE_MSG(dlg, WM_DESTROY, on_destroy_main);
 
             // new settings from the app (from a hotkey or popup menu)
 
@@ -248,20 +238,20 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-namespace imageview::settings_dialog
+namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
     // show the settings dialog and activate a tab
 
     HRESULT show_settings_dialog(HWND app_hwnd, uint tab_id)
     {
-        if(main_dialog == null) {
-            CHK_NULL(
-                CreateDialogParamA(app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dlgproc, tab_id));
+        if(settings_dlg == null) {
+            CHK_NULL(settings_dlg = CreateDialogParamA(
+                         app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dlgproc, tab_id));
         }
-        ShowWindow(main_dialog, SW_SHOW);
-        BringWindowToTop(main_dialog);
-        SwitchToThisWindow(main_dialog, true);
+        ShowWindow(settings_dlg, SW_SHOW);
+        BringWindowToTop(settings_dlg);
+        SwitchToThisWindow(settings_dlg, true);
 
         return S_OK;
     }
@@ -271,10 +261,10 @@ namespace imageview::settings_dialog
 
     void update_settings_dialog()
     {
-        if(main_dialog != null) {
+        if(settings_dlg != null) {
             settings_t *settings_copy = new settings_t();
             memcpy(settings_copy, &settings, sizeof(settings_t));
-            PostMessage(main_dialog, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
+            PostMessage(settings_dlg, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
         }
     }
 }

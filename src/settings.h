@@ -66,7 +66,11 @@ enum mouse_button_t : int
 struct settings_t
 {
 
-#define DECL_SETTING_SECTION(string_id)
+#define DECL_SETTING_SECTION(name, string_id) \
+    bool name                                 \
+    {                                         \
+        false                                 \
+    }
 
 #define DECL_SETTING_BOOL(name, string_id, default_value) \
     bool name                                             \
@@ -74,11 +78,19 @@ struct settings_t
         default_value                                     \
     }
 
-#define DECL_SETTING_COLOR(name, string_id, argb, alpha) \
-    uint32 name                                          \
-    {                                                    \
-        argb                                             \
+// RGBA -> ABGR
+
+// clang-format off
+#define DECL_SETTING_COLOR(name, string_id, rgba, alpha)        \
+    uint32 name                                                 \
+    {                                                           \
+        (((rgba << (alpha ? 0 : 8)) & 0xff000000) >> 24) |      \
+        (((rgba << (alpha ? 0 : 8)) & 0x00ff0000) >> 8) |       \
+        (((rgba << (alpha ? 0 : 8)) & 0x0000ff00) << 8) |       \
+        (((rgba << (alpha ? 0 : 8)) & 0x000000ff) << 24) |      \
+        (alpha ? 0 : 0xff000000)                                \
     }
+    // clang-format on
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_map, value) \
     type name                                                     \
@@ -118,7 +130,7 @@ struct settings_t
 
     // write or read a settings field to or from the registry - helper for serialize()
     HRESULT serialize_setting(
-        settings_t::serialize_action action, char const *key_name, char const *name, byte *var, DWORD size);
+        settings_t::serialize_action action, char const *key_name, char const *name, byte *var, size_t size);
 };
 
 //////////////////////////////////////////////////////////////////////
