@@ -8,10 +8,6 @@
 // get all the mouse handling stuff out of update() and into mouse move handler
 // UTF16 everywhere
 
-// Rename grid -> checkerboard
-// Remove grid multiplier setting
-// Remove overlay grid remnants
-
 // SetCursor not always being called when it should
 
 // flip/rotate
@@ -1140,6 +1136,7 @@ namespace
             c = LoadCursor(null, IDC_ARROW);
         }
         current_mouse_cursor = c;
+        SetCursor(c);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3882,7 +3879,7 @@ namespace imageview::app
 
             if(PeekMessageA(&msg, null, 0, 0, PM_REMOVE)) {
 
-                if(!TranslateAcceleratorA(window, hotkeys::accelerators, &msg)) {
+                if(msg.hwnd != window || !TranslateAcceleratorA(window, hotkeys::accelerators, &msg)) {
 
                     TranslateMessage(&msg);
                     DispatchMessageA(&msg);

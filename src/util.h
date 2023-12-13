@@ -175,6 +175,13 @@ namespace imageview
     {
         return std::format("{},{} ({}x{})", r.left, r.top, rect_width(r), rect_height(r));
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <typename T> int sgn(T x)
+    {
+        return (T(0) < x) - (x < T(0));
+    }
 }
 
 //////////////////////////////////////////////////////////////////////

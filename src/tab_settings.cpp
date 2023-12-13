@@ -13,17 +13,17 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // scroll info for the settings page
 
-    imageview::scroll_info settings_scroll;
+    scroll_info settings_scrollinfo;
 
     //////////////////////////////////////////////////////////////////////
     // all the settings on the settings page
 
-    std::list<setting_controller *> setting_controllers;
+    std::list<setting_controller *> controllers;
 
     //////////////////////////////////////////////////////////////////////
-    // which one is expanding (make sure it's visible)
+    // which one is expanding (have to make sure it's visible)
 
-    section_setting const *show_this_section;
+    section_setting const *active_section;
 
     //////////////////////////////////////////////////////////////////////
     // suppress sending new settings to main window when bulk update in progress
@@ -38,7 +38,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // copy of settings from when the dialog was shown (for 'cancel')
 
-    settings_t revert_settings;
+    settings_t previous_settings;
 
     //////////////////////////////////////////////////////////////////////
     // setup all the controls when the settings have changed outside
@@ -48,7 +48,7 @@ namespace
     {
         settings_should_update = false;
 
-        for(auto s : setting_controllers) {
+        for(auto s : controllers) {
             s->update_controls();
         }
 
@@ -56,6 +56,9 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // animate any expanding/contracting sections
+    // update the scroll bars
+    // position the sections based on the scrollbar position
 
     void update_sections(HWND hwnd)
     {
@@ -69,52 +72,52 @@ namespace
 
         // update and get new heights of the sections
 
-        bool any_sections_require_further_attention{ false };
+        bool expanding_or_contracting{ false };
 
         int total_height = 0;
 
         // speed based on size of tab rect so dpi taken into account
-        int expand_speed = rect_height(tab_rect) / 20;
+        int expand_contract_speed = rect_height(tab_rect) / 10;
 
         // expand/contract sections and get total height
         for(auto const s : section_setting::sections) {
 
-            int diff = s->current_height - s->target_height;
+            int diff = sgn(s->target_height - s->current_height);
 
             if(diff != 0) {
 
-                int dir = diff < 0 ? expand_speed : -expand_speed;
-                s->current_height = std::clamp(s->current_height + dir, s->banner_height, s->expanded_height);
+                diff *= expand_contract_speed;
+                s->current_height = std::clamp(s->current_height + diff, s->banner_height, s->expanded_height);
+                expanding_or_contracting = true;
             }
             total_height += s->current_height;
-
-            any_sections_require_further_attention |= s->current_height != s->target_height;
         }
 
         // set scrollbars based on total height
 
-        update_scrollbars(settings_scroll, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
+        update_scrollbars(settings_scrollinfo, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
 
         // scroll so required section is within view
-        if(show_this_section != null) {
+
+        if(active_section != null) {
 
             // currently visible portion of the whole window
-            int v_top = settings_scroll.pos[SB_VERT];
+            int v_top = settings_scrollinfo.pos[SB_VERT];
             int v_bottom = v_top + rect_height(tab_rect);
 
-            // extent of the required section
+            // vertical extent of the required section
             RECT rc;
-            GetWindowRect(show_this_section->window, &rc);
+            GetWindowRect(active_section->window, &rc);
             MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
 
             // scroll up into view if necessary
             int top = rc.top + v_top;
-            int bottom = top + show_this_section->current_height;
+            int bottom = top + active_section->current_height;
             int diff = bottom - v_bottom;
             if(diff > 0) {
                 v_top += diff;
                 SetScrollPos(hwnd, SB_VERT, v_top, true);
-                settings_scroll.pos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
+                settings_scrollinfo.pos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
             }
         }
 
@@ -122,8 +125,8 @@ namespace
 
         HDWP dwp = BeginDeferWindowPos(static_cast<int>(section_setting::sections.size() + 1u));
 
-        int ypos = -settings_scroll.pos[SB_VERT];
-        int xpos = -settings_scroll.pos[SB_HORZ];
+        int ypos = -settings_scrollinfo.pos[SB_VERT];
+        int xpos = -settings_scrollinfo.pos[SB_HORZ];
 
         for(auto const s : section_setting::sections) {
 
@@ -137,10 +140,12 @@ namespace
 
         EndDeferWindowPos(dwp);
 
-        if(any_sections_require_further_attention) {
-            SetTimer(hwnd, 1, 10, null);
+        // if still need more expanding/contracting, set a timer to get it done
+
+        if(expanding_or_contracting) {
+            SetTimer(hwnd, 1, USER_TIMER_MINIMUM, null);
         } else {
-            show_this_section = null;
+            active_section = null;
         }
     }
 
@@ -149,7 +154,7 @@ namespace
 
     void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        on_scroll(settings_scroll, hwnd, SB_VERT, code);
+        on_scroll(settings_scrollinfo, hwnd, SB_VERT, code);
         update_sections(hwnd);
     }
 
@@ -158,13 +163,13 @@ namespace
 
     BOOL on_initdialog_settings(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        revert_settings = settings;    // for reverting
-        dialog_settings = settings;    // currently editing
+        previous_settings = settings;    // for reverting
+        dialog_settings = settings;      // currently editing
 
         settings_should_update = false;
 
         // create the list of settings controllers
-        setting_controllers.clear();
+        controllers.clear();
         section_setting::sections.clear();
 
 #undef DECL_SETTING_SECTION
@@ -174,43 +179,28 @@ namespace
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define DECL_SETTING_SECTION(name, string_id)                                 \
-    {                                                                         \
-        auto s = new section_setting(#name, string_id, dialog_settings.name); \
-        setting_controllers.push_back(s);                                     \
-    }
+#define DECL_SETTING_SECTION(name, string_id) \
+    controllers.push_back(new section_setting(#name, string_id, dialog_settings.name))
 
-#define DECL_SETTING_BOOL(name, string_id, value)                                                                    \
-    {                                                                                                                \
-        auto b =                                                                                                     \
-            new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name); \
-        setting_controllers.push_back(b);                                                                            \
-    }
+#define DECL_SETTING_BOOL(name, string_id, value) \
+    controllers.push_back(                        \
+        new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name))
 
-#define DECL_SETTING_COLOR(name, string_id, argb, alpha)                                                     \
-    {                                                                                                        \
-        auto c = new color_setting(                                                                          \
-            #name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha); \
-        setting_controllers.push_back(c);                                                                    \
-    }
+#define DECL_SETTING_COLOR(name, string_id, argb, alpha) \
+    controllers.push_back(new color_setting(             \
+        #name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha))
 
-#define DECL_SETTING_ENUM(name, string_id, type, enum_names, value)                \
-    {                                                                              \
-        auto e = new enum_setting(#name,                                           \
-                                  string_id,                                       \
-                                  IDD_DIALOG_SETTING_ENUM,                         \
-                                  setting_enum_dlgproc,                            \
-                                  enum_names,                                      \
-                                  reinterpret_cast<uint &>(dialog_settings.name)); \
-        setting_controllers.push_back(e);                                          \
-    }
+#define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) \
+    controllers.push_back(new enum_setting(#name,                   \
+                                           string_id,               \
+                                           IDD_DIALOG_SETTING_ENUM, \
+                                           setting_enum_dlgproc,    \
+                                           enum_names,              \
+                                           reinterpret_cast<uint &>(dialog_settings.name)))
 
-#define DECL_SETTING_RANGED(name, string_id, value, min, max)                                                     \
-    {                                                                                                             \
-        auto r = new ranged_setting(                                                                              \
-            #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max); \
-        setting_controllers.push_back(r);                                                                         \
-    }
+#define DECL_SETTING_RANGED(name, string_id, value, min, max) \
+    controllers.push_back(new ranged_setting(                 \
+        #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max))
 
 #define DECL_SETTING_INTERNAL(name, type, ...)
 
@@ -234,7 +224,7 @@ namespace
 
         // create the sections and populate them
 
-        for(auto const s : setting_controllers) {
+        for(auto const s : controllers) {
 
             // if it's a new section, parent should be hwnd, else parent should be the current section
             if(s->is_section_header()) {
@@ -287,7 +277,7 @@ namespace
 
         // expand sections which were expanded last time
 
-        for(auto const s : setting_controllers) {
+        for(auto const s : controllers) {
             if(s->is_section_header()) {
                 section_setting *ss = reinterpret_cast<section_setting *>(s);
                 if(ss->expanded) {
@@ -301,8 +291,8 @@ namespace
 
         SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
 
-        settings_scroll.pos[SB_HORZ] = 0;
-        settings_scroll.pos[SB_VERT] = 0;
+        settings_scrollinfo.pos[SB_HORZ] = 0;
+        settings_scrollinfo.pos[SB_VERT] = 0;
 
         update_sections(hwnd);
 
@@ -317,7 +307,7 @@ namespace
 
     void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
-        scroll_window(settings_scroll, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
+        scroll_window(settings_scrollinfo, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
         update_sections(hwnd);
     }
 
@@ -327,7 +317,7 @@ namespace
     void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
     {
         if(wparam) {
-            show_this_section = reinterpret_cast<section_setting const *>(lparam);
+            active_section = reinterpret_cast<section_setting const *>(lparam);
         }
         update_sections(hwnd);
     }
@@ -361,7 +351,7 @@ namespace imageview::settings_ui
 
     //////////////////////////////////////////////////////////////////////
 
-    void on_reset_default_settings()
+    void reset_settings_to_defaults()
     {
         dialog_settings = default_settings;
         update_all_settings_controls();
@@ -370,14 +360,14 @@ namespace imageview::settings_ui
 
     //////////////////////////////////////////////////////////////////////
 
-    void on_save_current_settings()
+    void save_current_settings()
     {
         dialog_settings.save();
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    void on_load_settings()
+    void load_saved_settings()
     {
         dialog_settings.load();
         update_all_settings_controls();
@@ -386,9 +376,9 @@ namespace imageview::settings_ui
 
     //////////////////////////////////////////////////////////////////////
 
-    void on_revert_settings()
+    void revert_settings()
     {
-        dialog_settings = revert_settings;
+        dialog_settings = previous_settings;
         update_all_settings_controls();
         post_new_settings();
     }

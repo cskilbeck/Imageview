@@ -158,15 +158,15 @@ namespace
                 switch(choice) {
 
                 case ID_POPUP_SETTINGS_RESET_DEFAULT:
-                    on_reset_default_settings();
+                    reset_settings_to_defaults();
                     break;
 
                 case ID_POPUP_SETTINGS_SAVE:
-                    on_save_current_settings();
+                    save_current_settings();
                     break;
 
                 case ID_POPUP_SETTINGS_LOAD_SAVED:
-                    on_load_settings();
+                    load_saved_settings();
                     break;
                 }
             }
@@ -199,7 +199,7 @@ namespace
             // clicked the split button
 
         case IDC_SPLIT_BUTTON_SETTINGS:
-            on_revert_settings();
+            revert_settings();
             break;
 
             // close button clicked (IDCLOSE) or window closed (IDCANCEL from DefDlgProc)
