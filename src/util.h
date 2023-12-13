@@ -26,6 +26,7 @@ namespace imageview
     HRESULT color_from_string(std::string const &hex_text, uint32 &color);
     std::string color32_to_string(uint32 color);
     std::string color24_to_string(uint32 color);
+    uint32 color_lerp(uint32 ca, uint32 cb, int x);
 
     //////////////////////////////////////////////////////////////////////
     // app admin

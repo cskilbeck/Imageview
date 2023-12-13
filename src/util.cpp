@@ -195,6 +195,30 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
+    uint32 color_lerp(uint32 ca, uint32 cb, int x)
+    {
+        uint a1 = (ca >> 24) & 0xff;
+        uint b1 = (ca >> 16) & 0xff;
+        uint g1 = (ca >> 8) & 0xff;
+        uint r1 = (ca >> 0) & 0xff;
+
+        uint a2 = (cb >> 24) & 0xff;
+        uint b2 = (cb >> 16) & 0xff;
+        uint g2 = (cb >> 8) & 0xff;
+        uint r2 = (cb >> 0) & 0xff;
+
+        int y = 255 - x;
+
+        uint a3 = ((a1 * y) >> 8) + ((a2 * x) >> 8);
+        uint b3 = ((b1 * y) >> 8) + ((b2 * x) >> 8);
+        uint g3 = ((g1 * y) >> 8) + ((g2 * x) >> 8);
+        uint r3 = ((r1 * y) >> 8) + ((r2 * x) >> 8);
+
+        return (a3 << 24) | (b3 << 16) | (g3 << 8) | r3;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     uint32 color_to_uint32(vec4 color)
     {
         uint r = static_cast<uint>(XMVectorGetX(color) * 255.0f);

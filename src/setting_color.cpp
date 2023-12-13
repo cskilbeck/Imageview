@@ -13,23 +13,29 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // COLOR setting \ WM_DRAWITEM
 
-    void on_drawitem_setting_color(HWND hwnd, const DRAWITEMSTRUCT *lpDrawItem)
+    void on_drawitem_setting_color(HWND hwnd, const DRAWITEMSTRUCT *di)
     {
-        // make the color button the right color
-
-        if(lpDrawItem->CtlID == IDC_BUTTON_SETTING_COLOR) {
+        if(di->CtlID == IDC_BUTTON_SETTING_COLOR) {
 
             color_setting &setting = setting_controller::get<color_setting>(hwnd);
 
-            SetDCBrushColor(lpDrawItem->hDC, setting.value & 0xffffff);
+            // outline and fill colors change when they press it
 
-            SelectObject(lpDrawItem->hDC, GetStockObject(DC_BRUSH));
+            uint32 ic = setting.value & 0xffffff;
+            uint32 oc = RGB(0, 0, 0);
+            if((di->itemState & ODS_SELECTED) != 0) {
+                oc = RGB(96, 160, 224);
+                ic = color_lerp(ic, RGB(128, 128, 255), 128);
+            }
 
-            Rectangle(lpDrawItem->hDC,
-                      lpDrawItem->rcItem.left,
-                      lpDrawItem->rcItem.top,
-                      lpDrawItem->rcItem.right,
-                      lpDrawItem->rcItem.bottom);
+            SetDCBrushColor(di->hDC, ic);
+            SetDCPenColor(di->hDC, oc);
+
+            SelectObject(di->hDC, GetStockObject(DC_BRUSH));
+            SelectObject(di->hDC, GetStockObject(DC_PEN));
+
+            RECT const &r = di->rcItem;
+            Rectangle(di->hDC, r.left, r.top, r.right, r.bottom);
         }
     }
 
@@ -52,7 +58,7 @@ namespace
             }
         } break;
 
-            // edited the hex text (or new text from clicking the color button)
+            // edited the hex text (or new text from clicking the color button via update_controls())
 
         case IDC_EDIT_SETTING_COLOR: {
 
