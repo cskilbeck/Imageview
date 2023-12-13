@@ -62,9 +62,10 @@ namespace
         GetWindowRect(tab_ctrl, &tab_rect);
         TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
 
-        // stack the sections
+        // get height of the sections
 
         int total_height = 0;
+
         for(auto const s : section_setting::sections) {
 
             int height = s->banner_height;
@@ -73,16 +74,36 @@ namespace
                 height = s->expanded_height;
             }
 
-            SetWindowPos(s->window, null, 0, total_height, rect_width(tab_rect), height, SWP_NOZORDER | SWP_SHOWWINDOW);
-
             total_height += height;
         }
 
-        // size the window to fit within the tab control exactly
-
-        SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
+        // set scrollbars based on total height
 
         update_scrollbars(settings_scroll, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
+
+        // move all the sections based on scrollbar position
+
+        HDWP dwp = BeginDeferWindowPos(static_cast<int>(section_setting::sections.size() + 1u));
+
+        int ypos = -settings_scroll.pos[SB_VERT];
+        int xpos = -settings_scroll.pos[SB_HORZ];
+
+        for(auto const s : section_setting::sections) {
+
+            int height = s->banner_height;
+
+            if(s->expanded) {
+                height = s->expanded_height;
+            }
+
+
+            DeferWindowPos(
+                dwp, s->window, null, xpos, ypos, rect_width(tab_rect), height, SWP_NOZORDER | SWP_SHOWWINDOW);
+
+            ypos += height;
+        }
+
+        EndDeferWindowPos(dwp);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -90,7 +111,8 @@ namespace
 
     void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        on_scroll(settings_scroll, SB_VERT, code);
+        on_scroll(settings_scroll, hwnd, SB_VERT, code);
+        update_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -220,6 +242,13 @@ namespace
             }
         }
 
+        // size the window to fit within the tab control exactly
+
+        SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
+
+        settings_scroll.pos[SB_HORZ] = 0;
+        settings_scroll.pos[SB_VERT] = 0;
+
         update_sections(hwnd);
 
         // uncork the settings notifier
@@ -233,8 +262,10 @@ namespace
 
     void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
-        scroll_window(settings_scroll, SB_VERT, -zDelta / WHEEL_DELTA);
+        scroll_window(settings_scroll, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
+        update_sections(hwnd);
     }
+
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_COMMAND (but faked from section button)
 
