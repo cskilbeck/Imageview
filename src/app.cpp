@@ -2500,20 +2500,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // swap back/front buffers
-
-    HRESULT present()
-    {
-        HRESULT hr = swap_chain->Present(1, 0);
-
-        if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-            hr = app::on_device_lost();
-        }
-
-        return hr;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // setup shader data
 
     void setup_shader()
@@ -2761,9 +2747,13 @@ namespace
             draw_text_overlays();
         }
 
-        CHK_HR(present());
+        HRESULT hr = swap_chain->Present(1, 0);
 
-        return S_OK;
+        if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+            hr = app::on_device_lost();
+        }
+
+        return hr;
     }
 
     //////////////////////////////////////////////////////////////////////
