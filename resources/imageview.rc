@@ -45,8 +45,8 @@ BEGIN
     IDS_ENUM_FULLSCREEN_STARTUP_FULLSCREEN "Fullscreen"
     IDS_SETTING_NAME_BORDER_COLOR "Border color"
     IDS_SETTING_NAME_BACKGROUND_COLOR "Background color"
-    IDS_SETTING_NAME_GRID_ENABLED "Enable grid"
-    IDS_SETTING_NAME_GRID_COLOR1 "Grid color 1"
+    IDS_SETTING_NAME_GRID_ENABLED "Checkerboard"
+    IDS_SETTING_NAME_GRID_COLOR1 "Checkerboard color 1"
 END
 
 STRINGTABLE
@@ -90,9 +90,9 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_SETTING_NAME_GRID_COLOR2 "Grid color 2"
-    IDS_SETTING_NAME_GRID_SIZE "Grid size"
-    IDS_SETTING_NAME_FIXED_GRID "Fixed grid"
+    IDS_SETTING_NAME_GRID_COLOR2 "Checkerboard color 2"
+    IDS_SETTING_NAME_GRID_SIZE "Checkerboard size"
+    IDS_SETTING_NAME_FIXED_GRID "Floating checkerboard"
     IDS_SETTING_NAME_GRID_MULTIPLIER "Grid multiplier"
     IDS_SETTING_NAME_SELECT_FILL_COLOR "Selection overlay color"
     IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1 "Select box outline color 1"
@@ -179,6 +179,8 @@ BEGIN
     IDS_SETTING_NAME_OVERLAY_GRID_COLOR "Grid color"
     IDS_SETTING_SEPARATOR_FILES "Files"
     IDS_SETTING_NAME_CROSSHAIR_DASH_LENGTH "Crosshair dash length"
+    IDS_SETTING_NAME_CROSSHAIR_WIDTH "Crosshair line width"
+    IDS_SETTING_SEPARATOR_CROSSHAIR "Crosshair"
 END
 
 #endif    // English (Neutral) resources

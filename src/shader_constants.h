@@ -11,7 +11,7 @@
     int2 bottom_right;
 
     // grid colors in a 2x2 checkerboard pattern
-    float4 grid_color[4];
+    float4 checkerboard_color[4];
 
     // selection rectangle topleft/bottomright in screen coordinates
     int4 inner_select_rect;
@@ -37,6 +37,8 @@
 
     // grid offset is {0,0} for 'floating', otherwise based on image position
     float2 grid_offset;
+
+    float2 crosshair_width;
 
     // grid size in screen pixels
     float grid_size;

@@ -16,11 +16,6 @@ DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0x203040, false)
 
 DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xff00ff, false);
 
-//////////////////////////////////////////////////////////////////////
-// grid
-
-DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_GRID);
-
 // grid on or off
 
 DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
@@ -30,24 +25,13 @@ DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
 DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x202020, false);
 DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x505050, false);
 
-// overlay grid
-
-DECL_SETTING_COLOR(overlay_grid_color, IDS_SETTING_NAME_OVERLAY_GRID_COLOR, 0x80808080, true);
-
-DECL_SETTING_RANGED(overlay_grid_width, IDS_SETTING_NAME_OVERLAY_GRID_WIDTH, 8, 2, 512);
-DECL_SETTING_RANGED(overlay_grid_height, IDS_SETTING_NAME_OVERLAY_GRID_HEIGHT, 8, 2, 512);
-
 // grid size in pixels
 
-DECL_SETTING_RANGED(grid_size, IDS_SETTING_NAME_GRID_SIZE, 16, 1, 512);
+DECL_SETTING_RANGED(grid_size, IDS_SETTING_NAME_GRID_SIZE, 16, 4, 128);
 
 // grid is fixed to screen coords (true) or floats (fixed to image origin)
 
 DECL_SETTING_BOOL(fixed_grid, IDS_SETTING_NAME_FIXED_GRID, true);
-
-// grid size multiplier, @NOTE must be a power of 2
-
-DECL_SETTING_RANGED(grid_multiplier, IDS_SETTING_NAME_GRID_MULTIPLIER, 2, 1, 4);
 
 //////////////////////////////////////////////////////////////////////
 // select
@@ -71,6 +55,11 @@ DECL_SETTING_RANGED(select_border_width, IDS_SETTING_NAME_SELECT_BORDER_WIDTH, 2
 
 DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 64);
 
+//////////////////////////////////////////////////////////////////////
+// crosshair
+
+DECL_SETTING_SECTION(IDS_SETTING_SEPARATOR_CROSSHAIR);
+
 // crosshair line colors
 
 DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0xff000000, true);
@@ -79,6 +68,10 @@ DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0xffffff
 // crosshair dash length
 
 DECL_SETTING_RANGED(crosshair_dash_length, IDS_SETTING_NAME_CROSSHAIR_DASH_LENGTH, 8, 4, 64);
+
+// crosshair dash length
+
+DECL_SETTING_RANGED(crosshair_width, IDS_SETTING_NAME_CROSSHAIR_WIDTH, 2, 1, 16);
 
 //////////////////////////////////////////////////////////////////////
 // mouse buttons
@@ -162,6 +155,10 @@ DECL_SETTING_RANGED(cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 128, 16, 4096
 
 //////////////////////////////////////////////////////////////////////
 // internal settings, not exposed in the UI
+
+// grid size multiplier, checkerboard is multiplied by 2^grid_multiplier
+
+DECL_SETTING_INTERNAL(uint, grid_multiplier, 1);
 
 // how far mouse has to move after clicking select button to consider a selection active
 

@@ -102,8 +102,8 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    char const *small_font_family_name{ "Noto Sans" };
-    char const *mono_font_family_name{ "Roboto Mono" };
+    char const *label_font_family_name{ "Noto Sans" };
+    char const *banner_font_family_name{ "Roboto Mono" };
 
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
     std::string current_folder;
@@ -263,8 +263,8 @@ namespace
     ComPtr<ID2D1SolidColorBrush> text_outline_brush;
     ComPtr<ID2D1SolidColorBrush> text_bg_brush;
 
-    ComPtr<IDWriteTextFormat> large_text_format;
-    ComPtr<IDWriteTextFormat> small_text_format;
+    ComPtr<IDWriteTextFormat> banner_format;
+    ComPtr<IDWriteTextFormat> label_format;
 
     ComPtr<IDWriteFontCollection> font_collection;
 
@@ -731,14 +731,17 @@ namespace
         // if it's in the cache already, just show it
         // TODO (chs): make this file path compare canonical
 
-        set_message(std::format("{}{}", fullpath, localize(IDS_IS_LOADING)), 10);
-
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
             LOG_DEBUG("Already got {}", name);
             CHK_HR(display_image(found->second));
             CHK_HR(warm_cache());
             return S_OK;
+        }
+
+        // TODO (chs): fix this lame
+        if(settings.show_filename != show_filename_never) {
+            set_message(std::format("{}{}", fullpath, localize(IDS_IS_LOADING)), 5);
         }
 
         // if it's currently being loaded, mark it for viewing when it arrives
@@ -1230,8 +1233,8 @@ namespace
 
     HRESULT create_text_formats()
     {
-        float large_font_size = dpi_scale(16.0f);
-        float small_font_size = dpi_scale(12.0f);
+        float banner_font_size = dpi_scale(16.0f);
+        float label_font_size = dpi_scale(12.0f);
 
         auto weight = DWRITE_FONT_WEIGHT_REGULAR;
         auto style = DWRITE_FONT_STYLE_NORMAL;
@@ -1239,22 +1242,22 @@ namespace
 
         // TODO (chs): localization
 
-        CHK_HR(dwrite_factory->CreateTextFormat(unicode(small_font_family_name).c_str(),
+        CHK_HR(dwrite_factory->CreateTextFormat(unicode(label_font_family_name).c_str(),
                                                 font_collection.Get(),
                                                 weight,
                                                 style,
                                                 stretch,
-                                                large_font_size,
+                                                banner_font_size,
                                                 L"en-us",
-                                                &large_text_format));
-        CHK_HR(dwrite_factory->CreateTextFormat(unicode(mono_font_family_name).c_str(),
+                                                banner_format.ReleaseAndGetAddressOf()));
+        CHK_HR(dwrite_factory->CreateTextFormat(unicode(banner_font_family_name).c_str(),
                                                 font_collection.Get(),
                                                 weight,
                                                 style,
                                                 stretch,
-                                                small_font_size,
+                                                label_font_size,
                                                 L"en-us",
-                                                &small_text_format));
+                                                label_format.ReleaseAndGetAddressOf()));
 
         return S_OK;
     }
@@ -1373,7 +1376,7 @@ namespace
 
         CHK_HR(create_text_formats());
 
-        CHK_HR(measure_string("X 9999 Y 9999", small_text_format.Get(), label_pad, small_label_size));
+        CHK_HR(measure_string("X 9999 Y 9999", label_format.Get(), label_pad, small_label_size));
 
         return S_OK;
     }
@@ -2519,9 +2522,11 @@ namespace
 
         shader.frame = -frame_count;
 
-        shader.crosshairs = { -1, -1 };
+        shader.crosshairs = { -99999, 99999 };
 
         if(crosshairs_active) {
+
+            shader.crosshair_width = { settings.crosshair_width / 2.0f, settings.crosshair_width / 2.0f };
 
             vec4 oc1 = color_from_uint32(settings.crosshair_color1);
             vec4 oc2 = color_from_uint32(settings.crosshair_color2);
@@ -2533,6 +2538,7 @@ namespace
 
             vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
             vec2 ts = mul_point(texel_size(), { 0.5f, 0.5f });
+
             shader.crosshairs = add_point(texture_to_screen_pos(p), ts);
         }
 
@@ -2556,10 +2562,10 @@ namespace
             g2 = g1;
         }
 
-        shader.grid_color[0] = g1;
-        shader.grid_color[1] = g2;
-        shader.grid_color[2] = g2;
-        shader.grid_color[3] = g1;
+        shader.checkerboard_color[0] = g1;
+        shader.checkerboard_color[1] = g2;
+        shader.checkerboard_color[2] = g2;
+        shader.checkerboard_color[3] = g1;
 
         shader.border_color = color_from_uint32(settings.border_color);
 
@@ -2576,15 +2582,9 @@ namespace
         shader.uv_scale = texture_scale;
         shader.uv_offset = mul_point(uv_offset, texture_scale);
 
-        float gm = (1 << settings.grid_multiplier) / 4.0f;
-        // uint gs = static_cast<uint>(settings.grid_size * current_rect.w / texture_width * gm);
-        float gs = floor(settings.grid_size * gm);
+        uint gs = settings.grid_size * (1 << settings.grid_multiplier);
 
-        if(gs < 4) {
-            gs = 0;
-        }
-
-        shader.grid_size = gs;
+        shader.grid_size = static_cast<float>(std::max(4u, gs));
         shader.grid_offset = grid_pos;
 
         memset(shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
@@ -2645,18 +2645,19 @@ namespace
             image::image_t const &img = current_file->img;
             byte const *pixel = img.pixels + img.row_pitch * (uint)p.y + (uint)p.x * 4;
 
-            vec2 screen_pos = texture_to_screen_pos(p);
-            screen_pos.x += texel_size().x / 2 - dpi_scale(label_pad * 3);
-            screen_pos.y -= dpi_scale(4);
+            vec2 screen_pos = add_point(texture_to_screen_pos(p), { texel_size().x / 2.0f, 0 });
+
+            vec2 draw_pos = add_point(screen_pos, { -dpi_scale(label_pad * 2 + 8), -dpi_scale(4.0f) });
 
             std::string text{ std::format("{},{}", (int)p.x, (int)p.y) };
-            draw_string(text, small_text_format.Get(), screen_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
+            draw_string(text, label_format.Get(), draw_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
 
             // pixels are BGRA, show as RGBA
             rgb_pixel_text = std::format("{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
 
-            screen_pos.x += dpi_scale(label_pad * 6);
-            draw_string(rgb_pixel_text, small_text_format.Get(), screen_pos, { 0, 1 }, 1.0f, label_pad, label_pad);
+            draw_pos = add_point(screen_pos, { dpi_scale(label_pad * 2 + 8), -dpi_scale(4.0f) });
+
+            draw_string(rgb_pixel_text, label_format.Get(), draw_pos, { 0, 1 }, 1.0f, label_pad, label_pad);
         }
 
         if(select_active) {
@@ -2668,7 +2669,7 @@ namespace
             vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
             vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
             draw_string(std::format("{},{}", (int)select_tl.x, (int)select_tl.y),
-                        small_text_format.Get(),
+                        label_format.Get(),
                         s_tl,
                         { 1, 1 },
                         1.0f,
@@ -2676,7 +2677,7 @@ namespace
                         2);
             float sw = floor(select_br.x) - floorf(select_tl.x) + 1;
             float sh = floorf(select_br.y) - floorf(select_tl.y) + 1;
-            draw_string(std::format("{}x{}", sw, sh), small_text_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+            draw_string(std::format("{}x{}", sw, sh), label_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
         }
 
         if(!current_message.empty()) {
@@ -2692,7 +2693,7 @@ namespace
                 vec2 pos{ dpi_scale(16.0f), window_height - dpi_scale(12.0f) };
 
                 draw_string(std::format("{}", current_message),
-                            large_text_format.Get(),
+                            banner_format.Get(),
                             pos,
                             { 0.0f, 1.0f },
                             message_alpha,
@@ -3696,8 +3697,24 @@ namespace imageview::app
 
             setup_window_text();
 
-            std::string msg{ std::format("{} {}x{}", f->filename, texture_width, texture_height) };
-            set_message(msg, 2.0f);
+            float fade_time;
+            switch(settings.show_filename) {
+            case show_filename_always:
+                fade_time = 1000000.0f;
+                break;
+            case show_filename_briefly:
+                fade_time = 5.0f;
+                break;
+            default:
+            case show_filename_never:
+                fade_time = 0.0f;
+                break;
+            }
+
+            if(fade_time != 0.0f) {
+                std::string msg{ std::format("{} {}x{}", f->filename, texture_width, texture_height) };
+                set_message(msg, fade_time);
+            }
 
         } else {
 
