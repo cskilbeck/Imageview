@@ -26,7 +26,13 @@ namespace
         HWND tab = GetParent(hwnd);
         section_setting &setting = setting_controller::get<section_setting>(hwnd);
         setting.expanded = !setting.expanded;
-        PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
+        if(setting.expanded) {
+            setting.target_height = setting.expanded_height;
+            PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
+        } else {
+            setting.target_height = setting.banner_height;
+            PostMessage(tab, WM_USER, 0, 0);
+        }
     }
 }
 

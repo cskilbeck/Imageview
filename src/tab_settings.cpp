@@ -21,6 +21,11 @@ namespace
     std::list<setting_controller *> setting_controllers;
 
     //////////////////////////////////////////////////////////////////////
+    // which one is expanding (make sure it's visible)
+
+    section_setting const *show_this_section;
+
+    //////////////////////////////////////////////////////////////////////
     // suppress sending new settings to main window when bulk update in progress
 
     bool settings_should_update{ false };
@@ -52,7 +57,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void update_sections(HWND hwnd, section_setting const *show_section)
+    void update_sections(HWND hwnd)
     {
         HWND tab_ctrl;
         HWND parent = GetParent(hwnd);
@@ -62,13 +67,28 @@ namespace
         GetWindowRect(tab_ctrl, &tab_rect);
         TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
 
-        // get height of the sections
+        // update and get new heights of the sections
+
+        bool any_sections_require_further_attention{ false };
 
         int total_height = 0;
 
+        // speed based on size of tab rect so dpi taken into account
+        int expand_speed = rect_height(tab_rect) / 20;
+
+        // expand/contract sections and get total height
         for(auto const s : section_setting::sections) {
 
-            total_height += s->height();
+            int diff = s->current_height - s->target_height;
+
+            if(diff != 0) {
+
+                int dir = diff < 0 ? expand_speed : -expand_speed;
+                s->current_height = std::clamp(s->current_height + dir, s->banner_height, s->expanded_height);
+            }
+            total_height += s->current_height;
+
+            any_sections_require_further_attention |= s->current_height != s->target_height;
         }
 
         // set scrollbars based on total height
@@ -76,7 +96,7 @@ namespace
         update_scrollbars(settings_scroll, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
 
         // scroll so required section is within view
-        if(show_section != null) {
+        if(show_this_section != null) {
 
             // currently visible portion of the whole window
             int v_top = settings_scroll.pos[SB_VERT];
@@ -84,12 +104,12 @@ namespace
 
             // extent of the required section
             RECT rc;
-            GetWindowRect(show_section->window, &rc);
+            GetWindowRect(show_this_section->window, &rc);
             MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
 
             // scroll up into view if necessary
             int top = rc.top + v_top;
-            int bottom = top + show_section->height();
+            int bottom = top + show_this_section->current_height;
             int diff = bottom - v_bottom;
             if(diff > 0) {
                 v_top += diff;
@@ -107,7 +127,7 @@ namespace
 
         for(auto const s : section_setting::sections) {
 
-            int height = s->height();
+            int height = s->current_height;
 
             DeferWindowPos(
                 dwp, s->window, null, xpos, ypos, rect_width(tab_rect), height, SWP_NOZORDER | SWP_SHOWWINDOW);
@@ -116,6 +136,12 @@ namespace
         }
 
         EndDeferWindowPos(dwp);
+
+        if(any_sections_require_further_attention) {
+            SetTimer(hwnd, 1, 10, null);
+        } else {
+            show_this_section = null;
+        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -124,7 +150,7 @@ namespace
     void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
         on_scroll(settings_scroll, hwnd, SB_VERT, code);
-        update_sections(hwnd, null);
+        update_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -226,6 +252,8 @@ namespace
 
                 cur_section->banner_height = rect_height(rc);
                 cur_section->expanded_height = cur_section->banner_height;
+                cur_section->current_height = cur_section->banner_height;
+                cur_section->target_height = cur_section->banner_height;
 
             } else {
 
@@ -261,7 +289,7 @@ namespace
         settings_scroll.pos[SB_HORZ] = 0;
         settings_scroll.pos[SB_VERT] = 0;
 
-        update_sections(hwnd, null);
+        update_sections(hwnd);
 
         // uncork the settings notifier
         settings_should_update = true;
@@ -275,15 +303,24 @@ namespace
     void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
         scroll_window(settings_scroll, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
-        update_sections(hwnd, null);
+        update_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_COMMAND (but faked from section button)
+    // SETTINGS page \ WM_USER
 
     void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
     {
-        update_sections(hwnd, reinterpret_cast<section_setting const *>(lparam));
+        show_this_section = reinterpret_cast<section_setting const *>(lparam);
+        update_sections(hwnd);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS page \ WM_TIMER
+
+    void on_timer_settings(HWND hwnd, uint id)
+    {
+        update_sections(hwnd);
     }
 }
 
@@ -300,6 +337,7 @@ namespace imageview::settings_dialog
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
             HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
             HANDLE_MSG(hWnd, WM_USER, on_user_settings);
+            HANDLE_MSG(hWnd, WM_TIMER, on_timer_settings);
         }
         return ctlcolor_base(hWnd, msg, wParam, lParam);
     }

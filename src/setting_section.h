@@ -14,6 +14,7 @@ namespace imageview::settings_dialog
             , expanded_height(0)
             , banner_height(0)
             , current_height(0)
+            , target_height(0)
             , expanded(false)
         {
         }
@@ -37,6 +38,7 @@ namespace imageview::settings_dialog
         int expanded_height;
         int banner_height;
         int current_height;
+        int target_height;
         bool expanded;
 
         static std::list<section_setting *> sections;
