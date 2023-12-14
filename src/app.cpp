@@ -578,7 +578,7 @@ namespace
                 if(SUCCEEDED(fl->hresult)) {
 
                     // Need to call this in any thread which uses Windows Imaging Component
-                    CoInitializeEx(null, COINIT_APARTMENTTHREADED);
+                    (void)CoInitializeEx(null, COINIT_APARTMENTTHREADED);
 
                     // decode the image
                     fl->hresult = image::decode(fl);
@@ -2624,7 +2624,7 @@ namespace
             vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
 
             image::image_t const &img = current_file->img;
-            byte const *pixel = img.pixels + img.row_pitch * (uint)p.y + (uint)p.x * 4;
+            byte const *pixel = img.pixels + img.row_pitch * (uint64)p.y + (uint64)p.x * 4llu;
 
             vec2 screen_pos = add_point(texture_to_screen_pos(p), { texel_size().x / 2.0f, 0 });
 
@@ -3301,6 +3301,7 @@ namespace
             cur_mouse_pos = pos;
         }
 
+        // TODO (chs): also square snap mode!? Only works for defining selection currently....
         if(snap_mode == snap_mode_t::axis) {
 
             switch(snap_axis) {
@@ -3927,7 +3928,7 @@ namespace imageview::app
 
 //////////////////////////////////////////////////////////////////////
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
     imageview::app::main();
     return 0;

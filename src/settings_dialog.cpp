@@ -95,7 +95,13 @@ namespace
                     active_tab_index = t->index;
                 }
 
-                CHK_NULL(t->hwnd = CreateDialogW(app::instance, MAKEINTRESOURCEW(t->resource_id), hwnd, t->dlg_proc));
+                t->hwnd =
+                    CreateDialogParamW((HMODULE)app::instance, MAKEINTRESOURCEW(t->resource_id), hwnd, t->dlg_proc, 0);
+
+                if(t->hwnd == null) {
+                    imageview::display_error(L"CreateDialogParamW failed!?");
+                    return false;
+                }
 
                 SetWindowPos(
                     t->hwnd, HWND_TOP, tab_rect.left, tab_rect.top, rect_width(tab_rect), rect_height(tab_rect), 0);
@@ -138,7 +144,8 @@ namespace
 
         case IDC_SPLIT_BUTTON_SETTINGS: {
 
-            if(nmhdr->code == BCN_DROPDOWN) {
+#pragma warning(suppress : 26454)
+            if(nmhdr->code == (uint)(BCN_DROPDOWN)) {
 
                 RECT rc;
                 GetWindowRect(GetDlgItem(hwnd, IDC_SPLIT_BUTTON_SETTINGS), &rc);

@@ -57,7 +57,7 @@ namespace imageview::recent_files
     {
         std::thread([]() {
 
-            CoInitialize(null);
+            (void)CoInitialize(null);
 
             PWSTR recent_file_path;
 

@@ -12,7 +12,7 @@ namespace
     {
         std::wstring description;
         std::wstring filter;
-        bool is_default;
+        bool is_default{ false };
     };
 
     struct GUID_compare

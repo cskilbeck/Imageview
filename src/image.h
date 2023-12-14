@@ -35,7 +35,7 @@ namespace imageview::image
         std::vector<byte> pixels;        // decoded pixels from the file, format is always BGRA32
         bool is_clipboard{ false };      // is it the dummy clipboard image_file?
 
-        image_t img;
+        image_t img{};
 
         bool is_decoded() const
         {

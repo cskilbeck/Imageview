@@ -424,6 +424,8 @@ namespace imageview::image
                 WICInProcPointer data;
                 CHK_HR(lock->GetDataPointer(&buffer_size, &data));
 
+                assert(data != null);    // satisfy the analyzer...
+
                 CHK_HR(bmp_src->CopyPixels(null, (uint32)pitch, buffer_size, data));
             }
 

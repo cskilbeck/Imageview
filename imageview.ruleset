@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<RuleSet Name="ImageView Rulesset" Description="Some Rules" ToolsVersion="16.0">
+<RuleSet Name="ImageView Rulesset" Description="Some Rules" ToolsVersion="17.0">
   <Rules AnalyzerId="Microsoft.Analyzers.NativeCodeAnalysis" RuleNamespace="Microsoft.Rules.Native">
     <Rule Id="C26100" Action="Warning" />
     <Rule Id="C26101" Action="Warning" />
@@ -26,7 +26,6 @@
     <Rule Id="C26498" Action="Warning" />
     <Rule Id="C26810" Action="Warning" />
     <Rule Id="C26811" Action="Warning" />
-    <Rule Id="C26812" Action="Warning" />
     <Rule Id="C26815" Action="Warning" />
     <Rule Id="C26816" Action="Warning" />
     <Rule Id="C26817" Action="Warning" />

@@ -14,7 +14,7 @@ namespace imageview
 
     std::wstring windows_error_message(uint32 err = 0);
     HRESULT log_win32_error(wchar const *message, DWORD err = 0);
-    HRESULT display_error(std::wstring const &message, HRESULT hr = 0);
+    HRESULT display_error(std::wstring const &message, HRESULT hr = (HRESULT)0);
     int message_box(HWND hwnd, std::wstring const &text, uint buttons);
 
     //////////////////////////////////////////////////////////////////////
@@ -203,13 +203,12 @@ namespace imageview
         }                                                   \
     } while(false)
 
-#define _DO_NULL(x, y)                                    \
-    do {                                                  \
-        auto hr##y = (x);                                 \
-        if(hr##y == (decltype(hr##y))null) {              \
-            DWORD gle##y = GetLastError();                \
-            return imageview::display_error(L#x, gle##y); \
-        }                                                 \
+#define _DO_NULL(x, y)                            \
+    do {                                          \
+        auto hr##y = (x);                         \
+        if(hr##y == (decltype(hr##y))null) {      \
+            return imageview::display_error(L#x); \
+        }                                         \
     } while(false)
 
 // if(FAILED(x)) { return hresult; }
