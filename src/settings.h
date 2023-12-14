@@ -55,6 +55,7 @@ enum zoom_mode_t : uint
 
 enum mouse_button_t : int
 {
+    btn_min = 0,
     btn_left = 0,
     btn_middle = 1,
     btn_right = 2,

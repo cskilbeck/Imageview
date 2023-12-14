@@ -1796,16 +1796,16 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // get current mouse buttons
 
-    bool get_mouse_buttons(int button)
+    bool get_mouse_buttons(mouse_button_t button)
     {
-        return (mouse_grab & (1 << button)) != 0;
+        return (mouse_grab & (1 << static_cast<int>(button))) != 0;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    void set_mouse_button(int button)
+    void set_mouse_button(mouse_button_t button)
     {
-        int mask = 1 << (int)button;
+        int mask = 1 << static_cast<int>(button);
         if(mouse_grab == 0) {
             SetCapture(window);
         }
@@ -2120,7 +2120,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // WM_[L/M/R]BUTTONDOWN]
 
-    void on_mouse_button_down(POINT pos, uint button)
+    void on_mouse_button_down(POINT pos, mouse_button_t button)
     {
         assert(button < btn_count);
 
@@ -2131,7 +2131,7 @@ namespace
 
         set_mouse_button(button);
 
-        if(button == static_cast<uint>(settings.select_button)) {
+        if(button == settings.select_button) {
 
             if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
 
@@ -2147,7 +2147,7 @@ namespace
                 select_active = false;
             }
 
-        } else if(button == static_cast<uint>(settings.zoom_button) && !popup_menu_active) {
+        } else if(button == settings.zoom_button && !popup_menu_active) {
 
             ShowCursor(FALSE);
         }
@@ -2751,11 +2751,35 @@ namespace
         return hr;
     }
 
+    enum select_mode_t
+    {
+        // no selection defined
+        // on mouse click followed by mouse move more than threshold, set select_anchor.xy = mouse.xy
+        select_mode_none = 0,
+
+        // dragging a corner
+        // set select_current.xy = mouse.xy
+        select_mode_dragging_corner = 1,
+
+        // dragging top or bottom edge
+        // set select_current.y = mouse.y
+        select_mode_dragging_vertical = 2,
+
+        // dragging left or right edge
+        // set select_current.x = mouse.x
+        select_mode_dragging_horizontal = 3,
+
+        // dragging whole selection (grabbed inside the rectangle)
+        // set select_current and select_anchor
+        select_mode_dragging_all = 2,
+    };
+
     //////////////////////////////////////////////////////////////////////
     // call this repeatedly when there are no windows messages available
 
     HRESULT update()
     {
+        // TODO (chs): allow crosshairs on another key
         crosshairs_active = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
         m_timer.update();
@@ -2771,149 +2795,32 @@ namespace
             }
         };
 
+        // update image position/zoom towards target
+
         lerp(current_rect.x, target_rect.x);
         lerp(current_rect.y, target_rect.y);
         lerp(current_rect.w, target_rect.w);
         lerp(current_rect.h, target_rect.h);
 
+        // update mouse deltas if in zoom mode
+
         if(get_mouse_buttons(settings.zoom_button)) {
+
             POINT old_pos{ mouse_click[settings.zoom_button].x, mouse_click[settings.zoom_button].y };
             ClientToScreen(window, &old_pos);
             SetCursorPos(old_pos.x, old_pos.y);
         }
 
-        if(get_mouse_buttons(settings.drag_button) && !get_mouse_buttons(settings.zoom_button)) {
-            current_rect.x += mouse_offset[settings.drag_button].x;
-            current_rect.y += mouse_offset[settings.drag_button].y;
-            target_rect = current_rect;
-            has_been_zoomed_or_dragged = true;
-        }
-
-        selecting = get_mouse_buttons(settings.select_button) && image_texture.Get() != null && !grabbing_selection;
-
-        if(selecting && !get_mouse_buttons(settings.zoom_button)) {
-
-            // get this out of update and into mouse move handler...
-            if(drag_selection) {
-
-                vec2 mouse{ cur_mouse_pos };
-
-                // texel mouse is over right now
-                vec2 cur_texel_pos = vec2::floor(screen_to_texture_pos(mouse));
-
-                // distance moved in texels since last frame
-                vec2 diff = sub_point(cur_texel_pos, drag_select_pos);
-
-                // so, we have a delta, but what to drag?
-                // could be a corner, could be an edge, could be the whole selection
-
-                float *x = &select_anchor.x;
-                float *y = &select_anchor.y;
-
-                vec2 max{ 0, 0 };
-                vec2 min{ select_anchor };
-
-                if(selection_hover & sel_hover_left) {
-                    x = &select_anchor.x;
-                    max.x = select_current.x;
-                    min.x = 0.0f;
-                } else if(selection_hover & sel_hover_right) {
-                    x = &select_current.x;
-                    max.x = (float)texture_width - 1;
-                    min.x = select_anchor.x;
-                }
-
-                if(selection_hover & sel_hover_top) {
-                    y = &select_anchor.y;
-                    max.y = select_current.y;
-                    min.y = 0.0f;
-                } else if(selection_hover & sel_hover_bottom) {
-                    y = &select_current.y;
-                    max.y = (float)texture_height - 1;
-                    min.y = select_anchor.y;
-                }
-
-                max = vec2::max(max, min);
-
-                if(selection_hover == sel_hover_inside) {
-                    min = { 0, 0 };
-                    vec2 ts = sub_point(texture_size(), { 1, 1 });
-                    max = sub_point(ts, selection_size);
-                }
-
-                // get actual movement
-                vec2 old{ *x, *y };
-
-                vec2 np = vec2::clamp(min, add_point(old, diff), max);
-
-                // actual distance moved after clamp
-                vec2 delta = sub_point(np, old);
-
-                if(x != null) {
-                    *x = np.x;
-                }
-                if(y != null) {
-                    *y = np.y;
-                }
-
-                if(selection_hover == sel_hover_inside) {
-                    select_current = add_point(select_anchor, selection_size);
-                }
-
-                // remember texel coordinate for next frame
-                drag_select_pos = add_point(drag_select_pos, delta);
-
-            } else if(image_texture.Get() != null) {
-
-                select_current = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-
-                // force the selection to be square if ctrl is held
-                if(snap_mode == snap_mode_t::square) {
-
-                    // selection dimensions
-                    vec2 d = sub_point(select_current, select_anchor);
-
-                    // biggest axis
-                    float m = std::max(fabsf(d.x), fabsf(d.y));
-
-                    // in the right quadrant
-                    vec2 s{ m, m };
-                    if(d.x < 0) {
-                        s.x = -s.x;
-                    }
-                    if(d.y < 0) {
-                        s.y = -s.y;
-                    }
-
-                    // now clamp to texture
-                    vec2 n = sub_point(select_anchor, clamp_to_texture(add_point(s, select_anchor)));
-
-                    // and get new clamped dimensions
-                    d = sub_point(select_current, select_anchor);
-
-                    // this time snap to the smallest axis
-                    m = std::min(fabsf(n.x), fabsf(n.y));
-
-                    // in the right quadrant
-                    s = vec2{ m, m };
-                    if(d.x < 0) {
-                        s.x = -s.x;
-                    }
-                    if(d.y < 0) {
-                        s.y = -s.y;
-                    }
-                    select_current = add_point(s, select_anchor);
-                }
-            }
-        }
         memset(mouse_offset, 0, sizeof(mouse_offset));
 
         // delay showing window until file is loaded (or 1/4 second, whichever comes first)
 
         if(frame_count > 0 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
 
+            // don't use saved window placement if it wasn't loaded from saved settings
+
             if(settings.first_run) {
-                SetWindowPos(window, null, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW);
+                ShowWindow(window, SW_SHOW);
                 settings.first_run = false;
             } else {
                 SetWindowPlacement(window, &settings.window_placement);
@@ -3098,21 +3005,24 @@ namespace
         Rid[0].hwndTarget = hwnd;
         RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
+        // if we have a saved windowplacement and we're not in fullscreen mode
+
         if(!settings.first_run && !settings.fullscreen) {
-            RECT const &rc = settings.window_placement.rcNormalPosition;
-            LOG_DEBUG(L"INITIALLY: {} ({})", rect_to_string(rc), settings.window_placement.showCmd);
+
+            // set the window placement but keep the window hidden
+
             WINDOWPLACEMENT hidden = settings.window_placement;
             hidden.flags = 0;
             hidden.showCmd = SW_HIDE;
             SetWindowPlacement(window, &hidden);
         }
 
+        // notify that the window is created
+
         SetEvent(window_created_event);
 
         file_dropper.InitializeDragDropHelper(window);
 
-        // if there was no file load requested on the command line
-        // and auto-paste is on, try to paste an image from the clipboard
         setup_window_text();
         return TRUE;
     }
@@ -3293,9 +3203,9 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void OnMouseMove(HWND hwnd, int x, int y, UINT keyFlags)
+    void OnMouseMove(HWND hwnd, int mx, int my, UINT keyFlags)
     {
-        POINT pos{ x, y };
+        POINT pos{ mx, my };
 
         if(!get_mouse_buttons(settings.zoom_button)) {
             cur_mouse_pos = pos;
@@ -3324,14 +3234,19 @@ namespace
             }
         }
 
-        for(int i = 0; i < btn_count; ++i) {
-            if(get_mouse_buttons(i)) {
+        for(uint i = btn_min; i < btn_count; ++i) {
+
+            mouse_button_t btn = static_cast<mouse_button_t>(i);
+
+            if(get_mouse_buttons(btn)) {
+
                 mouse_offset[i] = add_point(mouse_offset[i], sub_point(cur_mouse_pos, mouse_pos[i]));
                 mouse_pos[i] = cur_mouse_pos;
             }
         }
 
         if(grabbing_selection) {
+
             vec2 diff = vec2(sub_point(mouse_click[settings.select_button], pos));
             float len = vec2::length(diff);
             if(len > dpi_scale(settings.select_start_distance)) {
@@ -3348,8 +3263,132 @@ namespace
             }
         }
 
+        if(get_mouse_buttons(settings.drag_button) && !get_mouse_buttons(settings.zoom_button)) {
+            current_rect.x += mouse_offset[settings.drag_button].x;
+            current_rect.y += mouse_offset[settings.drag_button].y;
+            target_rect = current_rect;
+            has_been_zoomed_or_dragged = true;
+        }
+
+        selecting = get_mouse_buttons(settings.select_button) && image_texture.Get() != null && !grabbing_selection;
+
+        if(selecting && !get_mouse_buttons(settings.zoom_button)) {
+
+            if(drag_selection) {
+
+                vec2 mouse{ cur_mouse_pos };
+
+                // texel mouse is over right now
+                vec2 cur_texel_pos = vec2::floor(screen_to_texture_pos(mouse));
+
+                // distance moved in texels since last frame
+                vec2 diff = sub_point(cur_texel_pos, drag_select_pos);
+
+                // so, we have a delta, but what to drag?
+                // could be a corner, could be an edge, could be the whole selection
+
+                float *x = &select_anchor.x;
+                float *y = &select_anchor.y;
+
+                vec2 max{ 0, 0 };
+                vec2 min{ select_anchor };
+
+                if(selection_hover & sel_hover_left) {
+                    x = &select_anchor.x;
+                    max.x = select_current.x;
+                    min.x = 0.0f;
+                } else if(selection_hover & sel_hover_right) {
+                    x = &select_current.x;
+                    max.x = (float)texture_width - 1;
+                    min.x = select_anchor.x;
+                }
+
+                if(selection_hover & sel_hover_top) {
+                    y = &select_anchor.y;
+                    max.y = select_current.y;
+                    min.y = 0.0f;
+                } else if(selection_hover & sel_hover_bottom) {
+                    y = &select_current.y;
+                    max.y = (float)texture_height - 1;
+                    min.y = select_anchor.y;
+                }
+
+                max = vec2::max(max, min);
+
+                if(selection_hover == sel_hover_inside) {
+                    min = { 0, 0 };
+                    vec2 ts = sub_point(texture_size(), { 1, 1 });
+                    max = sub_point(ts, selection_size);
+                }
+
+                // get actual movement
+                vec2 old{ *x, *y };
+
+                vec2 np = vec2::clamp(min, add_point(old, diff), max);
+
+                // actual distance moved after clamp
+                vec2 delta = sub_point(np, old);
+
+                if(x != null) {
+                    *x = np.x;
+                }
+                if(y != null) {
+                    *y = np.y;
+                }
+
+                if(selection_hover == sel_hover_inside) {
+                    select_current = add_point(select_anchor, selection_size);
+                }
+
+                // remember texel coordinate for next frame
+                drag_select_pos = add_point(drag_select_pos, delta);
+
+            } else if(image_texture.Get() != null) {
+
+                select_current = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+
+                // force the selection to be square if ctrl is held
+                if(snap_mode == snap_mode_t::square) {
+
+                    // selection dimensions
+                    vec2 d = sub_point(select_current, select_anchor);
+
+                    // biggest axis
+                    float m = std::max(fabsf(d.x), fabsf(d.y));
+
+                    // in the right quadrant
+                    vec2 s{ m, m };
+                    if(d.x < 0) {
+                        s.x = -s.x;
+                    }
+                    if(d.y < 0) {
+                        s.y = -s.y;
+                    }
+
+                    // now clamp to texture
+                    vec2 n = sub_point(select_anchor, clamp_to_texture(add_point(s, select_anchor)));
+
+                    // and get new clamped dimensions
+                    d = sub_point(select_current, select_anchor);
+
+                    // this time snap to the smallest axis
+                    m = std::min(fabsf(n.x), fabsf(n.y));
+
+                    // in the right quadrant
+                    s = vec2{ m, m };
+                    if(d.x < 0) {
+                        s.x = -s.x;
+                    }
+                    if(d.y < 0) {
+                        s.y = -s.y;
+                    }
+                    select_current = add_point(s, select_anchor);
+                }
+            }
+        }
+
         if(!get_mouse_buttons(settings.select_button) && select_active) {
-            check_selection_hover(vec2(POINT{ x, y }));
+            check_selection_hover(vec2(POINT{ mx, my }));
         } else if(selection_hover == selection_hover_t::sel_hover_outside) {
             set_mouse_cursor(null);
         }
