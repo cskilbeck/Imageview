@@ -15,7 +15,7 @@
 void clear_drop_tip(IDataObject *pdtobj);
 void set_drop_tip(IDataObject *pdtobj, DROPIMAGETYPE type, PCWSTR pszMsg, PCWSTR pszInsert);
 HRESULT set_blob(IDataObject *pdtobj, CLIPFORMAT cf, const void *pvBlob, UINT cbBlob);
-CLIPFORMAT get_clipboard_format(CLIPFORMAT *pcf, PCSTR pszForamt);
+CLIPFORMAT get_clipboard_format(CLIPFORMAT *pcf, PCWSTR pszForamt);
 HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv);
 
 //////////////////////////////////////////////////////////////////////
@@ -55,7 +55,7 @@ public:
         _dropImageType = dropImageType;
         _pszDropTipTemplate = pszDropTipTemplate;
         if(FAILED(RegisterDragDrop(hwnd, this))) {
-            imageview::log_win32_error("RegisterDragDrop failed");
+            imageview::log_win32_error(L"RegisterDragDrop failed");
         } else {
             _hwndRegistered = hwnd;
         }

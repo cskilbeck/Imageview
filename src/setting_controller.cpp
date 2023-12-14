@@ -51,7 +51,7 @@ namespace imageview::settings_ui
     void setting_controller::setup_controls(HWND hwnd)
     {
         window = hwnd;
-        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), unicode(name()).c_str());
+        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), name().c_str());
         update_controls();
     }
 
@@ -60,7 +60,7 @@ namespace imageview::settings_ui
 
     BOOL on_initdialog_setting(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, lParam);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, lParam);
         setting_controller *s = reinterpret_cast<setting_controller *>(lParam);
         s->setup_controls(hwnd);
         return 0;

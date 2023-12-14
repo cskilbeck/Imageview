@@ -52,7 +52,7 @@ namespace
 
         case IDC_BUTTON_SETTINGS_BACKGROUND_COLOR: {
 
-            std::string title = localize(setting.string_resource_id);
+            std::wstring title = localize(setting.string_resource_id);
             if(dialog::select_color(GetParent(hwnd), setting.value, title.c_str()) == S_OK) {
                 setting.update_controls();
             }
@@ -67,11 +67,11 @@ namespace
             case EN_CHANGE: {
 
                 HWND edit_control = GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR);
-                int len = GetWindowTextLengthA(edit_control);
+                int len = GetWindowTextLengthW(edit_control);
                 if(len > 0) {
-                    std::string txt;
+                    std::wstring txt;
                     txt.resize(len + 1llu);
-                    GetWindowTextA(edit_control, txt.data(), len + 1);
+                    GetWindowTextW(edit_control, txt.data(), len + 1);
                     txt.pop_back();
                     uint32 new_color{};
                     if(SUCCEEDED(color_from_string(txt, new_color))) {
@@ -131,14 +131,14 @@ namespace imageview::settings_ui
 
     void color_setting::update_controls()
     {
-        std::string hex;
+        std::wstring hex;
         if(alpha) {
             hex = color32_to_string(value);
         } else {
             hex = color24_to_string(value);
         }
         hex = make_uppercase(hex);
-        SetWindowTextA(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
+        SetWindowTextW(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
     }
 
     //////////////////////////////////////////////////////////////////////

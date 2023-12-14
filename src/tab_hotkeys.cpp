@@ -22,22 +22,22 @@ namespace
 
         int inner_width = rect_width(listview_rect) - GetSystemMetrics(SM_CXVSCROLL);
 
-        LVCOLUMNA column;
+        LVCOLUMNW column;
         mem_clear(&column);
         column.mask = LVCF_TEXT | LVCF_WIDTH;
         column.fmt = LVCFMT_LEFT;
         column.cx = inner_width * 70 / 100;
-        column.pszText = const_cast<LPSTR>("Action");
+        column.pszText = const_cast<LPWSTR>(L"Action");
         ListView_InsertColumn(listview, 0, &column);
         column.cx = inner_width * 30 / 100;
-        column.pszText = const_cast<LPSTR>("Hotkey");
+        column.pszText = const_cast<LPWSTR>(L"Hotkey");
         ListView_InsertColumn(listview, 1, &column);
         ListView_SetExtendedListViewStyle(listview, LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT | LVS_EX_FLATSB);
         ListView_SetView(listview, LV_VIEW_DETAILS);
 
         // get all the hotkey descriptions in order
 
-        std::map<std::string, uint> descriptions;
+        std::map<std::wstring, uint> descriptions;
 
         for(auto const &a : hotkeys::hotkey_text) {
             descriptions[localize(a.first)] = a.first;
@@ -48,14 +48,14 @@ namespace
         int index = 0;
         for(auto const &a : descriptions) {
 
-            LVITEMA item;
+            LVITEMW item;
             mem_clear(&item);
             item.mask = LVIF_TEXT;
 
             // there should be a string corresponding to the command id
-            std::string action_text = a.first;
+            std::wstring action_text = a.first;
 
-            std::string key_text;
+            std::wstring key_text;
             if(SUCCEEDED(hotkeys::get_hotkey_text(a.second, key_text))) {
 
                 item.iItem = index;

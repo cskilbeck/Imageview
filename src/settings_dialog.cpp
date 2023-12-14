@@ -40,7 +40,7 @@ namespace
         HWND tab_ctrl = GetDlgItem(hwnd, IDC_SETTINGS_TAB_CONTROL);
         uint tab = TabCtrl_GetCurSel(tab_ctrl);
         if(tab >= active_tabs.size()) {
-            LOG_ERROR("!? Tab {} is out of range (there are {} tabs)", tab, active_tabs.size());
+            LOG_ERROR(L"!? Tab {} is out of range (there are {} tabs)", tab, active_tabs.size());
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
         ShowWindow(active_tabs[tab]->hwnd, show);
@@ -68,10 +68,10 @@ namespace
 
             if(!tab->should_hide()) {
 
-                std::string tab_text = localize((uint64)tab->resource_id);
-                TCITEMA tci;
+                std::wstring tab_text = localize((uint64)tab->resource_id);
+                TCITEMW tci;
                 tci.mask = TCIF_TEXT;
-                tci.pszText = const_cast<char *>(tab_text.c_str());
+                tci.pszText = const_cast<wchar *>(tab_text.c_str());
                 TabCtrl_InsertItem(tab_ctrl, index, &tci);
                 tab->index = index;
                 index += 1;
@@ -95,7 +95,7 @@ namespace
                     active_tab_index = t->index;
                 }
 
-                CHK_NULL(t->hwnd = CreateDialogA(app::instance, MAKEINTRESOURCE(t->resource_id), hwnd, t->dlg_proc));
+                CHK_NULL(t->hwnd = CreateDialogW(app::instance, MAKEINTRESOURCEW(t->resource_id), hwnd, t->dlg_proc));
 
                 SetWindowPos(
                     t->hwnd, HWND_TOP, tab_rect.left, tab_rect.top, rect_width(tab_rect), rect_height(tab_rect), 0);
@@ -142,7 +142,7 @@ namespace
 
                 RECT rc;
                 GetWindowRect(GetDlgItem(hwnd, IDC_SPLIT_BUTTON_SETTINGS), &rc);
-                HMENU menu = LoadMenuA(app::instance, MAKEINTRESOURCEA(IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON));
+                HMENU menu = LoadMenuW(app::instance, MAKEINTRESOURCEW(IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON));
                 HMENU popup = GetSubMenu(menu, 0);
                 TPMPARAMS tpm;
                 tpm.cbSize = sizeof(TPMPARAMS);
@@ -246,8 +246,8 @@ namespace imageview::settings_ui
     HRESULT show_settings_dialog(HWND app_hwnd, uint tab_id)
     {
         if(settings_dlg == null) {
-            CHK_NULL(settings_dlg = CreateDialogParamA(
-                         app::instance, MAKEINTRESOURCEA(IDD_DIALOG_SETTINGS), null, main_dlgproc, tab_id));
+            CHK_NULL(settings_dlg = CreateDialogParamW(
+                         app::instance, MAKEINTRESOURCEW(IDD_DIALOG_SETTINGS), null, main_dlgproc, tab_id));
         }
         ShowWindow(settings_dlg, SW_SHOW);
         BringWindowToTop(settings_dlg);

@@ -52,16 +52,16 @@ namespace
         HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
         SetWindowSubclass(about, suppress_caret_subclass, 0, 0);
 
-        SendMessage(about, EM_SETREADONLY, 1, 0);
+        SendMessageW(about, EM_SETREADONLY, 1, 0);
 
         // populate the about box text
-        std::string version{ "Version?" };
+        std::wstring version{ L"Version?" };
         get_app_version(version);
-        SetWindowTextA(about,
-                       std::format("{}\r\nv{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
+        SetWindowTextW(about,
+                       std::format(L"{}\r\nv{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
                                    localize(IDS_AppName),
                                    version,
-                                   __TIMESTAMP__,
+                                   unicode(__TIMESTAMP__),
                                    app::is_elevated,
                                    app::system_memory_gb)
                            .c_str());
@@ -80,7 +80,7 @@ namespace
         case IDC_BUTTON_ABOUT_COPY: {
 
             copy_window_text_to_clipboard(GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT));
-            SetWindowTextW(GetDlgItem(hwnd, IDC_BUTTON_ABOUT_COPY), unicode(localize(IDS_COPIED)).c_str());
+            SetWindowTextW(GetDlgItem(hwnd, IDC_BUTTON_ABOUT_COPY), localize(IDS_COPIED).c_str());
 
         } break;
         }

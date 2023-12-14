@@ -7,13 +7,13 @@ namespace imageview::settings_ui
 
     struct setting_controller
     {
-        setting_controller(char const *n, uint s, uint dlg_id, DLGPROC dlgproc)
+        setting_controller(wchar const *n, uint s, uint dlg_id, DLGPROC dlgproc)
             : internal_name(n), string_resource_id(s), dialog_resource_id(dlg_id), dlg_proc(dlgproc), window(null)
         {
         }
 
         // internal name of the setting
-        char const *internal_name;
+        wchar const *internal_name;
 
         // user friendly descriptive name
         uint string_resource_id;
@@ -37,7 +37,7 @@ namespace imageview::settings_ui
             return *p;
         }
 
-        std::string name() const
+        std::wstring name() const
         {
             return imageview::localize(string_resource_id);
         }

@@ -12,14 +12,14 @@ namespace
 {
     struct path_parts
     {
-        char drive[MAX_PATH];
-        char dir[MAX_PATH];
-        char fname[MAX_PATH];
-        char ext[MAX_PATH];
+        wchar drive[MAX_PATH];
+        wchar dir[MAX_PATH];
+        wchar fname[MAX_PATH];
+        wchar ext[MAX_PATH];
 
-        HRESULT get(std::string const &filename)
+        HRESULT get(std::wstring const &filename)
         {
-            if(_splitpath_s(filename.c_str(), drive, dir, fname, ext) != 0) {
+            if(_wsplitpath_s(filename.c_str(), drive, dir, fname, ext) != 0) {
                 return HRESULT_FROM_WIN32(GetLastError());
             }
             return S_OK;
@@ -29,7 +29,7 @@ namespace
 
 namespace imageview::file
 {
-    HRESULT load(std::string const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
+    HRESULT load(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
     {
         // if we error out for any reason, free the buffer
         auto cleanup_buffer = defer::deferred([&] { buffer.clear(); });
@@ -40,7 +40,7 @@ namespace imageview::file
         }
 
         // create an async file handle
-        HANDLE file_handle = CreateFileA(
+        HANDLE file_handle = CreateFileW(
             filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
         if(file_handle == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -61,7 +61,7 @@ namespace imageview::file
 
         // prepare for readfile
         OVERLAPPED overlapped{ 0 };
-        overlapped.hEvent = CreateEvent(null, true, false, null);
+        overlapped.hEvent = CreateEventW(null, true, false, null);
 
         if(overlapped.hEvent == null) {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -128,8 +128,8 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT scan_folder(std::string const &path,
-                        std::vector<std::string> const &extensions,
+    HRESULT scan_folder(std::wstring const &path,
+                        std::vector<std::wstring> const &extensions,
                         scan_folder_sort_field sort_field,
                         scan_folder_sort_order order,
                         folder_scan_result **result,
@@ -139,7 +139,7 @@ namespace imageview::file
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
 
-        HANDLE dir_handle = CreateFileA(
+        HANDLE dir_handle = CreateFileW(
             path.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null);
 
         if(dir_handle == INVALID_HANDLE_VALUE) {
@@ -201,18 +201,18 @@ namespace imageview::file
                 uint32 ignore = FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_VIRTUAL;
                 if((f->FileAttributes & ignore) == 0) {
 
-                    std::string filename = utf8(f->FileName, f->FileNameLength / sizeof(wchar));
+                    std::wstring filename = std::wstring(f->FileName, f->FileNameLength / sizeof(wchar));
 
-                    size_t dot = filename.find_last_of('.');
+                    size_t dot = filename.find_last_of(L'.');
 
-                    if(dot != std::string::npos && dot < filename.size()) {
+                    if(dot != std::wstring::npos && dot < filename.size()) {
 
                         // check if extension is in the list
                         for(auto const &ext : extensions) {
 
                             size_t ext_len = ext.size();
-                            char const *find_ext = ext.c_str();
-                            size_t ext_dot = ext.find('.');
+                            wchar const *find_ext = ext.c_str();
+                            size_t ext_dot = ext.find(L'.');
                             if(ext_dot != std::string::npos) {
                                 find_ext += 1;
                                 ext_len -= 1;
@@ -220,7 +220,7 @@ namespace imageview::file
 
                             size_t max_len = std::min(filename.size() - dot, ext_len);
 
-                            if(_strnicmp(&filename[dot] + 1, find_ext, max_len) == 0) {
+                            if(_wcsnicmp(&filename[dot] + 1, find_ext, max_len) == 0) {
 
                                 // it's in the list, add it to the vector of files
                                 files.emplace_back(filename, f->LastWriteTime.QuadPart);
@@ -267,7 +267,7 @@ namespace imageview::file
 
             // if date the same (or name ordering), compare names
             if(diff == 0) {
-                diff = StrCmpLogicalW(unicode(pa->name).c_str(), unicode(pb->name).c_str());
+                diff = StrCmpLogicalW(pa->name.c_str(), pb->name.c_str());
             }
             return diff <= 0;
         });
@@ -279,22 +279,22 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
-    BOOL exists(std::string const &name)
+    BOOL exists(std::wstring const &name)
     {
-        DWORD x = GetFileAttributesA(name.c_str());
+        DWORD x = GetFileAttributesW(name.c_str());
         DWORD const not_file = FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_OFFLINE;
         return x != INVALID_FILE_ATTRIBUTES && ((x & not_file) == 0);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_path(std::string const &filename, std::string &path)
+    HRESULT get_path(std::wstring const &filename, std::wstring &path)
     {
         path_parts p;
         CHK_HR(p.get(filename));
-        path = std::string(p.drive) + p.dir;
+        path = std::wstring(p.drive) + p.dir;
         if(path.empty()) {
-            path = ".";
+            path = L".";
         } else if(path.back() == '\\') {
             path.pop_back();
         }
@@ -303,35 +303,35 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_filename(std::string const &filename, std::string &name)
+    HRESULT get_filename(std::wstring const &filename, std::wstring &name)
     {
         path_parts p;
         CHK_HR(p.get(filename));
-        name = std::string(p.fname) + p.ext;
+        name = std::wstring(p.fname) + p.ext;
         return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_extension(std::string const &filename, std::string &extension)
+    HRESULT get_extension(std::wstring const &filename, std::wstring &extension)
     {
         path_parts p;
         CHK_HR(p.get(filename));
-        extension = std::string(p.ext);
+        extension = std::wstring(p.ext);
         return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_full_path(std::string const &filename, std::string &fullpath)
+    HRESULT get_full_path(std::wstring const &filename, std::wstring &fullpath)
     {
-        char dummy;
-        uint size = GetFullPathNameA(filename.c_str(), 1, &dummy, null);
+        wchar dummy;
+        uint size = GetFullPathNameW(filename.c_str(), 1, &dummy, null);
         if(size == 0) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
         fullpath.resize(size);
-        size = GetFullPathNameA(filename.c_str(), size, &fullpath[0], null);
+        size = GetFullPathNameW(filename.c_str(), size, &fullpath[0], null);
         if(size == 0) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -341,9 +341,9 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_size(std::string const &filename, uint64_t &size)
+    HRESULT get_size(std::wstring const &filename, uint64_t &size)
     {
-        HANDLE f = CreateFileA(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
+        HANDLE f = CreateFileW(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
         if(f == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -356,12 +356,12 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT paths_are_different(std::string const &a, std::string const &b, bool &differ)
+    HRESULT paths_are_different(std::wstring const &a, std::wstring const &b, bool &differ)
     {
         std::vector<wchar> pa(MAX_PATH * 2 + 1);
         std::vector<wchar> pb(MAX_PATH * 2 + 1);
-        CHK_HR(PathCchCanonicalizeEx(pa.data(), pa.size(), unicode(a).c_str(), 0));
-        CHK_HR(PathCchCanonicalizeEx(pb.data(), pb.size(), unicode(b).c_str(), 0));
+        CHK_HR(PathCchCanonicalizeEx(pa.data(), pa.size(), a.c_str(), 0));
+        CHK_HR(PathCchCanonicalizeEx(pb.data(), pb.size(), b.c_str(), 0));
         size_t la = wcslen(pa.data());
         size_t lb = wcslen(pb.data());
         differ = true;

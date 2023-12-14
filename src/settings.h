@@ -118,7 +118,7 @@ struct settings_t
     HRESULT load();
 
     // where in the registry to put the settings. this does not need to be localized... right?
-    static char constexpr settings_key_name[] = "Software\\ImageView";
+    static wchar constexpr settings_key_name[] = L"Software\\ImageView";
 
     enum class serialize_action
     {
@@ -126,11 +126,11 @@ struct settings_t
         load
     };
 
-    HRESULT serialize(serialize_action action, char const *save_key_name);
+    HRESULT serialize(serialize_action action, wchar const *save_key_name);
 
     // write or read a settings field to or from the registry - helper for serialize()
     HRESULT serialize_setting(
-        settings_t::serialize_action action, char const *key_name, char const *name, byte *var, size_t size);
+        settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, size_t size);
 };
 
 //////////////////////////////////////////////////////////////////////

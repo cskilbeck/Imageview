@@ -9,7 +9,7 @@ namespace imageview::settings_ui
 
     struct section_setting : setting_controller
     {
-        section_setting(char const *n, uint s, bool &v)
+        section_setting(wchar const *n, uint s, bool &v)
             : setting_controller(n, s, IDD_DIALOG_SETTING_SECTION, section_dlgproc)
             , expanded_height(0)
             , banner_height(0)

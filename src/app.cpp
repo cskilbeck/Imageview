@@ -53,7 +53,7 @@ namespace imageview::app
     // the window handle
     HWND window{ null };
 
-    HRESULT load_image_file(std::string const &filepath);
+    HRESULT load_image_file(std::wstring const &filepath);
     HRESULT show_image(image::image_file *f);
     HRESULT on_device_lost();
 
@@ -102,7 +102,7 @@ namespace
     char const *banner_font_family_name{ "Roboto Mono" };
 
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
-    std::string current_folder;
+    std::wstring current_folder;
 
     // index in folder scan of currently viewed file
     int current_file_cursor{ -1 };
@@ -135,16 +135,16 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // files which have been loaded
 
-    std::unordered_map<std::string, image::image_file *> loaded_files;
+    std::unordered_map<std::wstring, image::image_file *> loaded_files;
 
     //////////////////////////////////////////////////////////////////////
     // files which have been requested to load
 
-    std::unordered_map<std::string, image::image_file *> loading_files;
+    std::unordered_map<std::wstring, image::image_file *> loading_files;
 
     //////////////////////////////////////////////////////////////////////
 
-    LPCSTR window_class = "ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
+    LPCWSTR window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
 
     ComPtr<ID3D11Debug> d3d_debug;
 
@@ -174,14 +174,14 @@ namespace
     HANDLE window_created_event{ null };
 
     // admin for showing a message
-    std::string current_message;
+    std::wstring current_message;
     double message_timestamp{ 0 };
     float message_fade_time{ 0 };
 
     vec2 small_label_size{ 0, 0 };
     float label_pad{ 2.0f };
 
-    std::string rgb_pixel_text;
+    std::wstring rgb_pixel_text;
 
     uint64 cache_in_use{ 0 };
     std::mutex cache_mutex;
@@ -294,7 +294,7 @@ namespace
         src source;
         short id;
 
-        cursor_def(src s, char const *i) : source(s), id((short)((intptr_t)i & 0xffff))
+        cursor_def(src s, wchar const *i) : source(s), id((short)((intptr_t)i & 0xffff))
         {
         }
 
@@ -308,7 +308,7 @@ namespace
             if(source == src::user) {
                 h = app::instance;
             }
-            return LoadCursor(h, MAKEINTRESOURCEA(id));
+            return LoadCursor(h, MAKEINTRESOURCEW(id));
         }
     };
 
@@ -400,7 +400,7 @@ namespace
             PWSTR path{};
             CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
             DEFER(CoTaskMemFree(path));
-            return app::load_image_file(utf8(path));
+            return app::load_image_file(path);
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -408,7 +408,7 @@ namespace
 
         HRESULT on_drop_string(wchar const *str) override
         {
-            return app::load_image_file(strip_quotes(utf8(str)));
+            return app::load_image_file(strip_quotes(str));
         }
     } file_dropper;
 
@@ -435,7 +435,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
 
-    void set_message(std::string const &message, float fade_time)
+    void set_message(std::wstring const &message, float fade_time)
     {
         current_message = message;
         message_timestamp = m_timer.wall_time();
@@ -451,19 +451,19 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void error_message_box(std::string const &msg, HRESULT hr)
+    void error_message_box(std::wstring const &msg, HRESULT hr)
     {
-        std::string err = windows_error_message(hr);
-        message_box(null, std::format("{}\r\n{}", msg, err), MB_ICONEXCLAMATION);
+        std::wstring err = windows_error_message(hr);
+        message_box(null, std::format(L"{}\r\n{}", msg, err), MB_ICONEXCLAMATION);
     }
 
     //////////////////////////////////////////////////////////////////////
 
     HRESULT setup_window_text()
     {
-        std::string name(localize(IDS_AppName));
-        std::string details;
-        std::string admin;
+        std::wstring name(localize(IDS_AppName));
+        std::wstring details;
+        std::wstring admin;
 
         if(app::is_elevated) {
 
@@ -478,9 +478,9 @@ namespace
 
                 CHK_HR(file::get_filename(name, name));
             }
-            details = std::format(" {}x{}", current_file->img.width, current_file->img.height);
+            details = std::format(L" {}x{}", current_file->img.width, current_file->img.height);
         }
-        SetWindowTextW(window, unicode(std::format("{}{}{}", admin, name, details)).c_str());
+        SetWindowTextW(window, std::format(L"{}{}{}", admin, name, details).c_str());
         return S_OK;
     }
 
@@ -542,7 +542,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_image_file_size(std::string const &filename, uint64 *size)
+    HRESULT get_image_file_size(std::wstring const &filename, uint64 *size)
     {
         if(size == null || filename.empty()) {
             return E_INVALIDARG;
@@ -589,7 +589,7 @@ namespace
                 // let the window know, either way, that the file load attempt is complete, failed or
                 // otherwise
                 WaitForSingleObject(window_created_event, INFINITE);
-                PostMessageA(window, app::WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
+                PostMessageW(window, app::WM_FILE_LOAD_COMPLETE, 0, reinterpret_cast<LPARAM>(fl));
             },
             loader);
     }
@@ -610,7 +610,7 @@ namespace
 
                 if(y >= 0 && y < (int)current_folder_scan->files.size()) {
 
-                    std::string this_file = current_folder_scan->path + "\\" + current_folder_scan->files[y].name;
+                    std::wstring this_file = current_folder_scan->path + L"\\" + current_folder_scan->files[y].name;
 
                     if(loading_files.find(this_file) == loading_files.end() &&
                        loaded_files.find(this_file) == loaded_files.end()) {
@@ -636,7 +636,7 @@ namespace
 
                                 if(loser != null) {
 
-                                    LOG_DEBUG("Removing {} ({}) from cache (now {} MB in use)",
+                                    LOG_DEBUG(L"Removing {} ({}) from cache (now {} MB in use)",
                                               loser->filename,
                                               loser->index,
                                               cache_in_use / 1048576);
@@ -650,7 +650,7 @@ namespace
 
                             if((cache_in_use + img_size) <= cache_size) {
 
-                                LOG_DEBUG("Caching {} at {}", this_file, y);
+                                LOG_DEBUG(L"Caching {} at {}", this_file, y);
                                 image::image_file *cache_file = new image::image_file();
                                 cache_file->filename = this_file;
                                 cache_file->is_cache_load = true;
@@ -682,15 +682,15 @@ namespace
             // if this is the first file being loaded and there was a file loading error
             if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
-                error_message_box(std::format("Loading {}", f->filename), load_hr);
+                error_message_box(std::format(L"Loading {}", f->filename), load_hr);
                 DestroyWindow(window);
             }
 
             // and in any case, set window message to error text
-            std::string err_str = windows_error_message(load_hr);
-            std::string name;
+            std::wstring err_str = windows_error_message(load_hr);
+            std::wstring name;
             CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format("{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3);
+            set_message(std::format(L"{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3);
             return load_hr;
         }
         files_loaded += 1;
@@ -702,7 +702,7 @@ namespace
     // load an image file or get it from the cache (or notice that it's
     // already being loaded and just let it arrive later)
 
-    HRESULT load_image(std::string const &filename)
+    HRESULT load_image(std::wstring const &filename)
     {
         if(filename.empty()) {
             return E_INVALIDARG;
@@ -710,16 +710,16 @@ namespace
 
         // get somewhat canonical filepath and parts thereof
 
-        std::string folder;
-        std::string name;
-        std::string fullpath;
+        std::wstring folder;
+        std::wstring name;
+        std::wstring fullpath;
 
         CHK_HR(file::get_full_path(filename, fullpath));
         CHK_HR(file::get_filename(fullpath, name));
         CHK_HR(file::get_path(fullpath, folder));
 
         if(folder.empty()) {
-            folder = ".";
+            folder = L".";
         } else if(folder.back() == '\\') {
             folder.pop_back();
         }
@@ -729,7 +729,7 @@ namespace
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
-            LOG_DEBUG("Already got {}", name);
+            LOG_DEBUG(L"Already got {}", name);
             CHK_HR(display_image(found->second));
             CHK_HR(warm_cache());
             return S_OK;
@@ -737,14 +737,14 @@ namespace
 
         // TODO (chs): fix this lame
         if(settings.show_filename != show_filename_never) {
-            set_message(std::format("{}{}", fullpath, localize(IDS_IS_LOADING)), 5);
+            set_message(std::format(L"{}{}", fullpath, localize(IDS_IS_LOADING)), 5);
         }
 
         // if it's currently being loaded, mark it for viewing when it arrives
 
         found = loading_files.find(fullpath);
         if(found != loading_files.end()) {
-            LOG_DEBUG("In progress {}", name);
+            LOG_DEBUG(L"In progress {}", name);
             requested_file = found->second;
             return S_OK;
         }
@@ -754,7 +754,7 @@ namespace
 
         // file_loader object is later transferred from loading_files to loaded_files
 
-        LOG_INFO("Loading {}", name);
+        LOG_INFO(L"Loading {}", name);
 
         image::image_file *fl = new image::image_file();
         fl->filename = fullpath;
@@ -789,7 +789,7 @@ namespace
             char *fullpath_buffer = new char[fullpath.size() + 1];
             memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(char));
 
-            PostThreadMessageA(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
+            PostThreadMessageW(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
         }
         return S_OK;
     }
@@ -1008,7 +1008,7 @@ namespace
 
         // done
 
-        set_message(std::format("{} {}x{}", localize(IDS_COPIED), w, h), 3);
+        set_message(std::format(L"{} {}x{}", localize(IDS_COPIED), w, h), 3);
 
         return S_OK;
     }
@@ -1025,13 +1025,13 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // process a command line, could be from another instance
 
-    HRESULT on_command_line(std::string const &cmd_line)
+    HRESULT on_command_line(std::wstring const &cmd_line)
     {
-        LOG_INFO("COMMAND LINE: {}", cmd_line);
+        LOG_INFO(L"COMMAND LINE: {}", cmd_line);
 
         // parse args
         int argc;
-        wchar **argv = CommandLineToArgvW(unicode(cmd_line).c_str(), &argc);
+        wchar **argv = CommandLineToArgvW(cmd_line.c_str(), &argc);
 
         wchar const *filepath{ null };
 
@@ -1040,7 +1040,7 @@ namespace
         }
 
         if(filepath != null) {
-            return load_image(utf8(filepath));
+            return load_image(filepath);
         }
         return S_OK;
     }
@@ -1205,11 +1205,11 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // get dimensions of a string including padding
 
-    HRESULT measure_string(std::string const &text, IDWriteTextFormat *format, float padding, vec2 &size)
+    HRESULT measure_string(std::wstring const &text, IDWriteTextFormat *format, float padding, vec2 &size)
     {
         ComPtr<IDWriteTextLayout> text_layout;
 
-        CHK_HR(dwrite_factory->CreateTextLayout(unicode(text).c_str(),
+        CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(),
                                                 (UINT32)text.size(),
                                                 format,
                                                 (float)window_width * 2,
@@ -1265,7 +1265,7 @@ namespace
 
     HRESULT create_device()
     {
-        LOG_DEBUG("CREATE DEVICE: {}x{}", window_width, window_height);
+        LOG_DEBUG(L"CREATE DEVICE: {}x{}", window_width, window_height);
 
         UINT create_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
@@ -1373,7 +1373,7 @@ namespace
 
         CHK_HR(create_text_formats());
 
-        CHK_HR(measure_string("X 9999 Y 9999", label_format.Get(), label_pad, small_label_size));
+        CHK_HR(measure_string(L"X 9999 Y 9999", label_format.Get(), label_pad, small_label_size));
 
         return S_OK;
     }
@@ -1383,7 +1383,7 @@ namespace
 
     HRESULT create_resources()
     {
-        LOG_DEBUG("CREATE RESOURCES: {}x{}", window_width, window_height);
+        LOG_DEBUG(L"CREATE RESOURCES: {}x{}", window_width, window_height);
 
         if(d3d_device.Get() == null) {
             create_device();
@@ -1527,8 +1527,8 @@ namespace
 
         // if clipboard contains a PNG or DIB, make it look like a file we just loaded
 
-        UINT cf_png = RegisterClipboardFormat("PNG");
-        UINT cf_filename = RegisterClipboardFormat(CFSTR_FILENAMEW);
+        UINT cf_png = RegisterClipboardFormatW(L"PNG");
+        UINT cf_filename = RegisterClipboardFormatW(CFSTR_FILENAMEW);
 
         image::image_file &f = clipboard_image_file;
         f.is_clipboard = true;
@@ -1559,7 +1559,7 @@ namespace
 
         if(!f.bytes.empty()) {
             clear_selection();
-            f.filename = "Clipboard";
+            f.filename = L"Clipboard";
             f.hresult = S_OK;
             f.index = -1;
             f.is_cache_load = true;
@@ -1587,19 +1587,19 @@ namespace
     // scan a folder - this runs in the folder_scanner_thread
     // results are sent to the main thread with SendMessage
 
-    HRESULT do_folder_scan(char const *folder_path)
+    HRESULT do_folder_scan(wchar const *folder_path)
     {
         LOG_CONTEXT("folder_scan");
 
-        std::string path;
+        std::wstring path;
 
         CHK_HR(file::get_path(folder_path, path));
 
         delete[] folder_path;
 
-        LOG_INFO("Scan folder {}", path);
+        LOG_INFO(L"Scan folder {}", path);
 
-        std::vector<std::string> extensions;
+        std::vector<std::wstring> extensions;
 
         {
             auto iflock{ std::lock_guard(image::formats_mutex) };
@@ -1641,7 +1641,7 @@ namespace
                 }
             }
         }
-        LOG_INFO("File loader thread exit");
+        LOG_INFO(L"File loader thread exit");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1670,14 +1670,14 @@ namespace
                         break;
 
                     case WM_SCAN_FOLDER:
-                        do_folder_scan(reinterpret_cast<char const *>(msg.lParam));
+                        do_folder_scan(reinterpret_cast<wchar const *>(msg.lParam));
                         break;
                     }
                     break;
                 }
             }
         }
-        LOG_INFO("Scanner thread exit");
+        LOG_INFO(L"Scanner thread exit");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1688,20 +1688,20 @@ namespace
         if(current_folder_scan == null || f == null) {
             return E_INVALIDARG;
         }
-        std::string folder;
+        std::wstring folder;
         CHK_HR(file::get_path(f->filename, folder));
 
-        if(_stricmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
+        if(_wcsicmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
             return E_CHANGED_STATE;
         }
 
-        std::string name;
+        std::wstring name;
         CHK_HR(file::get_filename(f->filename, name));
         int id = 0;
         for(auto &ff : current_folder_scan->files) {
-            if(_stricmp(ff.name.c_str(), name.c_str()) == 0) {
+            if(_wcsicmp(ff.name.c_str(), name.c_str()) == 0) {
                 f->index = id;
-                LOG_DEBUG("{} is at index {}", name, id);
+                LOG_DEBUG(L"{} is at index {}", name, id);
                 if(current_file_cursor == -1) {
                     current_file_cursor = f->index;
                 }
@@ -1717,7 +1717,7 @@ namespace
 
     void on_folder_scanned(file::folder_scan_result *scan_result)
     {
-        LOG_INFO("{} images found in {}", scan_result->files.size(), scan_result->path);
+        LOG_INFO(L"{} images found in {}", scan_result->files.size(), scan_result->path);
 
         current_folder_scan.reset(scan_result);
 
@@ -1743,8 +1743,8 @@ namespace
 
         if(new_file_cursor != current_file_cursor) {
             current_file_cursor = new_file_cursor;
-            std::string const &name = current_folder_scan->files[current_file_cursor].name;
-            load_image(std::format("{}\\{}", current_folder_scan->path, name));
+            std::wstring const &name = current_folder_scan->files[current_file_cursor].name;
+            load_image(std::format(L"{}\\{}", current_folder_scan->path, name));
         }
     }
 
@@ -1756,7 +1756,7 @@ namespace
 
     void on_file_load_complete(image::image_file *f)
     {
-        LOG_DEBUG("LOADED {}", f->filename);
+        LOG_DEBUG(L"LOADED {}", f->filename);
 
         if(FAILED(f->hresult)) {
             delete f;
@@ -1896,7 +1896,7 @@ namespace
             window_width = rect_width(*r);
             window_height = rect_height(*r);
         }
-        LOG_INFO("Startup window is {}x{} (at {},{})", window_width, window_height, r->left, r->top);
+        LOG_INFO(L"Startup window is {}x{} (at {},{})", window_width, window_height, r->left, r->top);
         return S_OK;
     }
 
@@ -1955,11 +1955,11 @@ namespace
 
             for(int i = 0; i < item_count; ++i) {
 
-                MENUITEMINFOA mii;
+                MENUITEMINFOW mii;
                 mii.cbSize = sizeof(mii);
                 mii.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
 
-                if(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii)) {
+                if(GetMenuItemInfoW(cur_menu, i, MF_BYPOSITION, &mii)) {
 
                     // if it's a sub menu, just push it
                     if(mii.hSubMenu != null) {
@@ -1974,21 +1974,21 @@ namespace
                         mii.dwItemData = 0;
                         mii.dwTypeData = null;
                         mii.cch = 0;
-                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        CHK_BOOL(GetMenuItemInfoW(cur_menu, i, MF_BYPOSITION, &mii));
                         mii.cch += 1;
-                        std::string text;
+                        std::wstring text;
                         text.resize(mii.cch);
                         mii.fMask = MIIM_STRING;
                         mii.dwItemData = 0;
                         mii.dwTypeData = text.data();
-                        CHK_BOOL(GetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        CHK_BOOL(GetMenuItemInfoW(cur_menu, i, MF_BYPOSITION, &mii));
                         text.pop_back();
                         text = text.substr(0, text.find('\t'));    // truncate if there's already a tab
 
                         // append hotkeys to string
-                        std::string key_label;
+                        std::wstring key_label;
                         if(hotkeys::get_hotkey_text(mii.wID, key_label) == S_OK) {
-                            text = std::format("{}\t{}", text, key_label);
+                            text = std::format(L"{}\t{}", text, key_label);
                         }
 
                         // callback sets enabled/disabled
@@ -2003,7 +2003,7 @@ namespace
                         mii.dwTypeData = text.data();
                         mii.cch = static_cast<uint>(text.size());
 
-                        CHK_BOOL(SetMenuItemInfoA(cur_menu, i, MF_BYPOSITION, &mii));
+                        CHK_BOOL(SetMenuItemInfoW(cur_menu, i, MF_BYPOSITION, &mii));
                     }
                 }
             }
@@ -2023,7 +2023,7 @@ namespace
 
         if(settings.fullscreen) {
             GetWindowPlacement(window, &settings.window_placement);
-            LOG_INFO("toggle_fullscreen: {}", rect_to_string(settings.window_placement.rcNormalPosition));
+            LOG_INFO(L"toggle_fullscreen: {}", rect_to_string(settings.window_placement.rcNormalPosition));
             style = WS_POPUP;
         }
 
@@ -2201,7 +2201,7 @@ namespace
                     dummy_info.cbSize = sizeof(dummy_info);
                     dummy_info.fMask = MIIM_ID;
                     if(GetMenuItemInfoW(menu, ID_RECENT_DUMMY, MF_BYCOMMAND, &dummy_info) == 0) {
-                        log_win32_error("GetMenuItemInfoW");
+                        log_win32_error(L"GetMenuItemInfoW");
                     } else {
                         uint index = ID_RECENT_FILE_00;
                         MENUITEMINFOW recent_info;
@@ -2264,7 +2264,7 @@ namespace
                 long h = rect_height(mi.rcMonitor);
                 long dimension = std::max(w, h);
                 max_zoom = floor(dimension / 10.0f);
-                LOG_DEBUG("max_zoom set to {} (monitor is {}x{})", max_zoom, w, h);
+                LOG_DEBUG(L"max_zoom set to {} (monitor is {}x{})", max_zoom, w, h);
             }
         }
     }
@@ -2399,7 +2399,7 @@ namespace
         f.is_clipboard = true;
         f.bytes.clear();
         f.pixels.clear();
-        f.filename = "Cropped";
+        f.filename = L"Cropped";
         f.hresult = S_OK;
         f.index = -1;
         f.is_cache_load = true;
@@ -2439,7 +2439,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // draw some text with a box round it
 
-    HRESULT draw_string(std::string const &text,
+    HRESULT draw_string(std::wstring const &text,
                         IDWriteTextFormat *format,
                         vec2 pos,
                         vec2 pivot,
@@ -2456,7 +2456,7 @@ namespace
 
         // This sucks that you have to create and destroy a com object to draw a text string
 
-        CHK_HR(dwrite_factory->CreateTextLayout(unicode(text).c_str(),
+        CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(),
                                                 (UINT32)text.size(),
                                                 format,
                                                 (float)window_width * 2,
@@ -2630,11 +2630,11 @@ namespace
 
             vec2 draw_pos = add_point(screen_pos, { -dpi_scale(label_pad * 2 + 8), -dpi_scale(4.0f) });
 
-            std::string text{ std::format("{},{}", (int)p.x, (int)p.y) };
+            std::wstring text{ std::format(L"{},{}", (int)p.x, (int)p.y) };
             draw_string(text, label_format.Get(), draw_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
 
             // pixels are BGRA, show as RGBA
-            rgb_pixel_text = std::format("{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
+            rgb_pixel_text = std::format(L"{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
 
             draw_pos = add_point(screen_pos, { dpi_scale(label_pad * 2 + 8), -dpi_scale(4.0f) });
 
@@ -2649,7 +2649,7 @@ namespace
             vec2 offset{ dpi_scale(18.0f), dpi_scale(12.0f) };
             vec2 s_tl = sub_point(texture_to_screen_pos_unclamped(select_tl), offset);
             vec2 s_br = add_point(texture_to_screen_pos_unclamped({ select_br.x + 1, select_br.y + 1 }), offset);
-            draw_string(std::format("{},{}", (int)select_tl.x, (int)select_tl.y),
+            draw_string(std::format(L"{},{}", (int)select_tl.x, (int)select_tl.y),
                         label_format.Get(),
                         s_tl,
                         { 1, 1 },
@@ -2658,7 +2658,7 @@ namespace
                         2);
             float sw = floor(select_br.x) - floorf(select_tl.x) + 1;
             float sh = floorf(select_br.y) - floorf(select_tl.y) + 1;
-            draw_string(std::format("{}x{}", sw, sh), label_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
+            draw_string(std::format(L"{}x{}", sw, sh), label_format.Get(), s_br, { 0, 0 }, 1.0f, 2, 2);
         }
 
         if(!current_message.empty()) {
@@ -2673,7 +2673,7 @@ namespace
 
                 vec2 pos{ dpi_scale(16.0f), window_height - dpi_scale(12.0f) };
 
-                draw_string(std::format("{}", current_message),
+                draw_string(std::format(L"{}", current_message),
                             banner_format.Get(),
                             pos,
                             { 0.0f, 1.0f },
@@ -2950,7 +2950,7 @@ namespace
 
         case ID_COPY_RGB:
             if(crosshairs_active && SUCCEEDED(copy_string_to_clipboard(rgb_pixel_text))) {
-                set_message(std::format("Copied {}", rgb_pixel_text), 3);
+                set_message(std::format(L"Copied {}", rgb_pixel_text), 3);
             }
             break;
 
@@ -3034,7 +3034,7 @@ namespace
             break;
 
         case ID_FILE_OPEN: {
-            std::string selected_filename;
+            std::wstring selected_filename;
             if(SUCCEEDED(dialog::open_file(window, selected_filename))) {
                 load_image(selected_filename);
             }
@@ -3042,16 +3042,17 @@ namespace
 
         case ID_FILE_SAVE: {
 
-            std::string filename;
+            std::wstring filename;
             if(SUCCEEDED(dialog::save_file(window, filename))) {
 
                 image::image_t const &img = current_file->img;
                 HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
-                    std::string msg = std::format("{}\r\n{}", localize(IDS_CANT_SAVE_FILE), windows_error_message(hr));
+                    std::wstring msg =
+                        std::format(L"{}\r\n{}", localize(IDS_CANT_SAVE_FILE), windows_error_message(hr));
                     message_box(window, msg, MB_ICONEXCLAMATION);
                 } else {
-                    set_message(std::format("{} {}", localize(IDS_SAVED_FILE), filename), 5);
+                    set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), filename), 5);
                 }
             }
         } break;
@@ -3072,7 +3073,7 @@ namespace
         if(id >= ID_RECENT_FILE_00 && id <= ID_RECENT_FILE_09) {
             uint index = id - ID_RECENT_FILE_00;
             if(index < recent_files_list.size()) {
-                app::load_image_file(utf8(recent_files_list[index]));
+                app::load_image_file(recent_files_list[index]);
             }
         }
     }
@@ -3099,7 +3100,7 @@ namespace
 
         if(!settings.first_run && !settings.fullscreen) {
             RECT const &rc = settings.window_placement.rcNormalPosition;
-            LOG_DEBUG("INITIALLY: {} ({})", rect_to_string(rc), settings.window_placement.showCmd);
+            LOG_DEBUG(L"INITIALLY: {} ({})", rect_to_string(rc), settings.window_placement.showCmd);
             WINDOWPLACEMENT hidden = settings.window_placement;
             hidden.flags = 0;
             hidden.showCmd = SW_HIDE;
@@ -3216,7 +3217,7 @@ namespace
                 SwitchToThisWindow(window, true);
 
                 // must copy the data before returning from this message handler
-                std::string cmd_line(reinterpret_cast<char const *>(c->lpData));
+                std::wstring cmd_line(reinterpret_cast<wchar const *>(c->lpData));
                 on_command_line(cmd_line);
 
             } break;
@@ -3541,7 +3542,7 @@ namespace
         case WM_ENTERIDLE:
             break;
         default:
-            LOG_DEBUG("({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
+            LOG_DEBUG(L"({:04x}) {} {:08x} {:08x}", message, get_wm_name(message), wParam, lParam);
             break;
         }
 #endif
@@ -3610,7 +3611,7 @@ namespace
             //////////////////////////////////////////////////////////////////////
 
         default:
-            return DefWindowProcA(hwnd, message, wParam, lParam);
+            return DefWindowProcW(hwnd, message, wParam, lParam);
         }
 
         return 0;
@@ -3642,7 +3643,7 @@ namespace imageview::app
     {
         current_file = f;
 
-        std::string name;
+        std::wstring name;
 
         // hresult from load_file
         HRESULT hr = f->hresult;
@@ -3697,13 +3698,13 @@ namespace imageview::app
             }
 
             if(fade_time != 0.0f) {
-                std::string msg{ std::format("{} {}x{}", f->filename, texture_width, texture_height) };
+                std::wstring msg{ std::format(L"{} {}x{}", f->filename, texture_width, texture_height) };
                 set_message(msg, fade_time);
             }
 
         } else {
 
-            std::string err_str;
+            std::wstring err_str;
 
             // "Component not found" isn't meaningful for unknown file type, override it
             if(hr == WINCODEC_ERR_COMPONENTNOTFOUND) {
@@ -3713,17 +3714,17 @@ namespace imageview::app
             }
 
             CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format("{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3.0f);
+            set_message(std::format(L"{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3.0f);
         }
         return hr;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT load_image_file(std::string const &filepath)
+    HRESULT load_image_file(std::wstring const &filepath)
     {
         if(!file::exists(filepath)) {
-            set_message(std::format("{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2.0f);
+            set_message(std::format(L"{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2.0f);
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);
@@ -3738,7 +3739,7 @@ namespace imageview::app
         // check for required CPU support (for DirectXMath SIMD)
 
         if(!XMVerifyCPUSupport()) {
-            std::string message = std::vformat(localize(IDS_OldCpu), std::make_format_args(localize(IDS_AppName)));
+            std::wstring message = std::vformat(localize(IDS_OldCpu), std::make_wformat_args(localize(IDS_AppName)));
             message_box(null, message, MB_ICONEXCLAMATION);
             return 0;
         }
@@ -3757,11 +3758,11 @@ namespace imageview::app
 #endif
             if(FAILED(settings.load())) {
                 message_box(null,
-                            std::format("{}\r\n{}", localize(IDS_FAILED_TO_LOAD_SETTINGS), windows_error_message()),
+                            std::format(L"{}\r\n{}", localize(IDS_FAILED_TO_LOAD_SETTINGS), windows_error_message()),
                             MB_ICONEXCLAMATION);
             }
 
-        std::string cmd_line{ GetCommandLineA() };
+        std::wstring cmd_line{ GetCommandLineW() };
 
         // if single window mode
 
@@ -3769,7 +3770,7 @@ namespace imageview::app
 
             // and it's already running
 
-            HWND existing_window = FindWindowA(window_class, null);
+            HWND existing_window = FindWindowW(window_class, null);
             if(existing_window != null) {
 
                 // send the existing instance the command line (which might be
@@ -3780,7 +3781,7 @@ namespace imageview::app
                     c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
                     c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
                     c.dwData = static_cast<DWORD>(copydata_t::commandline);
-                    SendMessageA(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
+                    SendMessageW(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
                 }
 
                 // Some confusion about whether this is legit but
@@ -3802,7 +3803,7 @@ namespace imageview::app
 
         system_memory_gb = system_memory_size_kb / 1048576;
 
-        LOG_INFO("System has {}GB of memory", system_memory_gb);
+        LOG_INFO(L"System has {}GB of memory", system_memory_gb);
 
         // load/create/init some things
 
@@ -3826,10 +3827,10 @@ namespace imageview::app
 
         // right, register window class
 
-        HICON icon = LoadIconA(app::instance, MAKEINTRESOURCE(IDI_ICON_DEFAULT));
-        HCURSOR cursor = LoadCursorA(null, IDC_ARROW);
+        HICON icon = LoadIconW(app::instance, MAKEINTRESOURCEW(IDI_ICON_DEFAULT));
+        HCURSOR cursor = LoadCursorW(null, IDC_ARROW);
 
-        WNDCLASSEXA wcex;
+        WNDCLASSEXW wcex;
         mem_clear(&wcex);
         wcex.cbSize = sizeof(WNDCLASSEXA);
         wcex.style = CS_HREDRAW | CS_VREDRAW;
@@ -3841,7 +3842,7 @@ namespace imageview::app
         wcex.hIconSm = icon;
         wcex.hbrBackground = null;
 
-        CHK_BOOL(RegisterClassExA(&wcex));
+        CHK_BOOL(RegisterClassExW(&wcex));
 
         // get window position from settings
 
@@ -3853,7 +3854,7 @@ namespace imageview::app
         // create the window
 
         HWND hwnd;
-        CHK_NULL(hwnd = CreateWindowExA(window_ex_style,
+        CHK_NULL(hwnd = CreateWindowExW(window_ex_style,
                                         window_class,
                                         localize(IDS_AppName).c_str(),
                                         window_style,
@@ -3877,12 +3878,12 @@ namespace imageview::app
 
         while(msg.message != WM_QUIT) {
 
-            if(PeekMessageA(&msg, null, 0, 0, PM_REMOVE)) {
+            if(PeekMessageW(&msg, null, 0, 0, PM_REMOVE)) {
 
-                if(msg.hwnd != window || !TranslateAcceleratorA(window, hotkeys::accelerators, &msg)) {
+                if(msg.hwnd != window || !TranslateAcceleratorW(window, hotkeys::accelerators, &msg)) {
 
                     TranslateMessage(&msg);
-                    DispatchMessageA(&msg);
+                    DispatchMessageW(&msg);
                 }
 
             } else {

@@ -106,19 +106,20 @@ namespace imageview::image
 
     // TODO(chs): get this table of image formats from WIC
 
-    std::map<std::string, image_format> formats{
+    std::map<std::wstring, image_format> formats{
 
-        { "PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
-        { "JPEG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
-        { "JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { "BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { "TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
-        { "ICO", { GUID_ContainerFormatIco, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
-        { "DNG", { GUID_ContainerFormatAdng, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { "WMP", { GUID_ContainerFormatWmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { "WEBP", { GUID_ContainerFormatWebp, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
-        { "RAW", { GUID_ContainerFormatRaw, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { "DDS", { GUID_ContainerFormatDds, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
+        { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
+        { L"JPEG",
+          { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
+        { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
+        { L"ICO", { GUID_ContainerFormatIco, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
+        { L"DNG", { GUID_ContainerFormatAdng, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { L"WMP", { GUID_ContainerFormatWmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { L"WEBP", { GUID_ContainerFormatWebp, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
+        { L"RAW", { GUID_ContainerFormatRaw, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
+        { L"DDS", { GUID_ContainerFormatDds, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -146,17 +147,17 @@ namespace imageview::image
 
         if(count > 0) {
 
-            LOG_INFO("HEIF support is enabled");
+            LOG_INFO(L"HEIF support is enabled");
 
             auto iflock{ std::lock_guard(formats_mutex) };
 
-            image::formats["HEIF"] = { GUID_ContainerFormatHeif,
-                                       GUID_WICPixelFormat32bppBGRA,
-                                       format_flags{ with_alpha | use_name } };
+            image::formats[L"HEIF"] = { GUID_ContainerFormatHeif,
+                                        GUID_WICPixelFormat32bppBGRA,
+                                        format_flags{ with_alpha | use_name } };
 
-            image::formats["HEIC"] = { GUID_ContainerFormatHeif,
-                                       GUID_WICPixelFormat32bppBGRA,
-                                       format_flags{ with_alpha } };
+            image::formats[L"HEIC"] = { GUID_ContainerFormatHeif,
+                                        GUID_WICPixelFormat32bppBGRA,
+                                        format_flags{ with_alpha } };
         }
 
         return S_OK;
@@ -165,7 +166,7 @@ namespace imageview::image
     //////////////////////////////////////////////////////////////////////
     // get width, height in pixels and size of output in bytes for an image file
 
-    HRESULT get_size(std::string const &filename, uint32 &width, uint32 &height, uint64 &total_size)
+    HRESULT get_size(std::wstring const &filename, uint32 &width, uint32 &height, uint64 &total_size)
     {
         auto wic = get_wic();
 
@@ -178,7 +179,7 @@ namespace imageview::image
 
         ComPtr<IWICBitmapDecoder> decoder;
         CHK_HR(wic->CreateDecoderFromFilename(
-            unicode(filename).c_str(), null, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder));
+            filename.c_str(), null, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder));
 
         // assumption here is that GetFrame() does _NOT_ actually decode the pixels...
         // that's what the docs seem to say, but... well, here's hoping
@@ -238,7 +239,7 @@ namespace imageview::image
         CHK_HR(frame->SetPixelFormat(&format));
 
         if(format != requested_format) {
-            LOG_ERROR("Can't encode as PNG, format not supported");
+            LOG_ERROR(L"Can't encode as PNG, format not supported");
             return E_FAIL;
         }
 
@@ -283,7 +284,7 @@ namespace imageview::image
 
     HRESULT decode(image_file *file)
     {
-        LOG_DEBUG("DECODE {}", file->filename);
+        LOG_DEBUG(L"DECODE {}", file->filename);
 
         byte const *bytes = file->bytes.data();
         size_t file_size = file->bytes.size();
@@ -480,12 +481,12 @@ namespace imageview::image
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT save(std::string const &filename, byte const *bytes, uint width, uint height, uint pitch)
+    HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch)
     {
-        std::string extension;
+        std::wstring extension;
         CHK_HR(file::get_extension(filename, extension));
 
-        if(extension[0] == '.') {
+        if(extension[0] == L'.') {
             extension = extension.substr(1);
         }
 
@@ -512,7 +513,7 @@ namespace imageview::image
 
         ComPtr<IWICStream> file_stream;
         CHK_HR(wic->CreateStream(&file_stream));
-        CHK_HR(file_stream->InitializeFromFilename(unicode(filename).c_str(), GENERIC_WRITE));
+        CHK_HR(file_stream->InitializeFromFilename(filename.c_str(), GENERIC_WRITE));
 
         ComPtr<IWICBitmapEncoder> encoder;
         CHK_HR(wic->CreateEncoder(format.file_format, NULL, &encoder));
@@ -658,11 +659,11 @@ namespace imageview::image
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT is_file_extension_supported(std::string const &extension, bool &is_supported)
+    HRESULT is_file_extension_supported(std::wstring const &extension, bool &is_supported)
     {
-        std::string ext;
+        std::wstring ext;
 
-        if(extension[0] == '.') {
+        if(extension[0] == L'.') {
 
             ext = extension.substr(1);
 

@@ -29,7 +29,7 @@ namespace imageview
 
     HRESULT thread_pool_t::init()
     {
-        CHK_NULL(thread_exit_event = CreateEvent(null, true, true, null));
+        CHK_NULL(thread_exit_event = CreateEventW(null, true, true, null));
         return S_OK;
     }
 

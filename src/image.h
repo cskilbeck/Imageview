@@ -26,7 +26,7 @@ namespace imageview::image
 
     struct image_file
     {
-        std::string filename;            // file path, use this as key for map
+        std::wstring filename;           // file path, use this as key for map
         std::vector<byte> bytes;         // file contents, once it has been loaded
         HRESULT hresult{ E_PENDING };    // error code or S_OK from load_file()
         int index{ -1 };                 // position in the list of files
@@ -93,20 +93,20 @@ namespace imageview::image
         }
     };
 
-    extern std::map<std::string, image_format> formats;
+    extern std::map<std::wstring, image_format> formats;
     extern std::mutex formats_mutex;
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT is_file_extension_supported(std::string const &extension, bool &is_supported);
+    HRESULT is_file_extension_supported(std::wstring const &extension, bool &is_supported);
 
     HRESULT check_heif_support();
 
-    HRESULT get_size(std::string const &filename, uint32 &width, uint32 &height, uint64 &total_size);
+    HRESULT get_size(std::wstring const &filename, uint32 &width, uint32 &height, uint64 &total_size);
 
     HRESULT decode(image_file *file);
 
     HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 
-    HRESULT save(std::string const &filename, byte const *bytes, uint width, uint height, uint pitch);
+    HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch);
 }

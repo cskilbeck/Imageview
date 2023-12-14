@@ -6,26 +6,25 @@ namespace imageview
     // get the name of a WM_ windows message
 
 #if defined(_DEBUG)
-    std::string get_wm_name(uint32 uMsg);
+    std::wstring get_wm_name(uint32 uMsg);
 #endif
 
     //////////////////////////////////////////////////////////////////////
     // error reporting
 
-    std::string windows_error_message(uint32 err = 0);
-    HRESULT log_win32_error(DWORD err, char const *message, ...);
-    HRESULT log_win32_error(char const *message, ...);
-    void display_error(std::string const &message, HRESULT hr = 0);
-    int message_box(HWND hwnd, std::string const &text, uint buttons);
+    std::wstring windows_error_message(uint32 err = 0);
+    HRESULT log_win32_error(wchar const *message, DWORD err = 0);
+    HRESULT display_error(std::wstring const &message, HRESULT hr = 0);
+    int message_box(HWND hwnd, std::wstring const &text, uint buttons);
 
     //////////////////////////////////////////////////////////////////////
     // color admin
 
     uint32 color_to_uint32(vec4 color);
     vec4 color_from_uint32(uint32 color);
-    HRESULT color_from_string(std::string const &hex_text, uint32 &color);
-    std::string color32_to_string(uint32 color);
-    std::string color24_to_string(uint32 color);
+    HRESULT color_from_string(std::wstring const &hex_text, uint32 &color);
+    std::wstring color32_to_string(uint32 color);
+    std::wstring color24_to_string(uint32 color);
     uint32 color_lerp(uint32 ca, uint32 cb, int x);
 
     //////////////////////////////////////////////////////////////////////
@@ -33,19 +32,19 @@ namespace imageview
 
     HRESULT get_is_process_elevated(bool &is_elevated);
     float get_window_dpi(HWND w);
-    std::string get_app_filename();
-    HRESULT get_app_version(std::string &version);
-    HRESULT copy_string_to_clipboard(std::string const &string);
+    std::wstring get_app_filename();
+    HRESULT get_app_version(std::wstring &version);
+    HRESULT copy_string_to_clipboard(std::wstring const &string);
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size);
+    HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size);
 
     //////////////////////////////////////////////////////////////////////
     // string
 
-    std::string localize(uint id);
-    std::string strip_quotes(std::string const &s);
+    std::wstring localize(uint id);
+    std::wstring strip_quotes(std::wstring const &s);
 
     std::wstring unicode(std::string s);
     std::wstring unicode(char const *s, size_t len);
@@ -59,7 +58,7 @@ namespace imageview
     std::string ascii(wchar const *s, size_t len);
     std::string ascii(wchar const *s);
 
-    std::string hex_string_from_bytes(byte const *data, size_t len);
+    std::wstring hex_string_from_bytes(byte const *data, size_t len);
 
     //////////////////////////////////////////////////////////////////////
     // upper/lower case - these are not valid for many unicode pages!
@@ -171,9 +170,9 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    inline std::string rect_to_string(RECT const &r)
+    inline std::wstring rect_to_string(RECT const &r)
     {
-        return std::format("{},{} ({}x{})", r.left, r.top, rect_width(r), rect_height(r));
+        return std::format(L"{},{} ({}x{})", r.left, r.top, rect_width(r), rect_height(r));
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -187,40 +186,31 @@ namespace imageview
 //////////////////////////////////////////////////////////////////////
 // error checking macros
 
-#define _DO_HR(x, y)                                   \
-    {                                                  \
-        do {                                           \
-            HRESULT hr##y = (x);                       \
-            if(FAILED(hr##y)) {                        \
-                imageview::log_win32_error(hr##y, #x); \
-                return hr##y;                          \
-            }                                          \
-        } while(false);                                \
-    }
+#define _DO_HR(x, y)                                       \
+    do {                                                   \
+        HRESULT hr##y = (x);                               \
+        if(FAILED(hr##y)) {                                \
+            return imageview::log_win32_error(L#x, hr##y); \
+        }                                                  \
+    } while(false)
 
-#define _DO_BOOL(x, y)                                  \
-    {                                                   \
-        do {                                            \
-            bool hr##y = (x);                           \
-            if(!(hr##y)) {                              \
-                DWORD gle##y = GetLastError();          \
-                imageview::log_win32_error(gle##y, #x); \
-                return HRESULT_FROM_WIN32(gle##y);      \
-            }                                           \
-        } while(false);                                 \
-    }
+#define _DO_BOOL(x, y)                                      \
+    do {                                                    \
+        bool hr##y = (x);                                   \
+        if(!(hr##y)) {                                      \
+            DWORD gle##y = GetLastError();                  \
+            return imageview::log_win32_error(L#x, gle##y); \
+        }                                                   \
+    } while(false)
 
-#define _DO_NULL(x, y)                                \
-    {                                                 \
-        do {                                          \
-            auto hr##y = (x);                         \
-            if(hr##y == (decltype(hr##y))null) {      \
-                DWORD gle##y = GetLastError();        \
-                imageview::display_error(#x, gle##y); \
-                return HRESULT_FROM_WIN32(gle##y);    \
-            }                                         \
-        } while(false);                               \
-    }
+#define _DO_NULL(x, y)                                    \
+    do {                                                  \
+        auto hr##y = (x);                                 \
+        if(hr##y == (decltype(hr##y))null) {              \
+            DWORD gle##y = GetLastError();                \
+            return imageview::display_error(L#x, gle##y); \
+        }                                                 \
+    } while(false)
 
 // if(FAILED(x)) { return hresult; }
 #define CHK_HR(x) _DO_HR(x, __COUNTER__)

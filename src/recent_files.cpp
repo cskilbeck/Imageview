@@ -89,8 +89,8 @@ namespace imageview::recent_files
                             stripped = stripped.substr(0, stripped.size() - 4);
                         }
 
-                        std::string extension;
-                        file::get_extension(utf8(stripped), extension);
+                        std::wstring extension;
+                        file::get_extension(stripped, extension);
 
                         bool supported;
                         image::is_file_extension_supported(extension, supported);

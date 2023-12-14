@@ -13,8 +13,8 @@ namespace
 
         case IDC_BUTTON_SETTINGS_RELAUNCH: {
 
-            EndDialog(hwnd, 0);
-            PostMessage(app::window, app::WM_RELAUNCH_AS_ADMIN, 0, 0);
+            PostMessageW(app::window, app::WM_RELAUNCH_AS_ADMIN, 0, 0);
+            DestroyWindow(hwnd);
         } break;
         }
     }

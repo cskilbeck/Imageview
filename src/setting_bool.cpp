@@ -6,8 +6,9 @@
 namespace
 {
     using imageview::settings_ui::bool_setting;
-    using imageview::settings_ui::post_new_settings;
     using imageview::settings_ui::setting_controller;
+
+    using imageview::settings_ui::post_new_settings;
 
     //////////////////////////////////////////////////////////////////////
     // BOOL setting \ WM_COMMAND

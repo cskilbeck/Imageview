@@ -180,18 +180,18 @@ namespace
 #undef DECL_SETTING_INTERNAL
 
 #define DECL_SETTING_SECTION(name, string_id) \
-    controllers.push_back(new section_setting(#name, string_id, dialog_settings.name))
+    controllers.push_back(new section_setting(L#name, string_id, dialog_settings.name))
 
 #define DECL_SETTING_BOOL(name, string_id, value) \
     controllers.push_back(                        \
-        new bool_setting(#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name))
+        new bool_setting(L#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name))
 
 #define DECL_SETTING_COLOR(name, string_id, argb, alpha) \
     controllers.push_back(new color_setting(             \
-        #name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha))
+        L#name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha))
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) \
-    controllers.push_back(new enum_setting(#name,                   \
+    controllers.push_back(new enum_setting(L#name,                  \
                                            string_id,               \
                                            IDD_DIALOG_SETTING_ENUM, \
                                            setting_enum_dlgproc,    \
@@ -200,7 +200,7 @@ namespace
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) \
     controllers.push_back(new ranged_setting(                 \
-        #name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max))
+        L#name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max))
 
 #define DECL_SETTING_INTERNAL(name, type, ...)
 
@@ -231,8 +231,8 @@ namespace
 
                 section_setting *cur_section = reinterpret_cast<section_setting *>(s);
 
-                HWND section_window = CreateDialogParamA(app::instance,
-                                                         MAKEINTRESOURCE(s->dialog_resource_id),
+                HWND section_window = CreateDialogParamW(app::instance,
+                                                         MAKEINTRESOURCEW(s->dialog_resource_id),
                                                          hwnd,
                                                          s->dlg_proc,
                                                          reinterpret_cast<LPARAM>(s));
@@ -252,8 +252,8 @@ namespace
 
                 section_setting *cur_section = section_setting::sections.back();
 
-                HWND controller_window = CreateDialogParamA(app::instance,
-                                                            MAKEINTRESOURCE(s->dialog_resource_id),
+                HWND controller_window = CreateDialogParamW(app::instance,
+                                                            MAKEINTRESOURCEW(s->dialog_resource_id),
                                                             cur_section->window,
                                                             s->dlg_proc,
                                                             reinterpret_cast<LPARAM>(s));

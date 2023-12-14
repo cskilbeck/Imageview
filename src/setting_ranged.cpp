@@ -19,7 +19,7 @@ namespace
         ranged_setting &ranged = setting_controller::get<ranged_setting>(hwnd);
         ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
         HWND edit = GetDlgItem(hwnd, IDC_EDIT_SETTING_RANGED);
-        Edit_SetText(edit, std::format("{}", ranged.value).c_str());
+        Edit_SetText(edit, std::format(L"{}", ranged.value).c_str());
         post_new_settings();
     }
 }
@@ -44,7 +44,7 @@ namespace imageview::settings_ui
     {
         HWND slider = GetDlgItem(window, IDC_SLIDER_SETTING_RANGED);
         HWND edit = GetDlgItem(window, IDC_EDIT_SETTING_RANGED);
-        Edit_SetText(edit, std::format("{}", value).c_str());
+        Edit_SetText(edit, std::format(L"{}", value).c_str());
         SendMessage(slider, TBM_SETPOS, true, value);
     }
 

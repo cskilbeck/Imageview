@@ -49,10 +49,10 @@ HRESULT create_shell_item_from_object(IUnknown *punk, REFIID riid, void **ppv)
 //////////////////////////////////////////////////////////////////////
 // declare a static CLIPFORMAT and pass that that by ref as the first param
 
-CLIPFORMAT get_clipboard_format(CLIPFORMAT *pcf, PCSTR pszForamt)
+CLIPFORMAT get_clipboard_format(CLIPFORMAT *pcf, PCWSTR pszForamt)
 {
     if(*pcf == 0) {
-        *pcf = (CLIPFORMAT)RegisterClipboardFormatA(pszForamt);
+        *pcf = (CLIPFORMAT)RegisterClipboardFormatW(pszForamt);
     }
     return *pcf;
 }

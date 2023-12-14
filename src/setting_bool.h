@@ -9,7 +9,7 @@ namespace imageview::settings_ui
 
     struct bool_setting : setting_controller
     {
-        bool_setting(char const *n, uint s, uint dlg_id, DLGPROC dlg_proc, bool &b)
+        bool_setting(wchar const *n, uint s, uint dlg_id, DLGPROC dlg_proc, bool &b)
             : setting_controller(n, s, dlg_id, dlg_proc), value(b)
         {
         }

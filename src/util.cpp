@@ -48,7 +48,7 @@ namespace imageview
 {
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT load_resource(DWORD id, char const *type, void **buffer, size_t *size)
+    HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size)
     {
         if(buffer == null || size == null || type == null || id == 0) {
             return E_INVALIDARG;
@@ -56,7 +56,7 @@ namespace imageview
 
 
         HRSRC rsrc;
-        CHK_NULL(rsrc = FindResourceA(app::instance, MAKEINTRESOURCEA(id), type));
+        CHK_NULL(rsrc = FindResourceW(app::instance, MAKEINTRESOURCEW(id), type));
 
         size_t len;
         CHK_ZERO(len = SizeofResource(app::instance, rsrc));
@@ -175,22 +175,23 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    int message_box(HWND hwnd, std::string const &text, uint buttons)
+    int message_box(HWND hwnd, std::wstring const &text, uint buttons)
     {
-        std::wstring title = unicode(localize(IDS_AppName));
-        return MessageBoxW(hwnd, unicode(text).c_str(), title.c_str(), buttons);
+        std::wstring title = localize(IDS_AppName);
+        return MessageBoxW(hwnd, text.c_str(), title.c_str(), buttons);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    void display_error(std::string const &message, HRESULT hr)
+    HRESULT display_error(std::wstring const &message, HRESULT hr)
     {
         if(hr == 0) {
             hr = HRESULT_FROM_WIN32(GetLastError());
         }
-        std::string err = std::format("{}\r\n{}\r\n{}", localize(IDS_ERROR), message, windows_error_message(hr));
+        std::wstring err = std::format(L"{}\r\n{}\r\n{}", localize(IDS_ERROR), message, windows_error_message(hr));
         message_box(null, err, MB_ICONEXCLAMATION);
-        log_win32_error(hr, err.c_str());
+        log_win32_error(err.c_str(), hr);
+        return hr;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -241,11 +242,11 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    static constexpr char const *hex_digits = "0123456789ABCDEF";
+    static constexpr wchar const *hex_digits = L"0123456789ABCDEF";
 
-    std::string color32_to_string(uint32 color)
+    std::wstring color32_to_string(uint32 color)
     {
-        std::string c;
+        std::wstring c;
         c.reserve(8);
         for(uint i = 0; i < 4; ++i) {
             c.push_back(hex_digits[(color >> 4) & 0x0f]);
@@ -257,9 +258,9 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    std::string color24_to_string(uint32 color)
+    std::wstring color24_to_string(uint32 color)
     {
-        std::string c;
+        std::wstring c;
         c.reserve(6);
         for(uint i = 0; i < 3; ++i) {
             c.push_back(hex_digits[(color >> 4) & 0x0f]);
@@ -271,7 +272,7 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT color_from_string(std::string const &text, uint32 &color)
+    HRESULT color_from_string(std::wstring const &text, uint32 &color)
     {
         auto nibble_from_char = [](int c, int &x) {
             if(c >= '0' && c <= '9') {
@@ -312,12 +313,12 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    std::string hex_string_from_bytes(byte const *data, size_t len)
+    std::wstring hex_string_from_bytes(byte const *data, size_t len)
     {
-        std::string result;
+        std::wstring result;
         result.resize(len * 2);
         for(size_t i = 0; i < len; ++i) {
-            std::format_to_n(result.begin() + i * 2, 2, "{:02x}", data[i]);
+            std::format_to_n(result.begin() + i * 2, 2, L"{:02x}", data[i]);
         }
         return result;
     }
@@ -325,9 +326,9 @@ namespace imageview
     //////////////////////////////////////////////////////////////////////
     // get a localized string by id
 
-    std::string localize(uint id)
+    std::wstring localize(uint id)
     {
-        static std::unordered_map<uint, std::string> localized_strings;
+        static std::unordered_map<uint, std::wstring> localized_strings;
 
         auto f = localized_strings.find(id);
 
@@ -341,16 +342,17 @@ namespace imageview
         int len = LoadStringW(app::instance, id, reinterpret_cast<wchar *>(&str), 0);
 
         if(len <= 0) {
-            return std::format("UNLOCALIZED_{}", id);
+            return std::format(L"UNLOCALIZED_{}", id);
         }
-        return localized_strings.insert({ id, utf8(str, len) }).first->second;
+        return localized_strings.insert({ id, std::wstring(str, len) }).first->second;
     }
 
     //////////////////////////////////////////////////////////////////////
+    // TODO (chs): quotes are not always quotes in other languages....
 
-    std::string strip_quotes(std::string const &s)
+    std::wstring strip_quotes(std::wstring const &s)
     {
-        if(s.front() != '"' || s.back() != '"') {
+        if(s.front() != L'"' || s.back() != L'"') {
             return s;
         }
         return s.substr(1, s.size() - 2);
@@ -358,44 +360,27 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    std::string windows_error_message(uint32 err)
+    std::wstring windows_error_message(uint32 err)
     {
         if(err == 0) {
             err = GetLastError();
         }
-        return std::string(_com_error(HRESULT_FROM_WIN32(err)).ErrorMessage());
+        return std::wstring(_com_error(HRESULT_FROM_WIN32(err)).ErrorMessage());
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    static HRESULT log_win32_error_v(DWORD err, char const *message, va_list v)
+    HRESULT log_win32_error(wchar const *message, DWORD err)
     {
         LOG_CONTEXT("win32");
 
-        char buffer[4096];
-        _vsnprintf_s(buffer, _countof(buffer), message, v);
+        if(err == 0) {
+            err = GetLastError();
+        }
         HRESULT r = HRESULT_FROM_WIN32(err);
-        std::string err_str = windows_error_message(r);
-        LOG_ERROR("ERROR {:08x} ({}) {}", err, buffer, err_str);
+        std::wstring err_str = windows_error_message(r);
+        LOG_ERROR(L"ERROR {:08x} ({}) {}", err, message, err_str);
         return r;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT log_win32_error(DWORD err, char const *message, ...)
-    {
-        va_list v;
-        va_start(v, message);
-        return log_win32_error_v(err, message, v);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT log_win32_error(char const *message, ...)
-    {
-        va_list v;
-        va_start(v, message);
-        return log_win32_error_v(GetLastError(), message, v);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -441,25 +426,25 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    std::string get_app_filename()
+    std::wstring get_app_filename()
     {
-        std::string path;
-        char exe_path[MAX_PATH * 2];
-        uint32 got = GetModuleFileNameA(NULL, exe_path, _countof(exe_path));
+        std::wstring path;
+        wchar exe_path[MAX_PATH * 2];
+        uint32 got = GetModuleFileNameW(NULL, exe_path, _countof(exe_path));
         if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
-            path = std::string(exe_path);
+            path = std::wstring(exe_path);
         }
         return path;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_app_version(std::string &version)
+    HRESULT get_app_version(std::wstring &version)
     {
-        std::string app_filename = get_app_filename();
+        std::wstring app_filename = get_app_filename();
 
         DWORD dummy;
-        uint32 len = GetFileVersionInfoSizeA(app_filename.c_str(), &dummy);
+        uint32 len = GetFileVersionInfoSizeW(app_filename.c_str(), &dummy);
 
         if(len == 0) {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -468,31 +453,31 @@ namespace imageview
         std::vector<byte> buffer;
         buffer.resize(len);
 
-        CHK_BOOL(GetFileVersionInfoA(get_app_filename().c_str(), 0, len, buffer.data()));
+        CHK_BOOL(GetFileVersionInfoW(get_app_filename().c_str(), 0, len, buffer.data()));
 
         VS_FIXEDFILEINFO *version_info;
         uint version_size;
-        CHK_BOOL(VerQueryValueA(buffer.data(), "\\", reinterpret_cast<void **>(&version_info), &version_size));
+        CHK_BOOL(VerQueryValueW(buffer.data(), L"\\", reinterpret_cast<void **>(&version_info), &version_size));
 
         uint32 vh = version_info->dwFileVersionMS;
         uint32 vl = version_info->dwFileVersionLS;
 
-        version = std::format("{}.{}.{}.{}", (vh >> 16) & 0xffff, vh & 0xffff, (vl >> 16) & 0xffff, vl & 0xffff);
+        version = std::format(L"{}.{}.{}.{}", (vh >> 16) & 0xffff, vh & 0xffff, (vl >> 16) & 0xffff, vl & 0xffff);
 
         return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT copy_string_to_clipboard(std::string const &string)
+    HRESULT copy_string_to_clipboard(std::wstring const &string)
     {
         SetLastError(0);
 
         HANDLE handle;
-        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, string.size() + 1));
+        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, string.size() * sizeof(wchar)));
 
-        char *buffer;
-        CHK_NULL(buffer = reinterpret_cast<char *>(GlobalLock(handle)));
+        wchar *buffer;
+        CHK_NULL(buffer = reinterpret_cast<wchar *>(GlobalLock(handle)));
         DEFER(GlobalUnlock(handle));
 
         memcpy(buffer, string.c_str(), string.size() + 1);
@@ -501,7 +486,7 @@ namespace imageview
         DEFER(CloseClipboard());
 
         CHK_BOOL(EmptyClipboard());
-        CHK_BOOL(SetClipboardData(CF_TEXT, handle));
+        CHK_BOOL(SetClipboardData(CF_UNICODETEXT, handle));
 
         return S_OK;
     }

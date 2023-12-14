@@ -68,9 +68,9 @@ namespace imageview
     {
         LOG_CONTEXT("stopwatch");
 
-        char const *name;
+        wchar const *name;
 
-        explicit stopwatch(char const *name) : timer_t(), name(name)
+        explicit stopwatch(wchar const *name) : timer_t(), name(name)
         {
             reset();
         }
@@ -78,7 +78,7 @@ namespace imageview
         ~stopwatch()
         {
             update();
-            LOG_INFO("Stopwatch {} : {}", name, wall_time());
+            LOG_INFO(L"Stopwatch {} : {}", name, wall_time());
         }
     };
 }
