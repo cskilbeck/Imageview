@@ -8,8 +8,6 @@
 // get all the mouse handling stuff out of update() and into mouse move handler
 // UTF16 everywhere
 
-// SetCursor not always being called when it should
-
 // flip/rotate
 // colorspace / SRGB / HDR
 // overlay grid
@@ -45,8 +43,6 @@ LOG_CONTEXT("app");
 // HKEY_CLASSES_ROOT\{.ext}\OpenWithProgids\ImageView.files (empty REG_SZ)
 
 //////////////////////////////////////////////////////////////////////
-
-#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
 
 namespace imageview::app
 {
@@ -97,15 +93,31 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // selection admin
 
-    char const *label_font_family_name{ "Noto Sans" };
-    char const *banner_font_family_name{ "Roboto Mono" };
+    // how, if at all, is the selection being modified
+    enum select_mode_t
+    {
+        // no selection defined
+        // on mouse click followed by mouse move more than threshold, set select_anchor.xy = mouse.xy
+        select_mode_none = 0,
 
-    // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
-    std::wstring current_folder;
+        // dragging a corner
+        // set select_current.xy = mouse.xy
+        select_mode_dragging_corner = 1,
 
-    // index in folder scan of currently viewed file
-    int current_file_cursor{ -1 };
+        // dragging top or bottom edge
+        // set select_current.y = mouse.y
+        select_mode_dragging_vertical = 2,
+
+        // dragging left or right edge
+        // set select_current.x = mouse.x
+        select_mode_dragging_horizontal = 3,
+
+        // dragging whole selection (grabbed inside the rectangle)
+        // set select_current and select_anchor
+        select_mode_dragging_all = 2,
+    };
 
     // where on selection is mouse hovering
     enum selection_hover_t : uint
@@ -115,8 +127,15 @@ namespace
         sel_hover_right = 2,
         sel_hover_top = 4,
         sel_hover_bottom = 8,
+        sel_hover_topleft = sel_hover_left | sel_hover_top,
+        sel_hover_topright = sel_hover_right | sel_hover_top,
+        sel_hover_bottomleft = sel_hover_left | sel_hover_bottom,
+        sel_hover_bottomright = sel_hover_right | sel_hover_bottom,
+
         sel_hover_outside = 0x80000000
     };
+
+    DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
 
     enum class shift_snap_axis_t
     {
@@ -133,6 +152,18 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // fonts are hard coded for now, embedded as resources
+
+    char const *label_font_family_name{ "Noto Sans" };
+    char const *banner_font_family_name{ "Roboto Mono" };
+
+    // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
+    std::wstring current_folder;
+
+    // index in folder scan of currently viewed file
+    int current_file_cursor{ -1 };
+
+    //////////////////////////////////////////////////////////////////////
     // files which have been loaded
 
     std::unordered_map<std::wstring, image::image_file *> loaded_files;
@@ -145,8 +176,6 @@ namespace
     //////////////////////////////////////////////////////////////////////
 
     LPCWSTR window_class = L"ImageViewWindowClass_2DAE134A-7E46-4E75-9DFA-207695F48699";
-
-    ComPtr<ID3D11Debug> d3d_debug;
 
     // most recently scanned folder results
     std::unique_ptr<file::folder_scan_result> current_folder_scan;
@@ -283,6 +312,57 @@ namespace
     snap_mode_t snap_mode{ snap_mode_t::none };
     float axis_snap_radius{ 8 };    // TODO (chs): make this a setting?
 
+    bool selecting{ false };         // dragging new selection rectangle
+    bool drag_selection{ false };    // dragging the existing selection rectangle
+    bool grabbing_selection{ false };
+
+    bool select_active{ false };          // a defined selection rectangle exists
+    selection_hover_t selection_hover;    // where on the selection rectangle being hovered
+    vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
+    vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
+
+    // the fixed point of the selection rectangle
+    vec2 select_anchor;
+
+    // the floating point of the selection rectangle
+    vec2 select_current;
+
+    // sticky zoom mode on window resize
+    bool has_been_zoomed_or_dragged{ false };
+    zoom_mode_t last_zoom_mode{ zoom_mode_t::shrink_to_fit };
+
+    // texture drawn in this rectangle which is in pixels
+    rect_f current_rect;
+
+    // texture rectangle target for animated zoom etc
+    rect_f target_rect;
+
+    // texture dimensions
+    int texture_width{ 0 };
+    int texture_height{ 0 };
+
+    // zoom limits in pixels
+    float min_zoom{ 8 };      // min size of entire image
+    float max_zoom{ 192 };    // max size of 1 pixel
+
+    // frame/wall timer for animation
+    timer_t m_timer;
+
+    // when was the selection copied for animating flash
+    double copy_timestamp{ 0 };
+
+    HCURSOR current_mouse_cursor;
+
+    // which frame rendering
+    int frame_count{ 0 };
+
+    // 10 recent files
+    std::vector<std::wstring> recent_files_list;
+
+    //////////////////////////////////////////////////////////////////////
+    // cursors for hovering over rectangle interior/corners/edges
+    // see selection_hover_t
+
     struct cursor_def
     {
         enum class src
@@ -311,59 +391,6 @@ namespace
             return LoadCursor(h, MAKEINTRESOURCEW(id));
         }
     };
-
-    bool selecting{ false };         // dragging new selection rectangle
-    bool drag_selection{ false };    // dragging the existing selection rectangle
-    bool grabbing_selection{ false };
-
-    bool select_active{ false };          // a defined selection rectangle exists
-    selection_hover_t selection_hover;    // where on the selection rectangle being hovered
-    vec2 drag_select_pos{ 0, 0 };         // where they originally grabbed the selection rectangle in texels
-    vec2 selection_size{ 0, 0 };          // size of selection rectangle in texels
-
-    HCURSOR current_mouse_cursor;
-
-    // the point they first clicked
-    vec2 select_anchor;
-
-    // the point where the mouse is now (could be above, below, left, right of anchor)
-    vec2 select_current;
-
-    // sticky zoom mode on window resize
-    bool has_been_zoomed_or_dragged{ false };
-    zoom_mode_t last_zoom_mode{ zoom_mode_t::shrink_to_fit };
-
-    // texture drawn in this rectangle which is in pixels
-    rect_f current_rect;
-
-    // texture rectangle target for animated zoom etc
-    rect_f target_rect;
-
-    // texture dimensions
-    int texture_width{ 0 };
-    int texture_height{ 0 };
-
-    // zoom limits in pixels
-    float min_zoom{ 8 };      // min size of entire image
-    float max_zoom{ 192 };    // max size of 1 pixel
-
-    // frame/wall timer for animation
-    timer_t m_timer;
-
-    // when was the selection copied for animating flash
-    double copy_timestamp{ 0 };
-
-    // which frame rendering
-    int frame_count{ 0 };
-
-    // 10 recent files
-    std::vector<std::wstring> recent_files_list;
-
-    DEFINE_ENUM_FLAG_OPERATORS(selection_hover_t);
-
-    //////////////////////////////////////////////////////////////////////
-    // cursors for hovering over rectangle interior/corners/edges
-    // see selection_hover_t
 
     cursor_def sel_hover_cursors[16] = {
         { cursor_def::src::user, IDC_CURSOR_HAND },    //  0 - inside
@@ -413,24 +440,31 @@ namespace
     } file_dropper;
 
     //////////////////////////////////////////////////////////////////////
+    // D3D Debug admin
 
 #if defined(_DEBUG)
+
+    ComPtr<ID3D11Debug> d3d_debug;
+
     void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
     {
         resource->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
     }
-#else
-    void set_d3d_debug_name(...)
-    {
-    }
-#endif
-
-    //////////////////////////////////////////////////////////////////////
 
     template <typename T> void set_d3d_debug_name(ComPtr<T> &resource, char const *name)
     {
         set_d3d_debug_name(resource.Get(), name);
     }
+
+#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
+
+#else
+
+#define D3D_SET_NAME(...) \
+    do {                  \
+    } while(false)
+
+#endif
 
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
@@ -450,6 +484,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // message box for catastrophic errors
 
     void error_message_box(std::wstring const &msg, HRESULT hr)
     {
@@ -458,6 +493,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // SetWindowText with ** admin ** prepender and current filename
 
     HRESULT setup_window_text()
     {
@@ -485,6 +521,8 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // new settings have arrived, update stuff which isn't automatically
+    // picked up by the renderer
 
     void on_new_settings()
     {
@@ -541,6 +579,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // get size of file + decoded image for cache
 
     HRESULT get_image_file_size(std::wstring const &filename, uint64 *size)
     {
@@ -683,10 +722,12 @@ namespace
             if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
                 error_message_box(std::format(L"Loading {}", f->filename), load_hr);
+
+                // bit harsh, quitting here...?
                 DestroyWindow(window);
             }
 
-            // and in any case, set window message to error text
+            // and in any case, set banner message to error text
             std::wstring err_str = windows_error_message(load_hr);
             std::wstring name;
             CHK_HR(file::get_filename(f->filename, name));
@@ -1046,19 +1087,11 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // ask the file_loader_thread to load a file
-
-    void request_image(wchar const *filename)
-    {
-        PostThreadMessage(file_loader_thread_id, WM_LOAD_FILE, 0, reinterpret_cast<LPARAM>(filename));
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // get texture size as a vec2
 
     vec2 texture_size()
     {
-        return { (float)texture_width, (float)texture_height };
+        return { static_cast<float>(texture_width), static_cast<float>(texture_height) };
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1066,7 +1099,7 @@ namespace
 
     vec2 window_size()
     {
-        return { (float)window_width, (float)window_height };
+        return { static_cast<float>(window_width), static_cast<float>(window_height) };
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1128,7 +1161,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // set the mouse cursor and track it
+    // set the current mouse cursor
 
     void set_mouse_cursor(HCURSOR c)
     {
@@ -1160,7 +1193,7 @@ namespace
             drag_select_pos = { 0, 0 };
             select_anchor = { 0, 0 };
             select_current = sub_point(texture_size(), { 1, 1 });
-            selection_size = sub_point(select_current, select_anchor);
+            selection_size = select_current;
             select_active = true;
             selecting = false;
             drag_selection = false;
@@ -1173,28 +1206,28 @@ namespace
 
     void reset_zoom(zoom_mode_t mode)
     {
-        float width_factor = (float)window_width / texture_width;
-        float height_factor = (float)window_height / texture_height;
-        float scale_factor{ 1.0f };
+        float width_factor = static_cast<float>(window_width) / texture_width;
+        float height_factor = static_cast<float>(window_height) / texture_height;
 
-        using m = zoom_mode_t;
+        float scale_factor{ 1.0f };
 
         switch(mode) {
 
-        case m::one_to_one:
+        case zoom_mode_t::one_to_one:
             break;
 
-        case m::shrink_to_fit:
+        case zoom_mode_t::shrink_to_fit:
             scale_factor = std::min(1.0f, std::min(width_factor, height_factor));
             break;
 
-        case m::fit_to_window:
+        case zoom_mode_t::fit_to_window:
             scale_factor = std::min(width_factor, height_factor);
             break;
         }
 
         target_rect.w = texture_width * scale_factor;
         target_rect.h = texture_height * scale_factor;
+
         target_rect.x = (window_width - target_rect.w) / 2.0f;
         target_rect.y = (window_height - target_rect.h) / 2.0f;
 
@@ -1991,7 +2024,7 @@ namespace
                             text = std::format(L"{}\t{}", text, key_label);
                         }
 
-                        // callback sets enabled/disabled
+                        // callback sets enabled/disabled/checked states
                         mii.fState = MF_ENABLED;    // which is 0
                         auto process_fn = menu_process_table.find(mii.wID);
                         if(process_fn != menu_process_table.end()) {
@@ -2037,7 +2070,7 @@ namespace
 
             HMONITOR h = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
             RECT window_rect;
-            if(h != null && GetMonitorInfo(h, &monitor_info)) {
+            if(h != null && GetMonitorInfoW(h, &monitor_info)) {
                 window_rect = monitor_info.rcMonitor;
             } else {
                 window_rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
@@ -2050,6 +2083,7 @@ namespace
             int sw = rect_width(window_rect);
             int sh = rect_height(window_rect);
 
+            // this hide/show nonsense to deal with D3D (and it's still ugly)
             SetWindowPos(window, HWND_TOP, sx, sy, sw, sh, SWP_FRAMECHANGED | SWP_HIDEWINDOW);
             ShowWindow(window, SW_SHOW);
 
@@ -2133,14 +2167,37 @@ namespace
 
         if(button == settings.select_button) {
 
-            if(select_active && selection_hover != selection_hover_t::sel_hover_outside) {
+            bool renew_selection{ false };
 
-                // texel they were on when they grabbed the selection
-                grabbing_selection = true;
-                drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
+            if(select_active && selection_hover != sel_hover_outside) {
+
+                vec2 tl = vec2::min(select_anchor, select_current);
+                vec2 br = vec2::max(select_anchor, select_current);
+
+                if(selection_hover == sel_hover_topleft || selection_hover == sel_hover_topright ||
+                   selection_hover == sel_hover_bottomleft || selection_hover == sel_hover_bottomright) {
+
+                    select_current = clamp_to_texture(screen_to_texture_pos(pos));
+                    grabbing_selection = false;
+                    renew_selection = true;
+
+                    if((selection_hover & sel_hover_left) != 0) {
+                        select_anchor.x = br.x;
+                    } else {
+                        select_anchor.x = tl.x;
+                    }
+                    if((selection_hover & sel_hover_top) != 0) {
+                        select_anchor.y = br.y;
+                    } else {
+                        select_anchor.y = tl.y;
+                    }
+                } else {
+                    grabbing_selection = true;
+                    drag_select_pos = vec2::floor(screen_to_texture_pos(pos));
+                }
             }
 
-            if(!grabbing_selection && image_texture.Get() != null) {
+            if(!renew_selection && !grabbing_selection && image_texture.Get() != null) {
 
                 select_anchor = clamp_to_texture(screen_to_texture_pos(pos));
                 select_current = select_anchor;
@@ -2751,29 +2808,6 @@ namespace
         return hr;
     }
 
-    enum select_mode_t
-    {
-        // no selection defined
-        // on mouse click followed by mouse move more than threshold, set select_anchor.xy = mouse.xy
-        select_mode_none = 0,
-
-        // dragging a corner
-        // set select_current.xy = mouse.xy
-        select_mode_dragging_corner = 1,
-
-        // dragging top or bottom edge
-        // set select_current.y = mouse.y
-        select_mode_dragging_vertical = 2,
-
-        // dragging left or right edge
-        // set select_current.x = mouse.x
-        select_mode_dragging_horizontal = 3,
-
-        // dragging whole selection (grabbed inside the rectangle)
-        // set select_current and select_anchor
-        select_mode_dragging_all = 2,
-    };
-
     //////////////////////////////////////////////////////////////////////
     // call this repeatedly when there are no windows messages available
 
@@ -2802,13 +2836,13 @@ namespace
         lerp(current_rect.w, target_rect.w);
         lerp(current_rect.h, target_rect.h);
 
-        // update mouse deltas if in zoom mode
+        // reset mouse to original click position in zoom mode
 
         if(get_mouse_buttons(settings.zoom_button)) {
 
-            POINT old_pos{ mouse_click[settings.zoom_button].x, mouse_click[settings.zoom_button].y };
-            ClientToScreen(window, &old_pos);
-            SetCursorPos(old_pos.x, old_pos.y);
+            POINT click_pos = mouse_click[settings.zoom_button];
+            ClientToScreen(window, &click_pos);
+            SetCursorPos(click_pos.x, click_pos.y);
         }
 
         memset(mouse_offset, 0, sizeof(mouse_offset));
@@ -3290,37 +3324,38 @@ namespace
                 float *x = &select_anchor.x;
                 float *y = &select_anchor.y;
 
-                vec2 max{ 0, 0 };
-                vec2 min{ select_anchor };
-
-                if(selection_hover & sel_hover_left) {
-                    x = &select_anchor.x;
-                    max.x = select_current.x;
-                    min.x = 0.0f;
-                } else if(selection_hover & sel_hover_right) {
-                    x = &select_current.x;
-                    max.x = (float)texture_width - 1;
-                    min.x = select_anchor.x;
-                }
-
-                if(selection_hover & sel_hover_top) {
-                    y = &select_anchor.y;
-                    max.y = select_current.y;
-                    min.y = 0.0f;
-                } else if(selection_hover & sel_hover_bottom) {
-                    y = &select_current.y;
-                    max.y = (float)texture_height - 1;
-                    min.y = select_anchor.y;
-                }
-
-                max = vec2::max(max, min);
+                vec2 max = sub_point(texture_size(), { 1, 1 });
+                vec2 min{ 0, 0 };
 
                 if(selection_hover == sel_hover_inside) {
+
                     min = { 0, 0 };
                     vec2 ts = sub_point(texture_size(), { 1, 1 });
                     max = sub_point(ts, selection_size);
-                }
 
+                } else {
+
+                    if(selection_hover & sel_hover_left) {
+
+                        x = &select_anchor.x;
+                        max.y = min.y = select_anchor.y;
+                    } else if(selection_hover & sel_hover_right) {
+
+                        x = &select_current.x;
+                        max.y = min.y = select_anchor.y;
+                    }
+
+                    if(selection_hover & sel_hover_top) {
+
+                        y = &select_anchor.y;
+                        max.x = min.x = select_anchor.x;
+
+                    } else if(selection_hover & sel_hover_bottom) {
+
+                        y = &select_current.y;
+                        max.x = min.x = select_anchor.x;
+                    }
+                }
                 // get actual movement
                 vec2 old{ *x, *y };
 
