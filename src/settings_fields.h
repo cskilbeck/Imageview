@@ -198,34 +198,34 @@ DECL_SETTING_RANGED(cache_size_mb, IDS_SETTING_NAME_CACHE_SIZE_MB, 128, 16, 4096
 
 // grid size multiplier, checkerboard is multiplied by 2^grid_multiplier
 
-DECL_SETTING_INTERNAL(grid_multiplier, uint, 1);
+DECL_SETTING_UINT(grid_multiplier, SETTING_HIDDEN, 1);
 
 // how far mouse has to move after clicking select button to consider a selection active
 
-DECL_SETTING_INTERNAL(select_start_distance, float, 4);
+DECL_SETTING_UINT(select_start_distance, SETTING_HIDDEN, 4);
 
 // how close in pixels the mouse must be to grab the selection edge
 
-DECL_SETTING_INTERNAL(select_border_grab_size, float, 8);
+DECL_SETTING_UINT(select_border_grab_size, SETTING_HIDDEN, 8);
 
 // has it ever been run before? if not, use some sensible defaults for window pos
 
-DECL_SETTING_INTERNAL(first_run, bool, true);
+DECL_SETTING_BOOL(first_run, SETTING_HIDDEN, true);
 
 // windowed or fullscreen
 
-DECL_SETTING_INTERNAL(fullscreen, bool, false);
+DECL_SETTING_BOOL(fullscreen, SETTING_HIDDEN, false);
 
 // non-fullscreen window placement
 
-DECL_SETTING_INTERNAL(window_placement, WINDOWPLACEMENT, sizeof(WINDOWPLACEMENT));
+DECL_SETTING_BINARY(window_placement, SETTING_HIDDEN, WINDOWPLACEMENT, 0);
 
 // last fullscreen rect
 
-DECL_SETTING_INTERNAL(fullscreen_rect, RECT, 0, 0, 0, 0);
+DECL_SETTING_BINARY(fullscreen_rect, SETTING_HIDDEN, RECT, 0, 0, 0, 0);
 
 // last file loaded
 
-DECL_SETTING_INTERNAL(last_file_loaded, std::wstring, L"");
+DECL_SETTING_BINARY(last_file_loaded, SETTING_HIDDEN, std::wstring, L"");
 
 #pragma warning(pop)

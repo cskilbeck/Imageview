@@ -9,8 +9,8 @@ namespace imageview::settings_ui
 
     struct bool_setting : setting_controller
     {
-        bool_setting(wchar const *n, uint s, uint dlg_id, DLGPROC dlg_proc, bool &b)
-            : setting_controller(n, s, dlg_id, dlg_proc), value(b)
+        bool_setting(wchar const *n, uint s, bool &b)
+            : setting_controller(n, s, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc), value(b)
         {
         }
 

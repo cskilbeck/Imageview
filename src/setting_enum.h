@@ -18,8 +18,11 @@ namespace imageview::settings_ui
 
     struct enum_setting : setting_controller
     {
-        enum_setting(wchar const *n, uint s, uint dlg_id, DLGPROC dlg_proc, enum_id_map const &names, uint &b)
-            : setting_controller(n, s, dlg_id, dlg_proc), enum_names(names), value(b)
+        template <typename T>
+        enum_setting(wchar const *n, uint s, enum_id_map const &names, T &b)
+            : setting_controller(n, s, IDD_DIALOG_SETTING_ENUM, setting_enum_dlgproc)
+            , enum_names(names)
+            , value(reinterpret_cast<uint &>(b))
         {
         }
 

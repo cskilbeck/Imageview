@@ -85,15 +85,35 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT parse_ranged(std::wstring const &value, settings_t::ranged_t &setting)
+    HRESULT parse_uint(std::wstring const &value, uint &setting)
     {
         wchar *ep;
-        uint x = std::wcstol(value.c_str(), &ep, 10);
+        uint x = std::wcstoul(value.c_str(), &ep, 10);
         if(ep != value.c_str() || *ep != 0) {
             setting = x;
             return S_OK;
         }
         return E_INVALIDARG;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT parse_int(std::wstring const &value, int &setting)
+    {
+        wchar *ep;
+        int x = std::wcstol(value.c_str(), &ep, 10);
+        if(ep != value.c_str() || *ep != 0) {
+            setting = x;
+            return S_OK;
+        }
+        return E_INVALIDARG;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT parse_ranged(std::wstring const &value, settings_t::ranged_t &setting)
+    {
+        return parse_uint(value, setting);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -108,13 +128,10 @@ namespace
 
     template <typename T> HRESULT parse_enum(std::wstring const &value, T &setting)
     {
-        wchar *ep;
-        uint x = std::wcstol(value.c_str(), &ep, 10);
-        if(ep != value.c_str() || *ep != 0) {
-            setting = static_cast<T>(x);
-            return S_OK;
-        }
-        return E_INVALIDARG;
+        uint x;
+        CHK_HR(parse_uint(value, x));
+        setting = static_cast<T>(x);
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -135,9 +152,28 @@ namespace
         return S_OK;
     }
 
+    //////////////////////////////////////////////////////////////////////
+
     template <> HRESULT parse_binary(std::wstring const &value, std::wstring &setting)
     {
         setting = value;
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <> HRESULT parse_binary(std::wstring const &value, RECT &setting)
+    {
+        std::vector<std::wstring> tokens;
+        tokenize(value, tokens, L",", tokenize_option::discard_empty);
+        if(tokens.size() != 4) {
+            return E_INVALIDARG;
+        }
+        LONG *l = reinterpret_cast<LONG *>(&setting);
+        for(size_t i = 0; i < 4; ++i) {
+            CHK_HR(parse_int(tokens[i], *reinterpret_cast<int *>(l)));
+            l += 1;
+        }
         return S_OK;
     }
 
@@ -167,10 +203,17 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT to_string_ranged(settings_t::ranged_t const &setting, std::wstring &result)
+    HRESULT to_string_uint(uint const &setting, std::wstring &result)
     {
         result = std::format(L"{:d}", setting);
         return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT to_string_ranged(settings_t::ranged_t const &setting, std::wstring &result)
+    {
+        return to_string_uint(static_cast<uint const &>(setting), result);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -189,8 +232,7 @@ namespace
 
     HRESULT to_string_enum(uint const &setting, std::wstring &result)
     {
-        result = std::format(L"{:d}", setting);
-        return S_OK;
+        return to_string_uint(static_cast<uint const &>(setting), result);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -215,6 +257,14 @@ namespace
         result = setting;
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <> HRESULT to_string_binary(RECT const &setting, std::wstring &result)
+    {
+        result = std::format(L"{:d},{:d},{:d},{:d}", setting.left, setting.top, setting.right, setting.bottom);
+        return S_OK;
+    }
 }
 
 namespace imageview
@@ -226,10 +276,11 @@ namespace imageview
     {
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
+#undef DECL_SETTING_UINT
 #undef DECL_SETTING_COLOR
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
-#undef DECL_SETTING_INTERNAL
+#undef DECL_SETTING_BINARY
 
 #define LOAD_SETTING(name, type)                                     \
     {                                                                \
@@ -253,13 +304,15 @@ namespace imageview
 
 #define DECL_SETTING_BOOL(name, string_id, value) LOAD_SETTING(name, bool)
 
+#define DECL_SETTING_UINT(name, string_id, value) LOAD_SETTING(name, uint)
+
 #define DECL_SETTING_COLOR(name, string_id, rgba, alpha) LOAD_SETTING(name, color)
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) LOAD_SETTING(name, enum)
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) LOAD_SETTING(name, ranged)
 
-#define DECL_SETTING_INTERNAL(name, type, ...) LOAD_SETTING(name, binary)
+#define DECL_SETTING_BINARY(name, string_id, type, ...) LOAD_SETTING(name, binary)
 
 #include "settings_fields.h"
 
@@ -273,10 +326,11 @@ namespace imageview
     {
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
+#undef DECL_SETTING_UINT
 #undef DECL_SETTING_COLOR
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
-#undef DECL_SETTING_INTERNAL
+#undef DECL_SETTING_BINARY
 
 #define SAVE_SETTING(name, type)                 \
     {                                            \
@@ -296,13 +350,15 @@ namespace imageview
 
 #define DECL_SETTING_BOOL(name, string_id, value) SAVE_SETTING(name, bool)
 
+#define DECL_SETTING_UINT(name, string_id, value) SAVE_SETTING(name, uint)
+
 #define DECL_SETTING_COLOR(name, string_id, rgba, alpha) SAVE_SETTING_V(name, color, alpha)
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) SAVE_SETTING(name, enum)
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) SAVE_SETTING(name, ranged)
 
-#define DECL_SETTING_INTERNAL(name, type, ...) SAVE_SETTING(name, binary)
+#define DECL_SETTING_BINARY(name, string_id, type, ...) SAVE_SETTING(name, binary)
 
 #include "settings_fields.h"
         return S_OK;

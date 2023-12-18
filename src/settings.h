@@ -2,7 +2,6 @@
 
 namespace imageview
 {
-
     using enum_id_map = std::map<uint, uint>;
 
     enum fullscreen_startup_option : uint
@@ -74,6 +73,8 @@ namespace imageview
         using ranged_t = uint;
         // enums are special, just serialize as uint for now...
 
+#define SETTING_HIDDEN 0
+
 #define DECL_SETTING_SECTION(name, string_id) \
     section_t name                            \
     {                                         \
@@ -82,6 +83,12 @@ namespace imageview
 
 #define DECL_SETTING_BOOL(name, string_id, default_value) \
     bool name                                             \
+    {                                                     \
+        default_value                                     \
+    }
+
+#define DECL_SETTING_UINT(name, string_id, default_value) \
+    uint name                                             \
     {                                                     \
         default_value                                     \
     }
@@ -112,10 +119,10 @@ namespace imageview
         value                                                 \
     }
 
-#define DECL_SETTING_INTERNAL(name, type, ...) \
-    type name                                  \
-    {                                          \
-        __VA_ARGS__                            \
+#define DECL_SETTING_BINARY(name, string_id, type, ...) \
+    type name                                           \
+    {                                                   \
+        __VA_ARGS__                                     \
     }
 
 #include "settings_fields.h"

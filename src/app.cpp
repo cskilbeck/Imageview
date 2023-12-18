@@ -2114,7 +2114,7 @@ namespace
         vec2 br = texture_to_screen_pos_unclamped(add_point({ 1, 1 }, select_rect.bottom_right()));
 
         // selection grab border is +/- N pixels (setting: 4 to 32 pixels)
-        float border = dpi_scale(settings.select_border_grab_size) / 2;
+        float border = dpi_scale(settings.select_border_grab_size) / 2.0f;
         vec2 b{ border, border };
 
         // expand outer rect
@@ -2862,11 +2862,12 @@ namespace
         if(frame_count > 0 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
 
             // don't use saved window placement if it wasn't loaded from saved settings
+            // (or its in fullscreen mode)
 
-            if(settings.first_run) {
+            if(settings.first_run || settings.fullscreen) {
                 ShowWindow(window, SW_SHOW);
                 settings.first_run = false;
-            } else {
+            } else if(!settings.fullscreen) {
                 SetWindowPlacement(window, &settings.window_placement);
             }
         }
@@ -3501,7 +3502,9 @@ namespace
 
     void OnDestroy(HWND hwnd)
     {
-        GetWindowPlacement(window, &settings.window_placement);
+        if(!settings.fullscreen) {
+            GetWindowPlacement(window, &settings.window_placement);
+        }
         PostQuitMessage(0);
     }
 
@@ -3683,7 +3686,7 @@ namespace
 
         case app::WM_NEW_SETTINGS: {
             settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
-            memcpy(&settings, new_settings, sizeof(settings));
+            settings = *new_settings;
             delete new_settings;
             on_new_settings();
         } break;

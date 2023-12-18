@@ -178,35 +178,37 @@ namespace
 
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
+#undef DECL_SETTING_UINT
 #undef DECL_SETTING_COLOR
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
-#undef DECL_SETTING_INTERNAL
+#undef DECL_SETTING_BINARY
 
 #define DECL_SETTING_SECTION(name, string_id) \
+    if constexpr(string_id != SETTING_HIDDEN) \
     controllers.push_back(new section_setting(L#name, string_id, dialog_settings.name))
 
 #define DECL_SETTING_BOOL(name, string_id, value) \
-    controllers.push_back(                        \
-        new bool_setting(L#name, string_id, IDD_DIALOG_SETTING_BOOL, setting_bool_dlgproc, dialog_settings.name))
+    if constexpr(string_id != SETTING_HIDDEN)     \
+    controllers.push_back(new bool_setting(L#name, string_id, dialog_settings.name))
 
 #define DECL_SETTING_COLOR(name, string_id, argb, alpha) \
-    controllers.push_back(new color_setting(             \
-        L#name, string_id, IDD_DIALOG_SETTING_COLOR, setting_color_dlgproc, dialog_settings.name, alpha))
+    if constexpr(string_id != SETTING_HIDDEN)            \
+    controllers.push_back(new color_setting(L#name, string_id, dialog_settings.name, alpha))
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) \
-    controllers.push_back(new enum_setting(L#name,                  \
-                                           string_id,               \
-                                           IDD_DIALOG_SETTING_ENUM, \
-                                           setting_enum_dlgproc,    \
-                                           enum_names,              \
-                                           reinterpret_cast<uint &>(dialog_settings.name)))
+    if constexpr(string_id != SETTING_HIDDEN)                       \
+    controllers.push_back(new enum_setting(L#name, string_id, enum_names, dialog_settings.name))
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) \
-    controllers.push_back(new ranged_setting(                 \
-        L#name, string_id, IDD_DIALOG_SETTING_RANGED, setting_ranged_dlgproc, dialog_settings.name, min, max))
+    if constexpr(string_id != SETTING_HIDDEN)                 \
+    controllers.push_back(new ranged_setting(L#name, string_id, dialog_settings.name, min, max))
 
-#define DECL_SETTING_INTERNAL(name, type, ...)
+        // binary and uint settings are all internal (hidden from UI) so no controllers for them
+
+#define DECL_SETTING_UINT(name, string_id, value)
+
+#define DECL_SETTING_BINARY(name, string_id, type, ...)
 
 #include "settings_fields.h"
 
@@ -410,7 +412,7 @@ namespace imageview::settings_ui
 
     void on_new_settings(settings_t const *new_settings)
     {
-        memcpy(&dialog_settings, new_settings, sizeof(settings_t));
+        dialog_settings = *new_settings;
         update_all_settings_controls();
     }
 
@@ -423,7 +425,7 @@ namespace imageview::settings_ui
 
             // main window is responsible for freeing this copy of the settings
             settings_t *settings_copy = new settings_t();
-            memcpy(settings_copy, &dialog_settings, sizeof(settings_t));
+            *settings_copy = dialog_settings;
             PostMessage(app::window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
         }
     }

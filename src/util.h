@@ -183,6 +183,33 @@ namespace imageview
     {
         return (T(0) < x) - (x < T(0));
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    enum tokenize_option
+    {
+        discard_empty = false,
+        keep_empty = true
+    };
+
+    template <class container_t, class string_t, class char_t>
+    void tokenize(string_t const &str,
+                  container_t &tokens,
+                  char_t const *delimiters,
+                  tokenize_option option = keep_empty)
+    {
+        typename string_t::size_type end = 0, start = 0, len = str.size();
+        while(end < len) {
+            end = str.find_first_of(delimiters, start);
+            if(end == string_t::npos) {
+                end = len;
+            }
+            if(end != start || option == keep_empty) {
+                tokens.push_back(container_t::value_type(str.data() + start, end - start));
+            }
+            start = end + 1;
+        }
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
