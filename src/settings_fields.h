@@ -178,6 +178,10 @@ DECL_SETTING_ENUM(show_filename,
 
 DECL_SETTING_BOOL(auto_paste, IDS_SETTING_NAME_AUTO_PASTE, true);
 
+// try and load the last file that was viewed
+
+DECL_SETTING_BOOL(reload_last_file, IDS_SETTING_NAME_RELOAD_LAST_FILE, true);
+
 // what to do about exif metadata
 
 DECL_SETTING_ENUM(
@@ -219,5 +223,9 @@ DECL_SETTING_INTERNAL(window_placement, WINDOWPLACEMENT, sizeof(WINDOWPLACEMENT)
 // last fullscreen rect
 
 DECL_SETTING_INTERNAL(fullscreen_rect, RECT, 0, 0, 0, 0);
+
+// last file loaded
+
+DECL_SETTING_INTERNAL(last_file_loaded, std::wstring, L"");
 
 #pragma warning(pop)

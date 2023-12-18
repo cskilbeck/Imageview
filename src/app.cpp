@@ -3728,6 +3728,10 @@ namespace imageview::app
     {
         current_file = f;
 
+        if(!f->is_clipboard) {
+            settings.last_file_loaded = f->filename;
+        }
+
         std::wstring name;
 
         // hresult from load_file
@@ -3960,8 +3964,16 @@ namespace imageview::app
 
         CHK_HR(hotkeys::load());
 
-        if(requested_file == null && settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
-            on_paste();
+        if(requested_file == null) {
+
+            if(settings.auto_paste && IsClipboardFormatAvailable(CF_DIBV5)) {
+
+                on_paste();
+
+            } else if(settings.reload_last_file && !settings.last_file_loaded.empty()) {
+
+                load_image(settings.last_file_loaded);
+            }
         }
 
         MSG msg;

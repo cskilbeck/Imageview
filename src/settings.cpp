@@ -135,6 +135,12 @@ namespace
         return S_OK;
     }
 
+    template <> HRESULT parse_binary(std::wstring const &value, std::wstring &setting)
+    {
+        setting = value;
+        return S_OK;
+    }
+
     //////////////////////////////////////////////////////////////////////
 
     HRESULT to_string_section(settings_t::section_t const &setting, std::wstring &result)
@@ -201,6 +207,14 @@ namespace
         }
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    template <> HRESULT to_string_binary(std::wstring const &setting, std::wstring &result)
+    {
+        result = setting;
+        return S_OK;
+    }
 }
 
 namespace imageview
@@ -217,7 +231,7 @@ namespace imageview
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_INTERNAL
 
-#define LOAD_SETTING(name, type)                 \
+#define LOAD_SETTING(name, type)                                     \
     {                                                                \
         std::wstring s;                                              \
         CHK_HR(load_registry_string(L#name, s));                     \
