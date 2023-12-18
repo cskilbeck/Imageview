@@ -205,7 +205,7 @@ namespace
     // admin for showing a message
     std::wstring current_message;
     double message_timestamp{ 0 };
-    float message_fade_time{ 0 };
+    int message_fade_time{ 0 };
 
     vec2 small_label_size{ 0, 0 };
     float label_pad{ 2.0f };
@@ -469,7 +469,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
 
-    void set_message(std::wstring const &message, float fade_time)
+    void set_message(std::wstring const &message, int fade_time)
     {
         current_message = message;
         message_timestamp = m_timer.wall_time();
@@ -2248,7 +2248,6 @@ namespace
                     setup_menu_accelerators(popup_menu);
 
                     popup_menu_active = true;
-                    clear_message();
 
                     recent_files::get_files(recent_files_list);
 
@@ -2724,11 +2723,20 @@ namespace
 
             float elapsed = static_cast<float>(m_timer.wall_time() - message_timestamp);
 
-            if(elapsed < message_fade_time) {
+            float message_alpha{ 0 };
 
-                float message_alpha = elapsed / std::max(0.1f, message_fade_time);
+            if(message_fade_time == 0) {
+
+                message_alpha = 1.0f;
+
+            } else if(elapsed < message_fade_time) {
+
+                message_alpha = elapsed / std::max(0.1f, static_cast<float>(message_fade_time));
 
                 message_alpha = 1 - powf(message_alpha, 16);
+            }
+
+            if(message_alpha > 0.0f) {
 
                 vec2 pos{ dpi_scale(16.0f), window_height - dpi_scale(12.0f) };
 
@@ -3760,21 +3768,21 @@ namespace imageview::app
 
             setup_window_text();
 
-            float fade_time;
+            int fade_time;
             switch(settings.show_filename) {
             case show_filename_always:
-                fade_time = 1000000.0f;
+                fade_time = 0;
                 break;
             case show_filename_briefly:
-                fade_time = 5.0f;
+                fade_time = 5;
                 break;
             default:
             case show_filename_never:
-                fade_time = 0.0f;
+                fade_time = -1;
                 break;
             }
 
-            if(fade_time != 0.0f) {
+            if(fade_time >= 0) {
                 std::wstring msg{ std::format(L"{} {}x{}", f->filename, texture_width, texture_height) };
                 set_message(msg, fade_time);
             }
@@ -3791,7 +3799,7 @@ namespace imageview::app
             }
 
             CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format(L"{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3.0f);
+            set_message(std::format(L"{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3);
         }
         return hr;
     }
@@ -3801,7 +3809,7 @@ namespace imageview::app
     HRESULT load_image_file(std::wstring const &filepath)
     {
         if(!file::exists(filepath)) {
-            set_message(std::format(L"{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2.0f);
+            set_message(std::format(L"{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2);
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         return load_image(filepath);
