@@ -827,8 +827,8 @@ namespace
 
             // sigh, manually marshall the filename for the message, the receiver is responsible for
             // freeing it
-            char *fullpath_buffer = new char[fullpath.size() + 1];
-            memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(char));
+            wchar *fullpath_buffer = new wchar[fullpath.size() + 1];
+            memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar));
 
             PostThreadMessageW(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
         }
