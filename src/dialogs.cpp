@@ -171,7 +171,8 @@ namespace imageview::dialog
         static COLORREF custom_colors[16];
         uint32 alpha = color & 0xff000000;
 
-        CHOOSECOLORW cc{ 0 };
+        CHOOSECOLORW cc;
+        mem_clear(&cc);
         cc.lStructSize = sizeof(cc);
         cc.hwndOwner = window;
         cc.lpCustColors = (LPDWORD)custom_colors;

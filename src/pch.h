@@ -54,10 +54,13 @@
 // All the Windows
 
 #define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+
 #include <Windows.h>
 #include <windowsx.h>
 #include <Uxtheme.h>
 #include <CommCtrl.h>
+#include <CommDlg.h>
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <hidusage.h>
@@ -67,8 +70,6 @@
 #include <dxgi1_2.h>
 #include <dcomp.h>
 #include <DirectXMath.h>
-#include <DirectXColors.h>
-#include <directxpackedvector.h>
 #include <wincodec.h>
 #include <Commctrl.h>
 #include <Shlobj.h>
@@ -77,9 +78,7 @@
 #include <dwrite_1.h>
 #include <strsafe.h>
 #include <shobjidl_core.h>
-#include <winhttp.h>
 #include <wincodec.h>
-#include <DirectXMath.h>
 #include <propkey.h>
 #include <pathcch.h>
 
@@ -141,25 +140,19 @@ using Microsoft::WRL::ComPtr;
 #include "settings.h"
 #include "hotkeys.h"
 #include "scrollbar.h"
-
 #include "app.h"
-
-#include "setting_controller.h"
-
 #include "tab_page.h"
 #include "tab_explorer.h"
 #include "tab_hotkeys.h"
 #include "tab_about.h"
 #include "tab_relaunch.h"
 #include "tab_settings.h"
-
 #include "settings_dialog.h"
-
+#include "setting_controller.h"
 #include "setting_section.h"
 #include "setting_bool.h"
 #include "setting_enum.h"
 #include "setting_color.h"
 #include "setting_ranged.h"
-
 #include "d3d.h"
 #include "recent_files.h"

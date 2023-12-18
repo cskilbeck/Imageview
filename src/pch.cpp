@@ -14,7 +14,6 @@
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "UxTheme.lib")
 #pragma comment(lib, "Mfplat.lib")
-#pragma comment(lib, "WinHTTP.lib")
 #pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "Version.lib")
 #pragma comment(lib, "Pathcch.lib")

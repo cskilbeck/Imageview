@@ -30,13 +30,6 @@ namespace imageview::settings_ui
         // update the dialog controls with current value of this setting
         virtual void update_controls() = 0;
 
-        // get a pointer to the setting object associated with a setting window
-        template <typename T> static T &get(HWND w)
-        {
-            T *p = reinterpret_cast<T *>(GetWindowLongPtrA(w, GWLP_USERDATA));
-            return *p;
-        }
-
         std::wstring name() const
         {
             return imageview::localize(string_resource_id);
@@ -47,6 +40,13 @@ namespace imageview::settings_ui
             return false;
         }
     };
+
+    // get a pointer to the setting object associated with a setting window
+    template <typename T> static T &get_controller(HWND w)
+    {
+        T *p = reinterpret_cast<T *>(GetWindowLongPtrA(w, GWLP_USERDATA));
+        return *p;
+    }
 
     // this for everybody to make all controls have the correct background color
     INT_PTR ctlcolor_base(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam);

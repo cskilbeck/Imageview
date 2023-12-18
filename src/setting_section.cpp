@@ -23,7 +23,7 @@ namespace
 
     void on_lbuttondown_setting_section(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
     {
-        section_setting &setting = setting_controller::get<section_setting>(hwnd);
+        section_setting &setting = get_controller<section_setting>(hwnd);
 
         setting.expanded = !setting.expanded;
 
@@ -34,7 +34,7 @@ namespace
         }
 
         HWND tab = GetParent(hwnd);
-        PostMessage(tab, WM_USER, setting.expanded, reinterpret_cast<LPARAM>(&setting));
+        PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
     }
 }
 

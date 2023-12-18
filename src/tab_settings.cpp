@@ -77,7 +77,7 @@ namespace
         int total_height = 0;
 
         // speed based on size of tab rect so dpi taken into account
-        int expand_contract_speed = rect_height(tab_rect) / 10;
+        int expand_contract_speed = std::max(4, rect_height(tab_rect) / 15);
 
         // expand/contract sections and get total height
         for(auto const s : section_setting::sections) {
@@ -90,12 +90,15 @@ namespace
                 s->current_height = std::clamp(s->current_height + diff, s->banner_height, s->expanded_height);
                 expanding_or_contracting = true;
             }
-            total_height += s->current_height;
+            total_height += s->current_height - 1;
         }
 
         // set scrollbars based on total height
 
-        update_scrollbars(settings_scrollinfo, hwnd, tab_rect, SIZE{ rect_width(tab_rect), total_height });
+        int tab_width = rect_width(tab_rect);
+        // int tab_width = rect_width(tab_rect) - GetSystemMetrics(SM_CXVSCROLL);
+
+        update_scrollbars(settings_scrollinfo, hwnd, tab_rect, SIZE{ tab_width, total_height });
 
         // scroll so required section is within view
 
@@ -132,8 +135,7 @@ namespace
 
             int height = s->current_height;
 
-            DeferWindowPos(
-                dwp, s->window, null, xpos, ypos, rect_width(tab_rect), height, SWP_NOZORDER | SWP_SHOWWINDOW);
+            DeferWindowPos(dwp, s->window, null, xpos, ypos, tab_width, height, SWP_NOZORDER | SWP_SHOWWINDOW);
 
             ypos += height;
         }
@@ -145,7 +147,9 @@ namespace
         if(expanding_or_contracting) {
             SetTimer(hwnd, 1, USER_TIMER_MINIMUM, null);
         } else {
+            KillTimer(hwnd, 1);
             active_section = null;
+            LOG_DEBUG(L"DONE ANIMATING SETTINGS SECTIONS...");
         }
     }
 
@@ -219,8 +223,9 @@ namespace
 
         auto dpi_scale = [=](int x) { return static_cast<int>(x * dpi / 96.0f); };
 
+        int const top_margin = dpi_scale(5);
         int const inner_margin = dpi_scale(3);
-        // int const bottom_margin = dpi_scale(12);
+        int const bottom_margin = dpi_scale(5);
 
         // create the sections and populate them
 
@@ -228,6 +233,10 @@ namespace
 
             // if it's a new section, parent should be hwnd, else parent should be the current section
             if(s->is_section_header()) {
+
+                if(!section_setting::sections.empty()) {
+                    section_setting::sections.back()->expanded_height += bottom_margin;
+                }
 
                 section_setting *cur_section = reinterpret_cast<section_setting *>(s);
 
@@ -258,6 +267,10 @@ namespace
                                                             s->dlg_proc,
                                                             reinterpret_cast<LPARAM>(s));
 
+                if(cur_section->banner_height == cur_section->expanded_height) {
+                    cur_section->expanded_height += top_margin;
+                }
+
                 // stack the setting_controller within the section
                 SetWindowPos(controller_window,
                              null,
@@ -275,6 +288,10 @@ namespace
             }
         }
 
+        if(!section_setting::sections.empty()) {
+            section_setting::sections.back()->expanded_height += bottom_margin;
+        }
+
         // expand sections which were expanded last time
 
         for(auto const s : controllers) {
@@ -289,7 +306,10 @@ namespace
 
         // size the window to fit within the tab control exactly
 
-        SetWindowPos(hwnd, null, 0, 0, rect_width(tab_rect), rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
+        int tab_width = rect_width(tab_rect);
+        // int tab_width = rect_width(tab_rect) - GetSystemMetrics(SM_CXVSCROLL);
+
+        SetWindowPos(hwnd, null, 0, 0, tab_width, rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
 
         settings_scrollinfo.pos[SB_HORZ] = 0;
         settings_scrollinfo.pos[SB_VERT] = 0;
@@ -316,9 +336,12 @@ namespace
 
     void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
     {
-        if(wparam) {
-            active_section = reinterpret_cast<section_setting const *>(lparam);
+        section_setting *section = reinterpret_cast<section_setting *>(lparam);
+
+        if(section->expanded) {
+            active_section = section;
         }
+
         update_sections(hwnd);
     }
 

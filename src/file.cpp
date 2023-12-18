@@ -1,34 +1,34 @@
 #include "pch.h"
 
 //////////////////////////////////////////////////////////////////////
-// loads a file, size is limited to 4GB or less
-// buffer will be cleared in case of any error, on success contains file contents
-// set cancel_event to cancel the load, it will return E_ABORT in that case
-// cancel_event can be null, in which case the load can't be cancelled
-
-//////////////////////////////////////////////////////////////////////
 
 namespace
 {
     struct path_parts
     {
         wchar drive[MAX_PATH];
-        wchar dir[MAX_PATH];
-        wchar fname[MAX_PATH];
-        wchar ext[MAX_PATH];
-
-        HRESULT get(std::wstring const &filename)
-        {
-            if(_wsplitpath_s(filename.c_str(), drive, dir, fname, ext) != 0) {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-            return S_OK;
-        }
+        wchar directory[MAX_PATH];
+        wchar filename[MAX_PATH];
+        wchar extension[MAX_PATH];
     };
+
+    HRESULT get_path_parts(path_parts &p, std::wstring const &filename)
+    {
+        if(_wsplitpath_s(filename.c_str(), p.drive, p.directory, p.filename, p.extension) != 0) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        return S_OK;
+    }
 }
 
 namespace imageview::file
 {
+    //////////////////////////////////////////////////////////////////////
+    // loads a file, size is limited to 4GB or less
+    // buffer will be cleared in case of any error, on success contains file contents
+    // set cancel_event to cancel the load, it will return E_ABORT in that case
+    // cancel_event can be null, in which case the load can't be cancelled
+
     HRESULT load(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
     {
         // if we error out for any reason, free the buffer
@@ -291,8 +291,8 @@ namespace imageview::file
     HRESULT get_path(std::wstring const &filename, std::wstring &path)
     {
         path_parts p;
-        CHK_HR(p.get(filename));
-        path = std::wstring(p.drive) + p.dir;
+        CHK_HR(get_path_parts(p, filename));
+        path = std::wstring(p.drive) + p.directory;
         if(path.empty()) {
             path = L".";
         } else if(path.back() == '\\') {
@@ -306,8 +306,8 @@ namespace imageview::file
     HRESULT get_filename(std::wstring const &filename, std::wstring &name)
     {
         path_parts p;
-        CHK_HR(p.get(filename));
-        name = std::wstring(p.fname) + p.ext;
+        CHK_HR(get_path_parts(p, filename));
+        name = std::wstring(p.filename) + p.extension;
         return S_OK;
     }
 
@@ -316,8 +316,8 @@ namespace imageview::file
     HRESULT get_extension(std::wstring const &filename, std::wstring &extension)
     {
         path_parts p;
-        CHK_HR(p.get(filename));
-        extension = std::wstring(p.ext);
+        CHK_HR(get_path_parts(p, filename));
+        extension = std::wstring(p.extension);
         return S_OK;
     }
 

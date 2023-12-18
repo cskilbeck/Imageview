@@ -16,7 +16,7 @@ namespace
 
         HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
         uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-        ranged_setting &ranged = setting_controller::get<ranged_setting>(hwnd);
+        ranged_setting &ranged = get_controller<ranged_setting>(hwnd);
         ranged.value = std::clamp(new_pos, ranged.min_value, ranged.max_value);
         HWND edit = GetDlgItem(hwnd, IDC_EDIT_SETTING_RANGED);
         Edit_SetText(edit, std::format(L"{}", ranged.value).c_str());

@@ -6,9 +6,7 @@
 namespace
 {
     using imageview::settings_ui::bool_setting;
-    using imageview::settings_ui::setting_controller;
-
-    using imageview::settings_ui::post_new_settings;
+    using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
     // BOOL setting \ WM_COMMAND
@@ -19,7 +17,7 @@ namespace
 
         case IDC_CHECK_SETTING_BOOL: {
 
-            bool_setting &setting = setting_controller::get<bool_setting>(hwnd);
+            bool_setting &setting = get_controller<bool_setting>(hwnd);
             setting.value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
             post_new_settings();
         } break;

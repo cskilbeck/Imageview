@@ -3,6 +3,17 @@
 
 #include "pch.h"
 
+namespace
+{
+    //////////////////////////////////////////////////////////////////////
+    // tab pages have white backgrounds - this sets the background of all controls to white
+
+    HBRUSH on_ctl_color_base(HWND hwnd, HDC hdc, HWND hwndChild, int type)
+    {
+        return GetSysColorBrush(COLOR_WINDOW);
+    }
+}
+
 namespace imageview::settings_ui
 {
     //////////////////////////////////////////////////////////////////////
@@ -20,14 +31,6 @@ namespace imageview::settings_ui
             return DefSubclassProc(hwnd, msg, wparam, lparam);
         }
         return 0;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // tab pages have white backgrounds - this sets the background of all controls to white
-
-    HBRUSH on_ctl_color_base(HWND hwnd, HDC hdc, HWND hwndChild, int type)
-    {
-        return GetSysColorBrush(COLOR_WINDOW);
     }
 
     //////////////////////////////////////////////////////////////////////

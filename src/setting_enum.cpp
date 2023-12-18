@@ -19,7 +19,7 @@ namespace
             HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
             int sel = ComboBox_GetCurSel(combo_box);
             uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
-            setting_controller::get<enum_setting>(hwnd).value = v;
+            get_controller<enum_setting>(hwnd).value = v;
             post_new_settings();
         } break;
         }

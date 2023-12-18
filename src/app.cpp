@@ -6,7 +6,7 @@
 // file type association / handler thing
 // remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
 // get all the mouse handling stuff out of update() and into mouse move handler
-// UTF16 everywhere
+// settings dialog : cache size not reet
 
 // flip/rotate
 // colorspace / SRGB / HDR
@@ -2474,6 +2474,8 @@ namespace
         f.img.width = width;
         f.img.height = height;
         f.img.row_pitch = mapped_resource.RowPitch;
+
+        clear_selection();
 
         return app::show_image(&f);
     }

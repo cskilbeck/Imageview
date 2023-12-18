@@ -17,19 +17,21 @@ namespace
     {
         if(di->CtlID == IDC_BUTTON_SETTING_COLOR) {
 
-            color_setting &setting = setting_controller::get<color_setting>(hwnd);
+            color_setting &setting = get_controller<color_setting>(hwnd);
 
-            // outline and fill colors change when they press it
+            uint32 fill = setting.value & 0xffffff;
+            uint32 outline = RGB(0, 0, 0);
 
-            uint32 ic = setting.value & 0xffffff;
-            uint32 oc = RGB(0, 0, 0);
+            // outline and fill colors change when they press it. Theme shmeme.
+
             if((di->itemState & ODS_SELECTED) != 0) {
-                oc = RGB(96, 160, 224);
-                ic = color_lerp(ic, RGB(128, 128, 255), 128);
+
+                outline = RGB(96, 160, 224);
+                fill = color_lerp(fill, RGB(128, 128, 255), 128);
             }
 
-            SetDCBrushColor(di->hDC, ic);
-            SetDCPenColor(di->hDC, oc);
+            SetDCBrushColor(di->hDC, fill);
+            SetDCPenColor(di->hDC, outline);
 
             SelectObject(di->hDC, GetStockObject(DC_BRUSH));
             SelectObject(di->hDC, GetStockObject(DC_PEN));
@@ -44,7 +46,7 @@ namespace
 
     void on_command_setting_color(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
-        color_setting &setting = setting_controller::get<color_setting>(hwnd);
+        color_setting &setting = get_controller<color_setting>(hwnd);
 
         switch(id) {
 
@@ -91,7 +93,7 @@ namespace
 
     void on_hscroll_setting_color(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        color_setting &setting = setting_controller::get<color_setting>(hwnd);
+        color_setting &setting = get_controller<color_setting>(hwnd);
         if(setting.alpha) {
             HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
             uint new_alpha = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
