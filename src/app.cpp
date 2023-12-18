@@ -3838,14 +3838,20 @@ namespace imageview::app
         CHK_HR(get_is_process_elevated(is_elevated));
 
         // in debug builds, hold middle mouse button at startup to reset settings to defaults
+        {
+            HRESULT hr = S_OK;
 #if defined(_DEBUG)
-        if((GetAsyncKeyState(VK_MBUTTON) & 0x8000) == 0)
+            if((GetAsyncKeyState(VK_MBUTTON) & 0x8000) == 0)
 #endif
-            if(FAILED(settings.load())) {
+                hr = settings.load();
+
+            if(FAILED(hr)) {
                 message_box(null,
-                            std::format(L"{}\r\n{}", localize(IDS_FAILED_TO_LOAD_SETTINGS), windows_error_message()),
+                            std::format(L"{}\r\n{}", localize(IDS_FAILED_TO_LOAD_SETTINGS), windows_error_message(hr)),
                             MB_ICONEXCLAMATION);
+                settings = default_settings;
             }
+        }
 
         std::wstring cmd_line{ GetCommandLineW() };
 

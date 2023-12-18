@@ -272,22 +272,25 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
+    HRESULT nibble_from_char(int c, int &x)
+    {
+        if(c >= '0' && c <= '9') {
+            x = c - '0';
+        } else {
+            c = tolower(c);
+            if(c >= 'a' && c <= 'f') {
+                x = (c - 'a') + 10;
+            } else {
+                return E_INVALIDARG;
+            }
+        }
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     HRESULT color_from_string(std::wstring const &text, uint32 &color)
     {
-        auto nibble_from_char = [](int c, int &x) {
-            if(c >= '0' && c <= '9') {
-                x = c - '0';
-            } else {
-                c = tolower(c);
-                if(c >= 'a' && c <= 'f') {
-                    x = (c - 'a') + 10;
-                } else {
-                    return false;
-                }
-            }
-            return true;
-        };
-
         uint32 new_color = 0;
         uint32 alpha = 0;
 
@@ -302,9 +305,7 @@ namespace imageview
 
         for(size_t i = 0; i < text.size(); ++i) {
             int x;
-            if(!nibble_from_char(text[i], x)) {
-                return E_INVALIDARG;
-            }
+            CHK_HR(nibble_from_char(text[i], x));
             new_color |= x << shift[i];
         }
         color = new_color | alpha;

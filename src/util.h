@@ -27,6 +27,8 @@ namespace imageview
     std::wstring color24_to_string(uint32 color);
     uint32 color_lerp(uint32 ca, uint32 cb, int x);
 
+    HRESULT nibble_from_char(int c, int &x);
+
     //////////////////////////////////////////////////////////////////////
     // app admin
 

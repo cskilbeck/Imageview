@@ -1,74 +1,81 @@
 #pragma once
 
-using enum_id_map = std::map<uint, uint>;
-
-enum fullscreen_startup_option : uint
+namespace imageview
 {
-    start_windowed,      // start up windowed
-    start_fullscreen,    // start up fullscreen
-    start_remember       // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
-};
 
-// whether to remember the window position or not
-enum window_position_option : uint
-{
-    window_pos_remember,    // restore last window position
-    window_pos_default      // reset window position to default each time
-};
+    using enum_id_map = std::map<uint, uint>;
 
-// how to show the filename overlay
+    enum fullscreen_startup_option : uint
+    {
+        start_windowed,      // start up windowed
+        start_fullscreen,    // start up fullscreen
+        start_remember    // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
+    };
 
-enum show_filename_option : uint
-{
-    show_filename_always,
-    show_filename_briefly,
-    show_filename_never
-};
+    // whether to remember the window position or not
+    enum window_position_option : uint
+    {
+        window_pos_remember,    // restore last window position
+        window_pos_default      // reset window position to default each time
+    };
 
-// what to do about exif rotation/flip data
+    // how to show the filename overlay
 
-enum exif_option : uint
-{
-    exif_option_ignore,    // always ignore it
-    exif_option_apply,     // always apply it
-    exif_option_prompt     // prompt if it's anything other than default 0 rotation
-};
+    enum show_filename_option : uint
+    {
+        show_filename_always,
+        show_filename_briefly,
+        show_filename_never
+    };
 
-// what should zoom be at startup - the first three of these should line up with zoom_mode_t
+    // what to do about exif rotation/flip data
 
-enum startup_zoom_mode_option : uint
-{
-    startup_zoom_one_to_one,
-    startup_zoom_fit_to_window,
-    startup_zoom_shrink_to_fit,
-    startup_zoom_remember
-};
+    enum exif_option : uint
+    {
+        exif_option_ignore,    // always ignore it
+        exif_option_apply,     // always apply it
+        exif_option_prompt     // prompt if it's anything other than default 0 rotation
+    };
 
-// what should reset_zoom do
+    // what should zoom be at startup - the first three of these should line up with zoom_mode_t
 
-enum zoom_mode_t : uint
-{
-    one_to_one,
-    fit_to_window,
-    shrink_to_fit
-};
+    enum startup_zoom_mode_option : uint
+    {
+        startup_zoom_one_to_one,
+        startup_zoom_fit_to_window,
+        startup_zoom_shrink_to_fit,
+        startup_zoom_remember
+    };
 
-enum mouse_button_t : int
-{
-    btn_min = 0,
-    btn_left = 0,
-    btn_middle = 1,
-    btn_right = 2,
-    btn_count = 3
-};
+    // what should reset_zoom do
 
-//////////////////////////////////////////////////////////////////////
+    enum zoom_mode_t : uint
+    {
+        one_to_one,
+        fit_to_window,
+        shrink_to_fit
+    };
 
-struct settings_t
-{
+    enum mouse_button_t : int
+    {
+        btn_min = 0,
+        btn_left = 0,
+        btn_middle = 1,
+        btn_right = 2,
+        btn_count = 3
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    struct settings_t
+    {
+        using section_t = bool;
+        using color_t = uint32;
+        using ranged_t = uint;
+        // enums are special, just serialize as uint for now...
 
 #define DECL_SETTING_SECTION(name, string_id) \
-    bool name                                 \
+    section_t name                            \
     {                                         \
         false                                 \
     }
@@ -83,7 +90,7 @@ struct settings_t
 
 // clang-format off
 #define DECL_SETTING_COLOR(name, string_id, rgba, alpha)        \
-    uint32 name                                                 \
+    color_t name                                                 \
     {                                                           \
         (((rgba << (alpha ? 0 : 8)) & 0xff000000) >> 24) |      \
         (((rgba << (alpha ? 0 : 8)) & 0x00ff0000) >> 8) |       \
@@ -91,7 +98,7 @@ struct settings_t
         (((rgba << (alpha ? 0 : 8)) & 0x000000ff) << 24) |      \
         (alpha ? 0 : 0xff000000)                                \
     }
-    // clang-format on
+        // clang-format on
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_map, value) \
     type name                                                     \
@@ -100,7 +107,7 @@ struct settings_t
     }
 
 #define DECL_SETTING_RANGED(name, string_id, value, min, max) \
-    uint name                                                 \
+    ranged_t name                                             \
     {                                                         \
         value                                                 \
     }
@@ -113,29 +120,15 @@ struct settings_t
 
 #include "settings_fields.h"
 
-    //////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////
 
-    HRESULT save();
-    HRESULT load();
-
-    // where in the registry to put the settings. this does not need to be localized... right?
-    static wchar constexpr settings_key_name[] = L"Software\\ImageView";
-
-    enum class serialize_action
-    {
-        save,
-        load
+        HRESULT save();
+        HRESULT load();
     };
 
-    HRESULT serialize(serialize_action action, wchar const *save_key_name);
+    //////////////////////////////////////////////////////////////////////
+    // settings get serialized/deserialized to/from the registry
 
-    // write or read a settings field to or from the registry - helper for serialize()
-    HRESULT serialize_setting(
-        settings_t::serialize_action action, wchar const *key_name, wchar const *name, byte *var, size_t size);
-};
-
-//////////////////////////////////////////////////////////////////////
-// settings get serialized/deserialized to/from the registry
-
-extern settings_t settings;
-extern settings_t default_settings;
+    extern settings_t settings;
+    extern settings_t default_settings;
+}
