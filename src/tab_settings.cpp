@@ -184,25 +184,19 @@ namespace
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_BINARY
 
-#define DECL_SETTING_SECTION(name, string_id) \
-    if constexpr(string_id != SETTING_HIDDEN) \
-    controllers.push_back(new section_setting(L#name, string_id, dialog_settings.name))
+#define ADD_SETTING(name, str, type, ...) \
+    if constexpr(str != SETTING_HIDDEN)   \
+    controllers.push_back(new type(L#name, str, dialog_settings.name, __VA_ARGS__))
 
-#define DECL_SETTING_BOOL(name, string_id, value) \
-    if constexpr(string_id != SETTING_HIDDEN)     \
-    controllers.push_back(new bool_setting(L#name, string_id, dialog_settings.name))
+#define DECL_SETTING_SECTION(name, str) ADD_SETTING(name, str, section_setting)
 
-#define DECL_SETTING_COLOR(name, string_id, argb, alpha) \
-    if constexpr(string_id != SETTING_HIDDEN)            \
-    controllers.push_back(new color_setting(L#name, string_id, dialog_settings.name, alpha))
+#define DECL_SETTING_BOOL(name, str, value) ADD_SETTING(name, str, bool_setting)
 
-#define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) \
-    if constexpr(string_id != SETTING_HIDDEN)                       \
-    controllers.push_back(new enum_setting(L#name, string_id, enum_names, dialog_settings.name))
+#define DECL_SETTING_COLOR(name, str, argb, alpha) ADD_SETTING(name, str, color_setting, alpha)
 
-#define DECL_SETTING_RANGED(name, string_id, value, min, max) \
-    if constexpr(string_id != SETTING_HIDDEN)                 \
-    controllers.push_back(new ranged_setting(L#name, string_id, dialog_settings.name, min, max))
+#define DECL_SETTING_ENUM(name, str, type, enum_names, value) ADD_SETTING(name, str, enum_setting, enum_names)
+
+#define DECL_SETTING_RANGED(name, str, value, min, max) ADD_SETTING(name, str, ranged_setting, min, max)
 
         // binary and uint settings are all internal (hidden from UI) so no controllers for them
 
