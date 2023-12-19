@@ -71,7 +71,6 @@ namespace
                 index += 1;
             }
         }
-
         return false;
     }
 

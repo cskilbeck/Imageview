@@ -1987,7 +1987,6 @@ namespace
 
         static auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
 
-        // clang-format off
         static std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
             { ID_COPY, got_selection },
             { ID_SELECT_ALL, got_image },
@@ -2008,7 +2007,6 @@ namespace
             { ID_ZOOM_RESET, got_image },
             { ID_ZOOM_SELECTION, got_image },
         };
-        // clang-format on
 
         // scan the menu to enable/disable, add/remove checks and add hotkey info
 
