@@ -67,20 +67,26 @@ namespace imageview
 
     template <typename T> T make_lowercase(T const &str)
     {
-        T n{ str };
-        std::transform(
-            n.begin(), n.end(), n.begin(), [](T::value_type x) { return static_cast<T::value_type>(::tolower(x)); });
-        return n;
+        std::locale l("");
+        T r;
+        r.reserve(str.size());
+        for(auto c : str) {
+            r.push_back(static_cast<decltype(c)>(std::tolower(c, l)));
+        }
+        return r;
     }
 
     //////////////////////////////////////////////////////////////////////
 
     template <typename T> T make_uppercase(T const &str)
     {
-        T n{ str };
-        std::transform(
-            n.begin(), n.end(), n.begin(), [](T::value_type x) { return static_cast<T::value_type>(::toupper(x)); });
-        return n;
+        std::locale l("");
+        T r;
+        r.reserve(str.size());
+        for(auto c : str) {
+            r.push_back(static_cast<decltype(c)>(std::toupper(c, l)));
+        }
+        return r;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -296,7 +302,7 @@ template <typename InterfaceType> void SafeSet(InterfaceType **currentObject, In
 }
 
 //////////////////////////////////////////////////////////////////////
-// These are missing from windowsx.h
+// These window message crackers are missing from windowsx.h
 
 #define HANDLE_WM_DPICHANGED(hwnd, wParam, lParam, fn) \
     ((fn)((hwnd), (UINT)LOWORD(wParam), (UINT)HIWORD(wParam), (RECT const *)(lParam)), 0L)

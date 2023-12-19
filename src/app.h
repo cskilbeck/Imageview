@@ -7,6 +7,11 @@
 namespace imageview::app
 {
     //////////////////////////////////////////////////////////////////////
+    // the application window - use with care
+
+    extern HWND window;
+
+    //////////////////////////////////////////////////////////////////////
     // is it running with elevated privileges
 
     extern bool is_elevated;
@@ -17,19 +22,9 @@ namespace imageview::app
     extern uint64 system_memory_gb;
 
     //////////////////////////////////////////////////////////////////////
-    // the current accelerator (hotkey) table
-
-    extern HACCEL accelerators;
-
-    //////////////////////////////////////////////////////////////////////
     // the current application instance
 
     extern HMODULE instance;
-
-    //////////////////////////////////////////////////////////////////////
-    // the application window - use with care
-
-    extern HWND window;
 
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for main window
@@ -39,7 +34,7 @@ namespace imageview::app
         WM_FILE_LOAD_COMPLETE = WM_USER,          // a file load completed (lparam -> file_loader *)
         WM_FOLDER_SCAN_COMPLETE = WM_USER + 1,    // a folder scan completed (lparam -> folder_scan_results *)
         WM_NEW_SETTINGS = WM_USER + 2,            // here (lparam is a copy of dialog settings) are some new settings
-        WM_RELAUNCH_AS_ADMIN,                     // please relaunch the application with admin privileges
+        WM_RELAUNCH_AS_ADMIN = WM_USER + 3,       // please relaunch the application with admin privileges
     };
 
     //////////////////////////////////////////////////////////////////////

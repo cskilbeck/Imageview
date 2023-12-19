@@ -54,7 +54,8 @@ namespace imageview::settings_ui
     void setting_controller::setup_controls(HWND hwnd)
     {
         window = hwnd;
-        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME), name().c_str());
+        HWND nametext = GetDlgItem(hwnd, IDC_STATIC_SETTING_NAME);
+        SetWindowTextW(nametext, name().c_str());
         update_controls();
     }
 

@@ -55,16 +55,28 @@ namespace
         Edit_SetReadOnly(about, true);
 
         // populate the about box text
-        std::wstring version{ L"Version?" };
-        get_app_version(version);
-        SetWindowTextW(about,
-                       std::format(L"{}\r\nv{}\r\nBuilt {}\r\nRunning as admin: {}\r\nSystem Memory {} GB\r\n",
-                                   localize(IDS_AppName),
-                                   version,
-                                   unicode(__TIMESTAMP__),
-                                   app::is_elevated,
-                                   app::system_memory_gb)
-                           .c_str());
+
+        std::vector<std::wstring> lines;
+
+        std::wstring ver{ L"Version?" };
+        get_app_version(ver);
+
+        lines.push_back(localize(IDS_AppName));
+        lines.push_back(std::format(L"v{}", ver));
+        lines.push_back(std::format(L"Built {}", unicode(__TIMESTAMP__)));
+        lines.push_back(std::format(L"Running as admin: {}", app::is_elevated));
+        lines.push_back(std::format(L"System Memory {} GB", app::system_memory_gb));
+
+        std::wstring about_text;
+        wchar const *sep = L"";
+
+        for(auto const &s : lines) {
+            about_text.append(sep);
+            about_text.append(s);
+            sep = L"\r\n";
+        }
+
+        SetWindowTextW(about, about_text.c_str());
         return 0;
     }
 
@@ -79,8 +91,10 @@ namespace
 
         case IDC_BUTTON_ABOUT_COPY: {
 
-            copy_window_text_to_clipboard(GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT));
-            SetWindowTextW(GetDlgItem(hwnd, IDC_BUTTON_ABOUT_COPY), localize(IDS_COPIED).c_str());
+            if(SUCCEEDED(copy_window_text_to_clipboard(GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT)))) {
+
+                SetWindowTextW(GetDlgItem(hwnd, IDC_BUTTON_ABOUT_COPY), localize(IDS_COPIED).c_str());
+            }
 
         } break;
         }

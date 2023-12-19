@@ -113,6 +113,8 @@ using Microsoft::WRL::ComPtr;
 #include <utility>
 #include <array>
 #include <cstdlib>
+#include <string_view>
+#include <ranges>
 
 //////////////////////////////////////////////////////////////////////
 // Resource IDs
@@ -125,9 +127,9 @@ using Microsoft::WRL::ComPtr;
 #pragma warning(disable : 4100)
 
 #include "types.h"
-#include "util.h"
 #include "ansi.h"
 #include "log.h"
+#include "util.h"
 #include "defer.h"
 #include "rect.h"
 #include "file.h"

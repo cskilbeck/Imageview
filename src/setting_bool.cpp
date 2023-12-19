@@ -5,7 +5,6 @@
 
 namespace
 {
-    using imageview::settings_ui::bool_setting;
     using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
@@ -18,7 +17,8 @@ namespace
         case IDC_CHECK_SETTING_BOOL: {
 
             bool_setting &setting = get_controller<bool_setting>(hwnd);
-            setting.value = Button_GetCheck(GetDlgItem(hwnd, id)) == BST_CHECKED;
+            HWND checkbox = GetDlgItem(hwnd, IDC_CHECK_SETTING_BOOL);
+            setting.value = Button_GetCheck(checkbox) == BST_CHECKED;
             post_new_settings();
         } break;
         }
@@ -49,7 +49,8 @@ namespace imageview::settings_ui
 
     void bool_setting::update_controls()
     {
-        Button_SetCheck(GetDlgItem(window, IDC_CHECK_SETTING_BOOL), value ? BST_CHECKED : BST_UNCHECKED);
+        HWND checkbox = GetDlgItem(window, IDC_CHECK_SETTING_BOOL);
+        Button_SetCheck(checkbox, value ? BST_CHECKED : BST_UNCHECKED);
     }
 
     //////////////////////////////////////////////////////////////////////

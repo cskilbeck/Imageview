@@ -121,6 +121,7 @@ namespace imageview::settings_ui
             uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
 
             if(current != cur_alpha) {
+                // this will cause the hex text to get updated
                 SendMessage(slider, TBM_SETPOS, true, cur_alpha);
             }
         }
@@ -140,7 +141,8 @@ namespace imageview::settings_ui
             hex = color24_to_string(value);
         }
         hex = make_uppercase(hex);
-        SetWindowTextW(GetDlgItem(window, IDC_EDIT_SETTING_COLOR), hex.c_str());
+        HWND hexedit = GetDlgItem(window, IDC_EDIT_SETTING_COLOR);
+        SetWindowTextW(hexedit, hex.c_str());
     }
 
     //////////////////////////////////////////////////////////////////////

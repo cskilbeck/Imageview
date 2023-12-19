@@ -286,14 +286,7 @@ namespace imageview
 
     HRESULT settings_t::load()
     {
-#undef DECL_SETTING_SECTION
-#undef DECL_SETTING_BOOL
-#undef DECL_SETTING_UINT
-#undef DECL_SETTING_COLOR24
-#undef DECL_SETTING_COLOR32
-#undef DECL_SETTING_ENUM
-#undef DECL_SETTING_RANGED
-#undef DECL_SETTING_BINARY
+#include "settings_reset_decls.h"
 
 #define LOAD_SETTING(name, type)                                     \
     {                                                                \
@@ -330,14 +323,7 @@ namespace imageview
 
     HRESULT settings_t::save()
     {
-#undef DECL_SETTING_SECTION
-#undef DECL_SETTING_BOOL
-#undef DECL_SETTING_UINT
-#undef DECL_SETTING_COLOR24
-#undef DECL_SETTING_COLOR32
-#undef DECL_SETTING_ENUM
-#undef DECL_SETTING_RANGED
-#undef DECL_SETTING_BINARY
+#include "settings_reset_decls.h"
 
 #define SAVE_SETTING(name, type)                 \
     {                                            \

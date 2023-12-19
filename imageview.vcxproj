@@ -240,6 +240,7 @@
     <ClInclude Include="src\drag_drop.h" />
     <ClInclude Include="src\file.h" />
     <ClInclude Include="src\font_loader.h" />
+    <ClInclude Include="src\settings_reset_decls.h" />
     <ClInclude Include="src\tab_explorer.h" />
     <ClInclude Include="src\tab_hotkeys.h" />
     <ClInclude Include="src\hotkeys.h" />

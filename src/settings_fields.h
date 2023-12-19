@@ -1,12 +1,9 @@
 // don't warn about structure padding in here
 
-#pragma warning(push)
-#pragma warning(disable : 4324)
-
 // DECL_SETTING_SECTION(name, string_id)
 //
 // creates a new settings section in the UI
-// the first DECL_SETTING_xxx must be a SECTION. i.e. every setting must be in a section
+// the first DECL_SETTING_xxx must be a DECL_SETTING_SECTION. i.e. every setting must be in a section
 
 // DECL_SETTING_BOOL(name, string_id, default_value)
 //
@@ -29,9 +26,14 @@
 //
 // ranged uint
 
-// DECL_SETTING_INTERNAL(name, type, ...)
+// DECL_SETTING_UINT(name, string_id, default_value)
 //
-// internal setting, not exposed in the UI
+// some binary data, serialized as hex
+
+// DECL_SETTING_BINARY(name, string_id, type, default_value...)
+//
+// some binary data of `type`, serialized as hex
+
 
 //////////////////////////////////////////////////////////////////////
 // background
@@ -231,5 +233,3 @@ DECL_SETTING_BINARY(fullscreen_rect, SETTING_HIDDEN, RECT, 0, 0, 0, 0);
 // last file loaded
 
 DECL_SETTING_BINARY(last_file_loaded, SETTING_HIDDEN, std::wstring, L"");
-
-#pragma warning(pop)

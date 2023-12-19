@@ -34,6 +34,9 @@ namespace
         }
 
         HWND tab = GetParent(hwnd);
+
+        // WM_USER posted to the settings page toggles section expand/collapse
+
         PostMessage(tab, WM_USER, 0, reinterpret_cast<LPARAM>(&setting));
     }
 }

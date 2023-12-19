@@ -7,10 +7,10 @@
 // remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
 // get all the mouse handling stuff out of update() and into mouse move handler
 // settings dialog : cache size not reet
+// pause render()/update() when app loses focus
 
 // flip/rotate
 // colorspace / SRGB / HDR
-// overlay grid
 
 // fix the cache
 // fix all the leaks
@@ -25,9 +25,6 @@
 //      scanner
 
 #include "pch.h"
-
-#include "shader_inc/vs_rectangle.h"
-#include "shader_inc/ps_draw_everything.h"
 
 LOG_CONTEXT("app");
 
@@ -49,12 +46,13 @@ namespace imageview::app
     // the window handle
     HWND window{ null };
 
-    HRESULT load_image_file(std::wstring const &filepath);
-    HRESULT show_image(image::image_file *f);
-    HRESULT on_device_lost();
-
+    // is it running as admin
     bool is_elevated{ false };
+
+    // detected system memory size at startup
     uint64 system_memory_gb;
+
+    // GetModuleHandle(null)
     HMODULE instance;
 }
 
@@ -66,6 +64,9 @@ namespace
     using namespace DirectX;
 
     using app::window;
+
+#include "shader_inc/vs_rectangle.h"
+#include "shader_inc/ps_draw_everything.h"
 
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for scanner thread
@@ -249,10 +250,15 @@ namespace
     // shader constants header is shared with the HLSL files
 
 #pragma pack(push, 4)
+
     struct shader_const_t
+    {
+
 #include "shader_constants.h"
+
+    } shader;
+
 #pragma pack(pop)
-        shader;
 
     // all the com pointers
 
@@ -411,60 +417,7 @@ namespace
         { cursor_def::src::system, IDC_ARROW }         // 15 - xx bottom top left and right
     };
 
-    //////////////////////////////////////////////////////////////////////
-    // DragDrop admin
-
-    struct FileDropper : public CDragDropHelper
-    {
-        //////////////////////////////////////////////////////////////////////
-        // user dropped something on the window, try to load it as a file
-
-        HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) override
-        {
-            UNREFERENCED_PARAMETER(grfKeyState);
-            ComPtr<IShellItem> shell_item;
-            CHK_HR(psia->GetItemAt(0, &shell_item));
-            PWSTR path{};
-            CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
-            DEFER(CoTaskMemFree(path));
-            return app::load_image_file(path);
-        }
-
-        //////////////////////////////////////////////////////////////////////
-        // dropped a thing that can be interpreted as text, try to load it as a file
-
-        HRESULT on_drop_string(wchar const *str) override
-        {
-            return app::load_image_file(strip_quotes(str));
-        }
-    } file_dropper;
-
-    //////////////////////////////////////////////////////////////////////
-    // D3D Debug admin
-
-#if defined(_DEBUG)
-
-    ComPtr<ID3D11Debug> d3d_debug;
-
-    void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
-    {
-        resource->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
-    }
-
-    template <typename T> void set_d3d_debug_name(ComPtr<T> &resource, char const *name)
-    {
-        set_d3d_debug_name(resource.Get(), name);
-    }
-
-#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
-
-#else
-
-#define D3D_SET_NAME(...) \
-    do {                  \
-    } while(false)
-
-#endif
+    HRESULT show_image(image::image_file *f);
 
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
@@ -477,13 +430,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    void clear_message()
-    {
-        current_message.clear();
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // message box for catastrophic errors
 
     void error_message_box(std::wstring const &msg, HRESULT hr)
@@ -493,89 +439,38 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SetWindowText with ** admin ** prepender and current filename
+    // make an image the current one
 
-    HRESULT setup_window_text()
+    HRESULT display_image(image::image_file *f)
     {
-        std::wstring name(localize(IDS_AppName));
-        std::wstring details;
-        std::wstring admin;
-
-        if(app::is_elevated) {
-
-            admin = localize(IDS_ADMIN);
+        if(f == null) {
+            return E_INVALIDARG;
         }
+        select_active = false;
 
-        if(current_file != null) {
+        HRESULT load_hr = f->hresult;
 
-            name = current_file->filename;
+        if(FAILED(load_hr)) {
 
-            if(!settings.show_full_filename_in_titlebar) {
+            // if this is the first file being loaded and there was a file loading error
+            if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
-                CHK_HR(file::get_filename(name, name));
+                error_message_box(std::format(L"Loading {}", f->filename), load_hr);
+
+                // bit harsh, quitting here...?
+                DestroyWindow(window);
             }
-            details = std::format(L" {}x{}", current_file->img.width, current_file->img.height);
+
+            // and in any case, set banner message to error text
+            std::wstring err_str = windows_error_message(load_hr);
+            std::wstring name;
+            CHK_HR(file::get_filename(f->filename, name));
+            set_message(std::format(L"{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3);
+            return load_hr;
         }
-        SetWindowTextW(window, std::format(L"{}{}{}", admin, name, details).c_str());
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // new settings have arrived, update stuff which isn't automatically
-    // picked up by the renderer
-
-    void on_new_settings()
-    {
-        setup_window_text();
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    RECT center_rect_on_default_monitor(RECT const &r)
-    {
-        int sw = GetSystemMetrics(SM_CXSCREEN);
-        int sh = GetSystemMetrics(SM_CYSCREEN);
-        int ww = rect_width(r);
-        int wh = rect_height(r);
-        RECT rc;
-        rc.left = (sw - ww) / 2;
-        rc.top = (sh - wh) / 2;
-        rc.right = rc.left + ww;
-        rc.bottom = rc.top + wh;
-        return rc;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // append helps because then we can prepend a BITMAPFILEHEADER
-    // when we're loading the clipboard and pretend it's a file
-
-    HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
-    {
-        CHK_BOOL(OpenClipboard(null));
-
-        DEFER(CloseClipboard());
-
-        HANDLE c = GetClipboardData(format);
-        if(c == null) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        void *data = GlobalLock(c);
-        if(data == null) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-        DEFER(GlobalUnlock(c));
-
-        size_t size = GlobalSize(c);
-        if(size == 0) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        size_t existing = buffer.size();
-        buffer.resize(size + existing);
-        memcpy(buffer.data() + existing, data, size);
-
-        return S_OK;
+        files_loaded += 1;
+        f->view_count += 1;
+        return show_image(f);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -705,41 +600,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // make an image the current one
-
-    HRESULT display_image(image::image_file *f)
-    {
-        if(f == null) {
-            return E_INVALIDARG;
-        }
-        select_active = false;
-
-        HRESULT load_hr = f->hresult;
-
-        if(FAILED(load_hr)) {
-
-            // if this is the first file being loaded and there was a file loading error
-            if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
-
-                error_message_box(std::format(L"Loading {}", f->filename), load_hr);
-
-                // bit harsh, quitting here...?
-                DestroyWindow(window);
-            }
-
-            // and in any case, set banner message to error text
-            std::wstring err_str = windows_error_message(load_hr);
-            std::wstring name;
-            CHK_HR(file::get_filename(f->filename, name));
-            set_message(std::format(L"{} {} - {}", localize(IDS_CANT_LOAD_FILE), name, err_str), 3);
-            return load_hr;
-        }
-        files_loaded += 1;
-        f->view_count += 1;
-        return app::show_image(f);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // load an image file or get it from the cache (or notice that it's
     // already being loaded and just let it arrive later)
 
@@ -832,6 +692,165 @@ namespace
 
             PostThreadMessageW(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
         }
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT load_image_file(std::wstring const &filepath)
+    {
+        if(!file::exists(filepath)) {
+            set_message(std::format(L"{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2);
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        return load_image(filepath);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // DragDrop admin
+
+    struct FileDropper : public CDragDropHelper
+    {
+        //////////////////////////////////////////////////////////////////////
+        // user dropped something on the window, try to load it as a file
+
+        HRESULT on_drop_shell_item(IShellItemArray *psia, DWORD grfKeyState) override
+        {
+            UNREFERENCED_PARAMETER(grfKeyState);
+            ComPtr<IShellItem> shell_item;
+            CHK_HR(psia->GetItemAt(0, &shell_item));
+            PWSTR path{};
+            CHK_HR(shell_item->GetDisplayName(SIGDN_FILESYSPATH, &path));
+            DEFER(CoTaskMemFree(path));
+            return load_image_file(path);
+        }
+
+        //////////////////////////////////////////////////////////////////////
+        // dropped a thing that can be interpreted as text, try to load it as a file
+
+        HRESULT on_drop_string(wchar const *str) override
+        {
+            return load_image_file(strip_quotes(str));
+        }
+    } file_dropper;
+
+    //////////////////////////////////////////////////////////////////////
+    // D3D Debug admin
+
+#if defined(_DEBUG)
+
+    ComPtr<ID3D11Debug> d3d_debug;
+
+    void set_d3d_debug_name(ID3D11DeviceChild *resource, char const *name)
+    {
+        resource->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
+    }
+
+    template <typename T> void set_d3d_debug_name(ComPtr<T> &resource, char const *name)
+    {
+        set_d3d_debug_name(resource.Get(), name);
+    }
+
+#define D3D_SET_NAME(x) set_d3d_debug_name(x, #x)
+
+#else
+
+#define D3D_SET_NAME(...) \
+    do {                  \
+    } while(false)
+
+#endif
+
+    //////////////////////////////////////////////////////////////////////
+
+    void clear_message()
+    {
+        current_message.clear();
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // SetWindowText with ** admin ** prepender and current filename
+
+    HRESULT setup_window_text()
+    {
+        std::wstring name(localize(IDS_AppName));
+        std::wstring details;
+        std::wstring admin;
+
+        if(app::is_elevated) {
+
+            admin = localize(IDS_ADMIN);
+        }
+
+        if(current_file != null) {
+
+            name = current_file->filename;
+
+            if(!settings.show_full_filename_in_titlebar) {
+
+                CHK_HR(file::get_filename(name, name));
+            }
+            details = std::format(L" {}x{}", current_file->img.width, current_file->img.height);
+        }
+        SetWindowTextW(window, std::format(L"{}{}{}", admin, name, details).c_str());
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // new settings have arrived, update stuff which isn't automatically
+    // picked up by the renderer
+
+    void on_new_settings()
+    {
+        setup_window_text();
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    RECT center_rect_on_default_monitor(RECT const &r)
+    {
+        int sw = GetSystemMetrics(SM_CXSCREEN);
+        int sh = GetSystemMetrics(SM_CYSCREEN);
+        int ww = rect_width(r);
+        int wh = rect_height(r);
+        RECT rc;
+        rc.left = (sw - ww) / 2;
+        rc.top = (sh - wh) / 2;
+        rc.right = rc.left + ww;
+        rc.bottom = rc.top + wh;
+        return rc;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // append helps because then we can prepend a BITMAPFILEHEADER
+    // when we're loading the clipboard and pretend it's a file
+
+    HRESULT append_clipboard_to_buffer(std::vector<byte> &buffer, UINT format)
+    {
+        CHK_BOOL(OpenClipboard(null));
+
+        DEFER(CloseClipboard());
+
+        HANDLE c = GetClipboardData(format);
+        if(c == null) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        void *data = GlobalLock(c);
+        if(data == null) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        DEFER(GlobalUnlock(c));
+
+        size_t size = GlobalSize(c);
+        if(size == 0) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        size_t existing = buffer.size();
+        buffer.resize(size + existing);
+        memcpy(buffer.data() + existing, data, size);
+
         return S_OK;
     }
 
@@ -1412,6 +1431,24 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // recreate device and recreate current image texture if necessary
+
+    HRESULT create_resources();
+
+    HRESULT on_device_lost()
+    {
+        CHK_HR(create_device());
+
+        CHK_HR(create_resources());
+
+        if(current_file != null) {
+            CHK_HR(display_image(current_file));
+        }
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // create window size dependent resources
 
     HRESULT create_resources()
@@ -1450,7 +1487,7 @@ namespace
 
             if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
 
-                CHK_HR(app::on_device_lost());
+                CHK_HR(on_device_lost());
 
                 // OnDeviceLost will set up the new device.
                 return S_OK;
@@ -1599,7 +1636,7 @@ namespace
             f.view_count = 0;
             CHK_HR(image::decode(&f));
             f.img.pixels = f.pixels.data();
-            return app::show_image(&f);
+            return show_image(&f);
         }
 
         UINT fmt = 0;
@@ -2476,7 +2513,7 @@ namespace
 
         clear_selection();
 
-        return app::show_image(&f);
+        return show_image(&f);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2812,7 +2849,7 @@ namespace
         HRESULT hr = swap_chain->Present(1, 0);
 
         if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-            hr = app::on_device_lost();
+            hr = on_device_lost();
         }
 
         return hr;
@@ -3025,7 +3062,7 @@ namespace
         if(id >= ID_RECENT_FILE_00 && id <= ID_RECENT_FILE_09) {
             uint index = id - ID_RECENT_FILE_00;
             if(index < recent_files_list.size()) {
-                app::load_image_file(recent_files_list[index]);
+                load_image_file(recent_files_list[index]);
             }
         }
     }
@@ -3704,25 +3741,6 @@ namespace
 
         return 0;
     }
-}
-
-namespace imageview::app
-{
-    //////////////////////////////////////////////////////////////////////
-    // recreate device and recreate current image texture if necessary
-
-    HRESULT on_device_lost()
-    {
-        CHK_HR(create_device());
-
-        CHK_HR(create_resources());
-
-        if(current_file != null) {
-            CHK_HR(display_image(current_file));
-        }
-
-        return S_OK;
-    }
 
     //////////////////////////////////////////////////////////////////////
     // actually show an image
@@ -3813,20 +3831,9 @@ namespace imageview::app
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT load_image_file(std::wstring const &filepath)
-    {
-        if(!file::exists(filepath)) {
-            set_message(std::format(L"{} {}", localize(IDS_CANT_LOAD_FILE), filepath), 2);
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-        }
-        return load_image(filepath);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
     HRESULT main()
     {
-        instance = GetModuleHandle(null);
+        app::instance = GetModuleHandle(null);
 
         // check for required CPU support (for DirectXMath SIMD)
 
@@ -3842,7 +3849,7 @@ namespace imageview::app
 
         CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
 
-        CHK_HR(get_is_process_elevated(is_elevated));
+        CHK_HR(imageview::get_is_process_elevated(app::is_elevated));
 
         // in debug builds, hold middle mouse button at startup to reset settings to defaults
         {
@@ -3876,8 +3883,8 @@ namespace imageview::app
 
                 if(!cmd_line.empty()) {
                     COPYDATASTRUCT c;
-                    c.cbData = static_cast<DWORD>(cmd_line.size() + 1);
-                    c.lpData = const_cast<void *>(reinterpret_cast<void const *>(cmd_line.c_str()));
+                    c.cbData = static_cast<DWORD>(cmd_line.size() * sizeof(wchar));
+                    c.lpData = reinterpret_cast<void *>(cmd_line.data());
                     c.dwData = static_cast<DWORD>(copydata_t::commandline);
                     SendMessageW(existing_window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&c));
                 }
@@ -3899,9 +3906,9 @@ namespace imageview::app
 
         CHK_BOOL(GetPhysicallyInstalledSystemMemory(&system_memory_size_kb));
 
-        system_memory_gb = system_memory_size_kb / 1048576;
+        app::system_memory_gb = system_memory_size_kb / 1048576;
 
-        LOG_INFO(L"System has {}GB of memory", system_memory_gb);
+        LOG_INFO(L"System has {}GB of memory", app::system_memory_gb);
 
         // load/create/init some things
 
@@ -4035,6 +4042,6 @@ namespace imageview::app
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
-    imageview::app::main();
+    main();
     return 0;
 }

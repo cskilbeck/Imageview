@@ -62,9 +62,8 @@ namespace
 
     void update_sections(HWND hwnd)
     {
-        HWND tab_ctrl;
         HWND parent = GetParent(hwnd);
-        tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
+        HWND tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
 
         RECT tab_rect;
         GetWindowRect(tab_ctrl, &tab_rect);
@@ -77,7 +76,7 @@ namespace
         int total_height = 0;
 
         // speed based on size of tab rect so dpi taken into account
-        int expand_contract_speed = std::max(4, rect_height(tab_rect) / 15);
+        int expand_contract_speed = std::max(3, rect_height(tab_rect) / 20);
 
         // expand/contract sections and get total height
         for(auto const s : section_setting::sections) {
@@ -88,7 +87,7 @@ namespace
 
                 diff *= expand_contract_speed;
                 s->current_height = std::clamp(s->current_height + diff, s->banner_height, s->expanded_height);
-                expanding_or_contracting = true;
+                expanding_or_contracting |= s->current_height != s->target_height;
             }
             total_height += s->current_height - 1;
         }
@@ -175,14 +174,7 @@ namespace
         controllers.clear();
         section_setting::sections.clear();
 
-#undef DECL_SETTING_SECTION
-#undef DECL_SETTING_BOOL
-#undef DECL_SETTING_UINT
-#undef DECL_SETTING_COLOR24
-#undef DECL_SETTING_COLOR32
-#undef DECL_SETTING_ENUM
-#undef DECL_SETTING_RANGED
-#undef DECL_SETTING_BINARY
+#include "settings_reset_decls.h"
 
         // MSVC suppresses trailing comma when VA_ARGS is empty...
         // (__VA_OPT__ not supported without the new preprocessor which causes problems)
@@ -308,7 +300,6 @@ namespace
         // size the window to fit within the tab control exactly
 
         int tab_width = rect_width(tab_rect);
-        // int tab_width = rect_width(tab_rect) - GetSystemMetrics(SM_CXVSCROLL);
 
         SetWindowPos(hwnd, null, 0, 0, tab_width, rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
 
@@ -334,6 +325,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
     // SETTINGS page \ WM_USER
+    // WM_USER toggles section expand/collapse
 
     void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
     {
