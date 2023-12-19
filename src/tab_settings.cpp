@@ -149,7 +149,6 @@ namespace
         } else {
             KillTimer(hwnd, 1);
             active_section = null;
-            LOG_DEBUG(L"DONE ANIMATING SETTINGS SECTIONS...");
         }
     }
 
@@ -179,10 +178,14 @@ namespace
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_UINT
-#undef DECL_SETTING_COLOR
+#undef DECL_SETTING_COLOR24
+#undef DECL_SETTING_COLOR32
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_BINARY
+
+        // MSVC suppresses trailing comma when VA_ARGS is empty...
+        // (__VA_OPT__ not supported without the new preprocessor which causes problems)
 
 #define ADD_SETTING(name, str, type, ...) \
     if constexpr(str != SETTING_HIDDEN)   \
@@ -192,7 +195,9 @@ namespace
 
 #define DECL_SETTING_BOOL(name, str, value) ADD_SETTING(name, str, bool_setting)
 
-#define DECL_SETTING_COLOR(name, str, argb, alpha) ADD_SETTING(name, str, color_setting, alpha)
+#define DECL_SETTING_COLOR24(name, str, bgr) ADD_SETTING(name, str, color_setting, false)
+
+#define DECL_SETTING_COLOR32(name, str, abgr) ADD_SETTING(name, str, color_setting, true)
 
 #define DECL_SETTING_ENUM(name, str, type, enum_names, value) ADD_SETTING(name, str, enum_setting, enum_names)
 

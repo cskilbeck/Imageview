@@ -118,7 +118,15 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT parse_color(std::wstring const &value, settings_t::color_t &setting)
+    HRESULT parse_color24(std::wstring const &value, settings_t::color_t &setting)
+    {
+        CHK_HR(color_from_string(value.c_str(), setting));
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT parse_color32(std::wstring const &value, settings_t::color_t &setting)
     {
         CHK_HR(color_from_string(value.c_str(), setting));
         return S_OK;
@@ -169,9 +177,9 @@ namespace
         if(tokens.size() != 4) {
             return E_INVALIDARG;
         }
-        LONG *l = reinterpret_cast<LONG *>(&setting);
+        int *l = reinterpret_cast<int *>(&setting);
         for(size_t i = 0; i < 4; ++i) {
-            CHK_HR(parse_int(tokens[i], *reinterpret_cast<int *>(l)));
+            CHK_HR(parse_int(tokens[i], *l));
             l += 1;
         }
         return S_OK;
@@ -218,13 +226,17 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT to_string_color(settings_t::color_t const &setting, std::wstring &result, bool alpha)
+    HRESULT to_string_color24(settings_t::color_t const &setting, std::wstring &result)
     {
-        if(alpha) {
-            result = color32_to_string(setting);
-        } else {
-            result = color24_to_string(setting);
-        }
+        result = color24_to_string(setting);
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT to_string_color32(settings_t::color_t const &setting, std::wstring &result)
+    {
+        result = color32_to_string(setting);
         return S_OK;
     }
 
@@ -277,7 +289,8 @@ namespace imageview
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_UINT
-#undef DECL_SETTING_COLOR
+#undef DECL_SETTING_COLOR24
+#undef DECL_SETTING_COLOR32
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_BINARY
@@ -291,22 +304,15 @@ namespace imageview
         }                                                            \
     }
 
-#define LOAD_SETTING_V(name, type, ...)                              \
-    {                                                                \
-        std::wstring s;                                              \
-        CHK_HR(load_registry_string(L#name, s));                     \
-        if(FAILED((parse_##type(s, name, __VA_ARGS__)))) {           \
-            LOG_ERROR(L"Can't load setting {} (got {})", L#name, s); \
-        }                                                            \
-    }
-
 #define DECL_SETTING_SECTION(name, string_id) LOAD_SETTING(name, section)
 
 #define DECL_SETTING_BOOL(name, string_id, value) LOAD_SETTING(name, bool)
 
 #define DECL_SETTING_UINT(name, string_id, value) LOAD_SETTING(name, uint)
 
-#define DECL_SETTING_COLOR(name, string_id, rgba, alpha) LOAD_SETTING(name, color)
+#define DECL_SETTING_COLOR24(name, string_id, rgba) LOAD_SETTING(name, color24)
+
+#define DECL_SETTING_COLOR32(name, string_id, rgba) LOAD_SETTING(name, color32)
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) LOAD_SETTING(name, enum)
 
@@ -327,7 +333,8 @@ namespace imageview
 #undef DECL_SETTING_SECTION
 #undef DECL_SETTING_BOOL
 #undef DECL_SETTING_UINT
-#undef DECL_SETTING_COLOR
+#undef DECL_SETTING_COLOR24
+#undef DECL_SETTING_COLOR32
 #undef DECL_SETTING_ENUM
 #undef DECL_SETTING_RANGED
 #undef DECL_SETTING_BINARY
@@ -339,20 +346,15 @@ namespace imageview
         CHK_HR(save_registry_string(L#name, s)); \
     }
 
-#define SAVE_SETTING_V(name, type, ...)                 \
-    {                                                   \
-        std::wstring s;                                 \
-        CHK_HR(to_string_##type(name, s, __VA_ARGS__)); \
-        CHK_HR(save_registry_string(L#name, s));        \
-    }
-
 #define DECL_SETTING_SECTION(name, string_id) SAVE_SETTING(name, section)
 
 #define DECL_SETTING_BOOL(name, string_id, value) SAVE_SETTING(name, bool)
 
 #define DECL_SETTING_UINT(name, string_id, value) SAVE_SETTING(name, uint)
 
-#define DECL_SETTING_COLOR(name, string_id, rgba, alpha) SAVE_SETTING_V(name, color, alpha)
+#define DECL_SETTING_COLOR24(name, string_id, bgr) SAVE_SETTING(name, color24)
+
+#define DECL_SETTING_COLOR32(name, string_id, abgr) SAVE_SETTING(name, color32)
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_names, value) SAVE_SETTING(name, enum)
 

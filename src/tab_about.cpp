@@ -52,7 +52,7 @@ namespace
         HWND about = GetDlgItem(hwnd, IDC_SETTINGS_EDIT_ABOUT);
         SetWindowSubclass(about, suppress_caret_subclass, 0, 0);
 
-        SendMessageW(about, EM_SETREADONLY, 1, 0);
+        Edit_SetReadOnly(about, true);
 
         // populate the about box text
         std::wstring version{ L"Version?" };

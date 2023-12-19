@@ -12,10 +12,14 @@
 //
 // a boolean setting
 
-// DECL_SETTING_COLOR(name, string_id, default_rgba_value, alpha_enabled)
+// DECL_SETTING_COLOR24(name, string_id, default_rgba_value, alpha_enabled)
 //
-// 32 bit color with optional alpha slider
-// if !alpha_enabled, alpha is fixed at 255
+// 24 bit color with no alpha slider
+// alpha is fixed at 255
+
+// DECL_SETTING_COLOR32(name, string_id, default_rgba_value, alpha_enabled)
+//
+// 32 bit color with alpha slider
 
 // DECL_SETTING_ENUM(name, string_id, type, enum_names, default_value)
 //
@@ -36,11 +40,11 @@ DECL_SETTING_SECTION(background_section, IDS_SETTING_SECTION_BACKGROUND);
 
 // border color beyond image bounds
 
-DECL_SETTING_COLOR(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0x000020, false);
+DECL_SETTING_COLOR24(border_color, IDS_SETTING_NAME_BORDER_COLOR, 0x200000);
 
 // bg color shows through image alpha
 
-DECL_SETTING_COLOR(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xff00ff, false);
+DECL_SETTING_COLOR24(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xff00ffu);
 
 // grid on or off
 
@@ -48,8 +52,8 @@ DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
 
 // grid colors
 
-DECL_SETTING_COLOR(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x101010, false);
-DECL_SETTING_COLOR(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x202020, false);
+DECL_SETTING_COLOR24(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x101010);
+DECL_SETTING_COLOR24(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x202020);
 
 // grid size in pixels
 
@@ -66,12 +70,12 @@ DECL_SETTING_SECTION(selection_section, IDS_SETTING_SECTION_SELECT);
 
 // selection rectangle fill color
 
-DECL_SETTING_COLOR(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0x00008040, true);
+DECL_SETTING_COLOR32(select_fill_color, IDS_SETTING_NAME_SELECT_FILL_COLOR, 0x80800000);
 
 // selection outline colors (line alternates)
 
-DECL_SETTING_COLOR(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 0x00000080, true);
-DECL_SETTING_COLOR(select_outline_color2, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2, 0xffffff80, true);
+DECL_SETTING_COLOR32(select_outline_color1, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR1, 0x80000000);
+DECL_SETTING_COLOR32(select_outline_color2, IDS_SETTING_NAME_SELECT_OUTLINE_COLOR2, 0x80ffffff);
 
 // selection border width (1 or maybe 2, anything bigger likely to cause problems)
 
@@ -92,8 +96,8 @@ DECL_SETTING_SECTION(crosshair_section, IDS_SETTING_SECTION_CROSSHAIR);
 
 // crosshair line colors
 
-DECL_SETTING_COLOR(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0x800000d0, true);
-DECL_SETTING_COLOR(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0x008080d0, true);
+DECL_SETTING_COLOR32(crosshair_color1, IDS_SETTING_NAME_CROSSHAIR_COLOR1, 0x80000000);
+DECL_SETTING_COLOR32(crosshair_color2, IDS_SETTING_NAME_CROSSHAIR_COLOR2, 0x80808080);
 
 // crosshair dash length
 

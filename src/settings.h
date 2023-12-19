@@ -71,7 +71,7 @@ namespace imageview
         using section_t = bool;
         using color_t = uint32;
         using ranged_t = uint;
-        // enums are special, just serialize as uint for now...
+        // enums are special, just serialized as uints
 
 #define SETTING_HIDDEN 0
 
@@ -93,19 +93,17 @@ namespace imageview
         default_value                                     \
     }
 
-// RGBA -> ABGR
-
-// clang-format off
-#define DECL_SETTING_COLOR(name, string_id, rgba, alpha)        \
-    color_t name                                                 \
-    {                                                           \
-        (((rgba << (alpha ? 0 : 8)) & 0xff000000) >> 24) |      \
-        (((rgba << (alpha ? 0 : 8)) & 0x00ff0000) >> 8) |       \
-        (((rgba << (alpha ? 0 : 8)) & 0x0000ff00) << 8) |       \
-        (((rgba << (alpha ? 0 : 8)) & 0x000000ff) << 24) |      \
-        (alpha ? 0 : 0xff000000)                                \
+#define DECL_SETTING_COLOR24(name, string_id, bgr) \
+    color_t name                                   \
+    {                                              \
+        bgr | 0xff000000                           \
     }
-        // clang-format on
+
+#define DECL_SETTING_COLOR32(name, string_id, abgr) \
+    color_t name                                    \
+    {                                               \
+        abgr                                        \
+    }
 
 #define DECL_SETTING_ENUM(name, string_id, type, enum_map, value) \
     type name                                                     \
