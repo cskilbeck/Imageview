@@ -9,32 +9,32 @@ namespace imageview
 {
     //////////////////////////////////////////////////////////////////////
 
-    void update_scrollbars(scroll_info &info, HWND hwnd, RECT const &rc, SIZE const &sz)
+    void update_scrollbars(scroll_pos &pos, HWND hwnd, RECT const &rc, SIZE const &sz)
     {
         SCROLLINFO si;
         si.cbSize = sizeof(SCROLLINFO);
         si.fMask = SIF_PAGE | SIF_RANGE | SIF_POS;
 
         // horizontal
-        si.nPos = info.pos[SB_HORZ];
+        si.nPos = pos[SB_HORZ];
         si.nPage = rect_width(rc) + 1;
         si.nMin = 0;
         si.nMax = sz.cx;
         SetScrollInfo(hwnd, SB_HORZ, &si, true);
-        info.pos[SB_HORZ] = GetScrollPos(hwnd, SB_HORZ);
+        pos[SB_HORZ] = GetScrollPos(hwnd, SB_HORZ);
 
         // vertical
-        si.nPos = info.pos[SB_VERT];
+        si.nPos = pos[SB_VERT];
         si.nPage = rect_height(rc) + 1;
         si.nMin = 0;
         si.nMax = sz.cy;
         SetScrollInfo(hwnd, SB_VERT, &si, true);
-        info.pos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
+        pos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    void scroll_window(scroll_info &info, HWND hwnd, int bar, int lines)
+    void scroll_window(scroll_pos &pos, HWND hwnd, int bar, int lines)
     {
         SCROLLINFO si;
         si.cbSize = sizeof(SCROLLINFO);
@@ -45,12 +45,12 @@ namespace imageview
         int line = page * 10 / 100;
         int new_pos = std::clamp(si.nPos + line * lines, si.nMin, max_pos);
         SetScrollPos(hwnd, bar, new_pos, true);
-        info.pos[bar] = GetScrollPos(hwnd, bar);
+        pos[bar] = GetScrollPos(hwnd, bar);
     }
 
     //////////////////////////////////////////////////////////////////////
 
-    void on_scroll(scroll_info &info, HWND hwnd, int bar, UINT code)
+    void on_scroll(scroll_pos &pos, HWND hwnd, int bar, UINT code)
     {
         SCROLLINFO si;
         si.cbSize = sizeof(SCROLLINFO);
@@ -96,6 +96,6 @@ namespace imageview
             break;
         }
         SetScrollPos(hwnd, bar, new_pos, true);
-        info.pos[bar] = GetScrollPos(hwnd, bar);
+        pos[bar] = GetScrollPos(hwnd, bar);
     }
 }

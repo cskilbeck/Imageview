@@ -14,6 +14,16 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    enum page_type_t
+    {
+        settings_page = 0,
+        hotkeys_page = 1,
+        explorer_page = 2,
+        about_page = 3,
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
     HWND settings_dlg = null;
 
     //////////////////////////////////////////////////////////////////////
@@ -215,6 +225,7 @@ namespace
         case IDCLOSE:
             settings_dlg = null;
             post_new_settings();    // save the sections expanded states
+            active_tabs.clear();
             DestroyWindow(hwnd);
             break;
         }
@@ -266,12 +277,23 @@ namespace imageview::settings_ui
     //////////////////////////////////////////////////////////////////////
     // call this from the app whenever settings are changed
 
-    void update_settings_dialog()
+    void new_settings_update()
     {
         if(settings_dlg != null) {
             settings_t *settings_copy = new settings_t();
-            memcpy(settings_copy, &settings, sizeof(settings_t));
+            *settings_copy = settings;
             PostMessage(settings_dlg, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
         }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // call this from main update() at frame rate
+
+    void update()
+    {
+        if(settings_dlg == null || active_tabs.empty()) {
+            return;
+        }
+        animate_settings_page(active_tabs[settings_page]->hwnd);
     }
 }

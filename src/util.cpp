@@ -481,7 +481,7 @@ namespace imageview
         CHK_NULL(buffer = reinterpret_cast<wchar *>(GlobalLock(handle)));
         DEFER(GlobalUnlock(handle));
 
-        memcpy(buffer, string.c_str(), string.size() + 1);
+        memcpy(buffer, string.c_str(), (string.size() + 1) * sizeof(wchar));
 
         CHK_BOOL(OpenClipboard(null));
         DEFER(CloseClipboard());

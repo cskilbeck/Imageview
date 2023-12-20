@@ -98,6 +98,48 @@ namespace
         float f = std::min(1.0f, (float)max_texture_size / std::max(s.w, s.h));
         return { (uint)(s.w * f), (uint)(s.h * f) };
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT enum_codecs()
+    {
+        auto wic = get_wic();
+
+        ComPtr<IEnumUnknown> enumerator;
+
+        DWORD enumerate_options = WICComponentEnumerateDefault;
+
+        CHK_HR(wic->CreateComponentEnumerator(WICDecoder, enumerate_options, &enumerator));
+
+        ULONG fetched = 0;
+        ComPtr<IUnknown> current = NULL;
+
+        while(enumerator->Next(1, &current, &fetched) == S_OK) {
+
+            ComPtr<IWICBitmapCodecInfo> codecinfo;
+            CHK_HR(current.As(&codecinfo));
+            current.Reset();
+
+            // two step dance to get the len and then the text
+            auto get_string = [](auto o, auto fn, std::wstring &str) {
+                UINT str_len = 0;
+                CHK_HR(fn(o, 0, null, &str_len));
+                str.resize(str_len);
+                CHK_HR(fn(o, str_len, str.data(), &str_len));
+                str.pop_back();    // remove null terminator
+                return S_OK;
+            };
+
+            std::wstring name;
+            std::wstring extensions;
+
+            CHK_HR(get_string(codecinfo.Get(), std::mem_fn(&IWICBitmapCodecInfo::GetFriendlyName), name));
+            CHK_HR(get_string(codecinfo.Get(), std::mem_fn(&IWICBitmapCodecInfo::GetFileExtensions), extensions));
+
+            LOG_DEBUG(L"WIC CODEC {} supports {}", name, extensions);
+        }
+        return S_OK;
+    }
 }
 
 namespace imageview::image
@@ -159,6 +201,8 @@ namespace imageview::image
                                         GUID_WICPixelFormat32bppBGRA,
                                         format_flags{ with_alpha } };
         }
+
+        enum_codecs();
 
         return S_OK;
     }
@@ -463,6 +507,8 @@ namespace imageview::image
         auto release_pixels = defer::deferred([&]() { file->pixels.clear(); });
 
         // actually get the pixels
+
+        LOG_DEBUG(L"DECODE {}", file->filename);
 
         CHK_HR(bmp_src->CopyPixels(null, (uint32)t_row_pitch, (uint32)total_bytes, file->pixels.data()));
 

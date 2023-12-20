@@ -13,7 +13,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // scroll info for the settings page
 
-    scroll_info settings_scrollinfo;
+    scroll_pos settings_scrollpos;
 
     //////////////////////////////////////////////////////////////////////
     // all the settings on the settings page
@@ -40,6 +40,8 @@ namespace
 
     settings_t previous_settings;
 
+    bool sections_should_update{ false };
+
     //////////////////////////////////////////////////////////////////////
     // setup all the controls when the settings have changed outside
     // of the dialog handlers (i.e. from the main window hotkeys or menu)
@@ -62,93 +64,101 @@ namespace
 
     void update_sections(HWND hwnd)
     {
-        HWND parent = GetParent(hwnd);
-        HWND tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
+        if(sections_should_update) {
 
-        RECT tab_rect;
-        GetWindowRect(tab_ctrl, &tab_rect);
-        TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
+            HWND parent = GetParent(hwnd);
+            HWND tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
 
-        // update and get new heights of the sections
+            RECT tab_rect;
+            GetWindowRect(tab_ctrl, &tab_rect);
+            TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
 
-        bool expanding_or_contracting{ false };
+            // update and get new heights of the sections
 
-        int total_height = 0;
+            int total_height = 0;
 
-        // speed based on size of tab rect so dpi taken into account
-        int expand_contract_speed = std::max(3, rect_height(tab_rect) / 20);
+            // speed based on size of tab rect so dpi taken into account
+            int expand_contract_speed = std::max(3, rect_height(tab_rect) / 20);
 
-        // expand/contract sections and get total height
-        for(auto const s : section_setting::sections) {
+            sections_should_update = false;
 
-            int diff = sgn(s->target_height - s->current_height);
+            // expand/contract sections, get total height and check if we're done animating
+            for(auto const s : section_setting::sections) {
 
-            if(diff != 0) {
+                int diff = sgn(s->target_height - s->current_height);
 
-                diff *= expand_contract_speed;
-                s->current_height = std::clamp(s->current_height + diff, s->banner_height, s->expanded_height);
-                expanding_or_contracting |= s->current_height != s->target_height;
+                if(diff != 0) {
+
+                    diff *= expand_contract_speed;
+                    s->current_height = std::clamp(s->current_height + diff, s->banner_height, s->expanded_height);
+                    sections_should_update |= s->current_height != s->target_height;
+                }
+                total_height += s->current_height;
             }
-            total_height += s->current_height - 1;
-        }
 
-        // set scrollbars based on total height
+            // set scrollbars based on total height
 
-        int tab_width = rect_width(tab_rect);
-        // int tab_width = rect_width(tab_rect) - GetSystemMetrics(SM_CXVSCROLL);
+            int tab_width = rect_width(tab_rect);
 
-        update_scrollbars(settings_scrollinfo, hwnd, tab_rect, SIZE{ tab_width, total_height });
+            update_scrollbars(settings_scrollpos, hwnd, tab_rect, SIZE{ tab_width, total_height });
 
-        // scroll so required section is within view
+            // scroll so required section is within view
 
-        if(active_section != null) {
+            if(active_section != null) {
 
-            // currently visible portion of the whole window
-            int v_top = settings_scrollinfo.pos[SB_VERT];
-            int v_bottom = v_top + rect_height(tab_rect);
+                // currently visible portion of the whole window
+                int v_top = settings_scrollpos[SB_VERT];
+                int v_bottom = v_top + rect_height(tab_rect);
 
-            // vertical extent of the required section
-            RECT rc;
-            GetWindowRect(active_section->window, &rc);
-            MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
+                // vertical extent of the required section
+                RECT rc;
+                GetWindowRect(active_section->window, &rc);
+                MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
 
-            // scroll up into view if necessary
-            int top = rc.top + v_top;
-            int bottom = top + active_section->current_height;
-            int diff = bottom - v_bottom;
-            if(diff > 0) {
-                v_top += diff;
-                SetScrollPos(hwnd, SB_VERT, v_top, true);
-                settings_scrollinfo.pos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
+                // scroll active section (most recently expanded) up into view if necessary
+                int top = rc.top + v_top;
+                int bottom = top + active_section->current_height;
+                int diff = bottom - v_bottom;
+                if(diff > 0) {
+                    v_top += diff;
+                    SetScrollPos(hwnd, SB_VERT, v_top, true);
+                    settings_scrollpos[SB_VERT] = GetScrollPos(hwnd, SB_VERT);
+                }
+            }
+
+            // move all the sections based on scrollbar position
+
+            HDWP dwp = BeginDeferWindowPos(static_cast<int>(section_setting::sections.size()));
+
+            int ypos = -settings_scrollpos[SB_VERT];
+            int xpos = -settings_scrollpos[SB_HORZ];
+
+            for(auto const s : section_setting::sections) {
+
+                int height = s->current_height;
+
+                DeferWindowPos(dwp, s->window, null, xpos, ypos, tab_width, height, SWP_NOZORDER | SWP_SHOWWINDOW);
+
+                ypos += height;
+            }
+
+            EndDeferWindowPos(dwp);
+
+            // if still need more expanding/contracting, set a timer to get it done
+
+            if(!sections_should_update) {
+                active_section = null;
             }
         }
+    }
 
-        // move all the sections based on scrollbar position
+    //////////////////////////////////////////////////////////////////////
+    // force settings controllers to update
 
-        HDWP dwp = BeginDeferWindowPos(static_cast<int>(section_setting::sections.size() + 1u));
-
-        int ypos = -settings_scrollinfo.pos[SB_VERT];
-        int xpos = -settings_scrollinfo.pos[SB_HORZ];
-
-        for(auto const s : section_setting::sections) {
-
-            int height = s->current_height;
-
-            DeferWindowPos(dwp, s->window, null, xpos, ypos, tab_width, height, SWP_NOZORDER | SWP_SHOWWINDOW);
-
-            ypos += height;
-        }
-
-        EndDeferWindowPos(dwp);
-
-        // if still need more expanding/contracting, set a timer to get it done
-
-        if(expanding_or_contracting) {
-            SetTimer(hwnd, 1, USER_TIMER_MINIMUM, null);
-        } else {
-            KillTimer(hwnd, 1);
-            active_section = null;
-        }
+    void refresh_sections(HWND hwnd)
+    {
+        sections_should_update = true;
+        update_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -156,8 +166,8 @@ namespace
 
     void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        on_scroll(settings_scrollinfo, hwnd, SB_VERT, code);
-        update_sections(hwnd);
+        on_scroll(settings_scrollpos, hwnd, SB_VERT, code);
+        refresh_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -303,10 +313,10 @@ namespace
 
         SetWindowPos(hwnd, null, 0, 0, tab_width, rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
 
-        settings_scrollinfo.pos[SB_HORZ] = 0;
-        settings_scrollinfo.pos[SB_VERT] = 0;
+        settings_scrollpos[SB_HORZ] = 0;
+        settings_scrollpos[SB_VERT] = 0;
 
-        update_sections(hwnd);
+        refresh_sections(hwnd);
 
         // uncork the settings notifier
         settings_should_update = true;
@@ -319,8 +329,8 @@ namespace
 
     void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
-        scroll_window(settings_scrollinfo, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
-        update_sections(hwnd);
+        scroll_window(settings_scrollpos, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
+        refresh_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -335,15 +345,7 @@ namespace
             active_section = section;
         }
 
-        update_sections(hwnd);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_TIMER
-
-    void on_timer_settings(HWND hwnd, uint id)
-    {
-        update_sections(hwnd);
+        refresh_sections(hwnd);
     }
 }
 
@@ -360,7 +362,6 @@ namespace imageview::settings_ui
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
             HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
             HANDLE_MSG(hWnd, WM_USER, on_user_settings);
-            HANDLE_MSG(hWnd, WM_TIMER, on_timer_settings);
         }
         return ctlcolor_base(hWnd, msg, wParam, lParam);
     }
@@ -419,5 +420,12 @@ namespace imageview::settings_ui
             *settings_copy = dialog_settings;
             PostMessage(app::window, app::WM_NEW_SETTINGS, 0, reinterpret_cast<LPARAM>(settings_copy));
         }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void animate_settings_page(HWND hwnd)
+    {
+        update_sections(hwnd);
     }
 }

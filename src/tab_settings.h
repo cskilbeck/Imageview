@@ -10,5 +10,7 @@ namespace imageview::settings_ui
 
     void post_new_settings();
 
+    void animate_settings_page(HWND hwnd);
+
     INT_PTR settings_dlgproc(HWND dlg, UINT msg, WPARAM wparam, LPARAM lparam);
 }
