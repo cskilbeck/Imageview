@@ -9,12 +9,12 @@
 //
 // a boolean setting
 
-// DECL_SETTING_COLOR24(name, string_id, default_rgba_value, alpha_enabled)
+// DECL_SETTING_COLOR24(name, string_id, default_rgb_value)
 //
 // 24 bit color with no alpha slider
 // alpha is fixed at 255
 
-// DECL_SETTING_COLOR32(name, string_id, default_rgba_value, alpha_enabled)
+// DECL_SETTING_COLOR32(name, string_id, default_rgba_value)
 //
 // 32 bit color with alpha slider
 
@@ -50,20 +50,20 @@ DECL_SETTING_COLOR24(background_color, IDS_SETTING_NAME_BACKGROUND_COLOR, 0xff00
 
 // grid on or off
 
-DECL_SETTING_BOOL(grid_enabled, IDS_SETTING_NAME_GRID_ENABLED, true);
+DECL_SETTING_BOOL(checkerboard_enabled, IDS_SETTING_NAME_CHECKERBOARD_ENABLED, true);
 
 // grid colors
 
-DECL_SETTING_COLOR24(grid_color_1, IDS_SETTING_NAME_GRID_COLOR1, 0x101010);
-DECL_SETTING_COLOR24(grid_color_2, IDS_SETTING_NAME_GRID_COLOR2, 0x202020);
+DECL_SETTING_COLOR24(grid_color_1, IDS_SETTING_NAME_CHECKERBOARD_COLOR1, 0x101010);
+DECL_SETTING_COLOR24(grid_color_2, IDS_SETTING_NAME_CHECKERBOARD_COLOR2, 0x202020);
 
 // grid size in pixels
 
-DECL_SETTING_RANGED(grid_size, IDS_SETTING_NAME_GRID_SIZE, 16, 4, 128);
+DECL_SETTING_RANGED(grid_size, IDS_SETTING_NAME_CHECKERBOARD_SIZE, 16, 4, 128);
 
 // grid origin is screen origin or image origin
 
-DECL_SETTING_BOOL(fixed_grid, IDS_SETTING_NAME_FIXED_GRID, true);
+DECL_SETTING_BOOL(fixed_checkerboard, IDS_SETTING_NAME_FIXED_CHECKERBOARD, true);
 
 //////////////////////////////////////////////////////////////////////
 // selection
@@ -145,7 +145,7 @@ DECL_SETTING_BOOL(reuse_window, IDS_SETTING_NAME_REUSE_WINDOW, true);
 
 // either remember fullscreen mode or always revert to: windowed or fullscreen
 
-DECL_SETTING_ENUM(fullscreen_mode,
+DECL_SETTING_ENUM(fullscreen_startup_mode,
                   IDS_SETTING_NAME_STARTUP_FULLSCREEN,
                   fullscreen_startup_option,
                   enum_fullscreen_startup_map,
@@ -187,6 +187,8 @@ DECL_SETTING_BOOL(auto_paste, IDS_SETTING_NAME_AUTO_PASTE, true);
 // try and load the last file that was viewed
 
 DECL_SETTING_BOOL(reload_last_file, IDS_SETTING_NAME_RELOAD_LAST_FILE, true);
+
+DECL_SETTING_RANGED(recent_files_count, IDS_SETTING_RECENT_FILES_COUNT, 10, 3, 20);
 
 // what to do about exif metadata
 

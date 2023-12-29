@@ -17,7 +17,7 @@ float4 main(vs_out input) : SV_TARGET
     float tl = in_rect(p, image_rect);
     float2 uv = input.texcoord * uv_scale + uv_offset;
     float4 pixel = mytexture.Sample(mysampler, uv);
-    int2 xy = int2((p.xy + grid_offset) * grid_size) & int2(1, 1);
+    int2 xy = int2((p.xy + checkerboard_offset) * checkerboard_size) & int2(1, 1);
     float4 check = checkerboard_color[xy.x + (xy.y * 2)];
     float4 background = lerp(border_color, check, tl);
     pixel = lerp(background, pixel, pixel.a);
@@ -29,16 +29,16 @@ float4 main(vs_out input) : SV_TARGET
 
     // selection rectangle
 
-    float outer = in_rect(p, outer_select_rect);
-    float sel_anim = p.x + p.y - select_frame - image_rect.x - image_rect.y;
-    float4 overlay = select_outline_color[(int) (sel_anim * select_dash_length) & 1];
-    pixel = lerp(pixel, overlay, overlay.a * (outer * (1 - inner)));
+    float outer = in_rect(p, outer_select_rect) * (1 - inner);
+    float sel_anim = (p.x + p.y - select_frame - image_rect.x - image_rect.y) * select_dash_length;
+    float4 overlay = select_outline_color[int(sel_anim) & 1];
+    pixel = lerp(pixel, overlay, overlay.a * outer);
 
     // crosshairs
 
     float cross = any(abs(p - crosshairs) < crosshair_width);
-    float xhair_anim = p.x + p.y - crosshair_frame;
-    float4 xhair = crosshair_color[(int) (xhair_anim * crosshair_dash_length) & 1];
+    float xhair_anim = (p.x + p.y - crosshair_frame) * crosshair_dash_length;
+    float4 xhair = crosshair_color[int(xhair_anim) & 1];
     pixel = lerp(pixel, xhair, xhair.a * cross);
 
     return pixel;

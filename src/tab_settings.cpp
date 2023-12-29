@@ -189,9 +189,12 @@ namespace
         // MSVC suppresses trailing comma when VA_ARGS is empty...
         // (__VA_OPT__ not supported without the new preprocessor which causes problems)
 
-#define ADD_SETTING(name, str, type, ...) \
-    if constexpr(str != SETTING_HIDDEN)   \
-    controllers.push_back(new type(L#name, str, dialog_settings.name, __VA_ARGS__))
+#define ADD_SETTING(name, str, type, ...)                                                    \
+    do {                                                                                     \
+        if constexpr(str != SETTING_HIDDEN) {                                                \
+            controllers.push_back(new type(L#name, str, dialog_settings.name, __VA_ARGS__)); \
+        }                                                                                    \
+    } while(false);
 
 #define DECL_SETTING_SECTION(name, str) ADD_SETTING(name, str, section_setting)
 

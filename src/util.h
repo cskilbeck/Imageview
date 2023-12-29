@@ -216,6 +216,17 @@ namespace imageview
             start = end + 1;
         }
     }
+
+    //////////////////////////////////////////////////////////////////////
+    // for use when making a std::map<GUID, ...>
+
+    struct GUID_compare
+    {
+        bool operator()(const GUID &a, const GUID &b) const
+        {
+            return memcmp(&a, &b, sizeof(GUID)) < 0;
+        }
+    };
 }
 
 //////////////////////////////////////////////////////////////////////

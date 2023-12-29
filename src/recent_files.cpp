@@ -80,28 +80,34 @@ namespace imageview::recent_files
                     std::wstring full_path;
 
                     if(path_from_shortcut(path, full_path) == S_OK) {
-                        // ho hum, all files have .lnk extension
-                        // strip that first
-
-                        std::wstring stripped = make_lowercase(full_path);
-
-                        if(stripped.ends_with(L".lnk")) {
-                            stripped = stripped.substr(0, stripped.size() - 4);
-                        }
 
                         std::wstring extension;
-                        file::get_extension(stripped, extension);
+                        file::get_extension(full_path, extension);
 
                         bool supported;
                         image::is_file_extension_supported(extension, supported);
 
                         if(supported) {
-                            LOG_DEBUG(L"POINTS AT {}", full_path);
-                            all_files.emplace(full_path, find_data.ftLastAccessTime);
+                            FILETIME create_time;
+                            FILETIME access_time;
+                            FILETIME write_time;
+                            if(SUCCEEDED(file::get_time(full_path, create_time, access_time, write_time))) {
+                                all_files.emplace(full_path, access_time);
+                            }
                         }
                     }
 
                 } while(FindNextFileW(f, &find_data));
+
+                for(auto const &ff : all_files) {
+                    SYSTEMTIME system_time;
+                    FileTimeToSystemTime(&ff.file_time, &system_time);
+                    LOG_DEBUG(L"POINTS AT {}, last accessed {}/{}/{}",
+                              ff.file_path,
+                              system_time.wDay,
+                              system_time.wMonth,
+                              system_time.wYear);
+                }
             }
             CoUninitialize();
         })
@@ -118,7 +124,7 @@ namespace imageview::recent_files
 
         for(auto const &file : all_files) {
             filenames.push_back(file.file_path);
-            if(filenames.size() >= 10) {
+            if(filenames.size() == settings.recent_files_count) {
                 break;
             }
         }

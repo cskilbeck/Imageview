@@ -8,6 +8,7 @@
 // get all the mouse handling stuff out of update() and into mouse move handler
 // settings dialog : cache size not reet
 // pause render()/update() when app loses focus
+// make render() pixel correct for select rect etc
 
 // flip/rotate
 // colorspace / SRGB / HDR
@@ -66,7 +67,9 @@ namespace
     using app::window;
 
 #include "shader_inc/vs_rectangle.h"
-#include "shader_inc/ps_draw_everything.h"
+#include "shader_inc/ps_texture.h"
+#include "shader_inc/ps_solid.h"
+#include "shader_inc/ps_stripe.h"
 
     //////////////////////////////////////////////////////////////////////
     // WM_USER messages for scanner thread
@@ -275,6 +278,11 @@ namespace
 #endif
 
     ComPtr<ID3D11PixelShader> main_shader;
+
+    ComPtr<ID3D11PixelShader> texture_shader;
+    ComPtr<ID3D11PixelShader> solid_shader;
+    ComPtr<ID3D11PixelShader> stripe_shader;
+
     ComPtr<ID3D11VertexShader> vertex_shader;
 
     ComPtr<ID3D11ShaderResourceView> image_texture_view;
@@ -455,7 +463,7 @@ namespace
             // if this is the first file being loaded and there was a file loading error
             if(load_hr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && files_loaded == 0) {
 
-                error_message_box(std::format(L"Loading {}", f->filename), load_hr);
+                error_message_box(f->filename, load_hr);
 
                 // bit harsh, quitting here...?
                 DestroyWindow(window);
@@ -1365,46 +1373,31 @@ namespace
         CHK_HR(device.As(&d3d_device));
         CHK_HR(context.As(&d3d_context));
 
-        CHK_HR(d3d_device->CreateVertexShader(
-            vs_rectangle_shaderbin, sizeof(vs_rectangle_shaderbin), null, &vertex_shader));
-
+        CHK_HR(d3d_device->CreateVertexShader(vs_rectangle_bin, sizeof(vs_rectangle_bin), null, &vertex_shader));
         D3D_SET_NAME(vertex_shader);
 
-        CHK_HR(d3d_device->CreatePixelShader(
-            ps_draw_everything_shaderbin, sizeof(ps_draw_everything_shaderbin), null, &main_shader));
+        CHK_HR(d3d_device->CreatePixelShader(ps_solid_bin, sizeof(ps_solid_bin), null, &solid_shader));
+        D3D_SET_NAME(solid_shader);
 
-        D3D_SET_NAME(main_shader);
+        CHK_HR(d3d_device->CreatePixelShader(ps_texture_bin, sizeof(ps_texture_bin), null, &texture_shader));
+        D3D_SET_NAME(texture_shader);
 
-        D3D11_SAMPLER_DESC sampler_desc{ CD3D11_SAMPLER_DESC(D3D11_DEFAULT) };
+        CHK_HR(d3d_device->CreatePixelShader(ps_stripe_bin, sizeof(ps_stripe_bin), null, &stripe_shader));
+        D3D_SET_NAME(stripe_shader);
 
+        CD3D11_SAMPLER_DESC sampler_desc(D3D11_DEFAULT);
         sampler_desc.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
-        sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
-        sampler_desc.BorderColor[0] = 0.0f;
-        sampler_desc.BorderColor[1] = 0.0f;
-        sampler_desc.BorderColor[2] = 0.0f;
-        sampler_desc.BorderColor[3] = 0.0f;
-        sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
-        sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
-
         CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
         D3D_SET_NAME(sampler_state);
 
-        D3D11_BUFFER_DESC constant_buffer_desc{};
-
-        constant_buffer_desc.ByteWidth = (sizeof(shader_const_t) + 0xf) & 0xfffffff0;
-        constant_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
-        constant_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
+        CD3D11_BUFFER_DESC constant_buffer_desc((sizeof(shader_const_t) + 0xf) & 0xfffffff0,
+                                                D3D11_BIND_CONSTANT_BUFFER,
+                                                D3D11_USAGE_DYNAMIC,
+                                                D3D11_CPU_ACCESS_WRITE);
         CHK_HR(d3d_device->CreateBuffer(&constant_buffer_desc, null, &constant_buffer));
         D3D_SET_NAME(constant_buffer);
 
-        D3D11_RASTERIZER_DESC rasterizer_desc{};
-
-        rasterizer_desc.FillMode = D3D11_FILL_SOLID;
-        rasterizer_desc.CullMode = D3D11_CULL_NONE;
-
+        CD3D11_RASTERIZER_DESC rasterizer_desc(D3D11_DEFAULT);
         CHK_HR(d3d_device->CreateRasterizerState(&rasterizer_desc, &rasterizer_state));
         D3D_SET_NAME(rasterizer_state);
 
@@ -1426,24 +1419,6 @@ namespace
         CHK_HR(create_text_formats());
 
         CHK_HR(measure_string(L"X 9999 Y 9999", label_format.Get(), label_pad, small_label_size));
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // recreate device and recreate current image texture if necessary
-
-    HRESULT create_resources();
-
-    HRESULT on_device_lost()
-    {
-        CHK_HR(create_device());
-
-        CHK_HR(create_resources());
-
-        if(current_file != null) {
-            CHK_HR(display_image(current_file));
-        }
 
         return S_OK;
     }
@@ -1487,13 +1462,12 @@ namespace
 
             if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
 
-                CHK_HR(on_device_lost());
-
-                // OnDeviceLost will set up the new device.
-                return S_OK;
+                CHK_HR(create_device());
+                swap_chain.Reset();
             }
+        }
 
-        } else {
+        if(swap_chain.Get() == null) {
 
             // First, retrieve the underlying DXGI Device from the D3D Device.
             ComPtr<IDXGIDevice1> dxgiDevice;
@@ -1538,6 +1512,9 @@ namespace
 #endif
         }
 
+
+
+
         ComPtr<ID3D11Texture2D> back_buffer;
         CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
         D3D_SET_NAME(back_buffer);
@@ -1581,6 +1558,22 @@ namespace
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.9f }, &text_fg_brush));
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.25f }, &text_outline_brush));
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 0, 0, 0, 0.4f }, &text_bg_brush));
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // recreate device and recreate current image texture if necessary
+
+    HRESULT on_device_lost()
+    {
+        CHK_HR(create_device());
+
+        CHK_HR(create_resources());
+
+        if(current_file != null) {
+            CHK_HR(display_image(current_file));
+        }
 
         return S_OK;
     }
@@ -1829,6 +1822,7 @@ namespace
         LOG_DEBUG(L"LOADED {}", f->filename);
 
         if(FAILED(f->hresult)) {
+            set_message(std::format(L"{} {}", f->filename, windows_error_message(f->hresult)), 5);
             delete f;
             return;
         }
@@ -1926,7 +1920,7 @@ namespace
             return S_OK;
         }
 
-        switch(settings.fullscreen_mode) {
+        switch(settings.fullscreen_startup_mode) {
         case fullscreen_startup_option::start_fullscreen:
             settings.fullscreen = true;
             break;
@@ -1981,11 +1975,11 @@ namespace
 
         static auto got_image = []() -> uint { return current_file != null ? 0 : MFS_DISABLED; };
 
-        static auto check_alpha = []() -> uint { return settings.grid_enabled ? MFS_CHECKED : 0; };
+        static auto check_alpha = []() -> uint { return settings.checkerboard_enabled ? MFS_CHECKED : 0; };
 
         static auto check_fullscreen = []() -> uint { return settings.fullscreen ? MFS_CHECKED : 0; };
 
-        static auto check_fixedgrid = []() -> uint { return settings.fixed_grid ? MFS_CHECKED : 0; };
+        static auto check_fixedgrid = []() -> uint { return settings.fixed_checkerboard ? MFS_CHECKED : 0; };
 
         static std::unordered_map<UINT, std::function<uint()>> menu_process_table = {
             { ID_COPY, got_selection },
@@ -2590,121 +2584,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // setup shader data
-
-    void setup_shader()
-    {
-        // border / image / checkerboard
-
-        shader.image_rect = {
-            current_rect.x, current_rect.y, current_rect.x + current_rect.w - 1, current_rect.y + current_rect.h - 1
-        };
-
-        vec4 g1;
-        vec4 g2;
-
-        if(settings.grid_enabled) {
-
-            g1 = color_from_uint32(settings.grid_color_1);
-            g2 = color_from_uint32(settings.grid_color_2);
-
-        } else {
-
-            g1 = color_from_uint32(settings.background_color);
-            g2 = g1;
-        }
-
-        shader.checkerboard_color[0] = g1;
-        shader.checkerboard_color[1] = g2;
-        shader.checkerboard_color[2] = g2;
-        shader.checkerboard_color[3] = g1;
-
-        shader.border_color = color_from_uint32(settings.border_color);
-
-        vec2 top_left = vec2::floor(current_rect.top_left());
-        vec2 rect_size = vec2::floor(current_rect.size());
-
-        vec2 texture_scale{ window_width / current_rect.w, window_height / current_rect.h };
-        vec2 uv_offset{ -current_rect.x / window_width, -current_rect.y / window_height };
-
-        vec2 grid_pos{ 0, 0 };
-
-        if(!settings.fixed_grid) {
-            grid_pos = { -current_rect.x, -current_rect.y };
-        }
-
-        shader.uv_scale = texture_scale;
-        shader.uv_offset = mul_point(uv_offset, texture_scale);
-
-        uint gs = settings.grid_size * (1 << settings.grid_multiplier);
-
-        shader.grid_size = 1.0f / std::max(4u, gs);
-        shader.grid_offset = grid_pos;
-
-        // crosshairs
-
-        shader.crosshair_frame = fmodf(settings.crosshair_dash_anim_speed * frame_count / 10.0f,
-                                       (float)settings.crosshair_dash_length * 2.0f);
-
-        shader.crosshairs = { 0, 0 };
-        shader.crosshair_width = { -1, -1 };
-
-        if(crosshairs_active) {
-
-            shader.crosshair_color[0] = color_from_uint32(settings.crosshair_color1);
-            shader.crosshair_color[1] = color_from_uint32(settings.crosshair_color2);
-
-            shader.crosshair_dash_length = 1.0f / settings.crosshair_dash_length;
-
-            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-            vec2 ts = mul_point(texel_size(), { 0.5f, 0.5f });
-            shader.crosshairs = add_point(texture_to_screen_pos(p), ts);
-
-            shader.crosshair_width = { settings.crosshair_width / 2.0f, settings.crosshair_width / 2.0f };
-        }
-
-        // selection rectangle
-
-        memset(&shader.inner_select_rect, 0, sizeof(shader.inner_select_rect));
-        memset(&shader.outer_select_rect, 0, sizeof(shader.outer_select_rect));
-
-        shader.select_frame = fmodf(settings.dash_anim_speed * frame_count / 10.0f, (float)settings.dash_length * 2.0f);
-
-        if(select_active) {
-
-            vec2 select_tl = vec2::min(select_anchor, select_current);
-            vec2 select_br = vec2::max(select_anchor, select_current);
-
-            // select_anchor, current are in texels, convert to screen coordinates
-
-            float sltlx = floor(select_tl.x) * current_rect.w / texture_width + current_rect.x;
-            float sltly = floor(select_tl.y) * current_rect.h / texture_height + current_rect.y;
-            float slbrx = floor(select_br.x + 1) * current_rect.w / texture_width + current_rect.x;
-            float slbry = floor(select_br.y + 1) * current_rect.h / texture_height + current_rect.y;
-
-            shader.inner_select_rect = { floor(sltlx), floor(sltly), floor(slbrx - 1), floor(slbry - 1) };
-
-            shader.outer_select_rect = XMVectorAdd(shader.inner_select_rect,
-                                                   { -(float)settings.select_border_width,
-                                                     -(float)settings.select_border_width,
-                                                     (float)settings.select_border_width,
-                                                     (float)settings.select_border_width });
-
-            shader.select_dash_length = 1.0f / settings.dash_length;
-
-            shader.select_outline_color[0] = color_from_uint32(settings.select_outline_color1);
-            shader.select_outline_color[1] = color_from_uint32(settings.select_outline_color2);
-
-            // flash the selection color white for 1/3rd of a second when they copy
-            float copy_flash = (float)std::min(1.0, (m_timer.current() - copy_timestamp) / 0.3333f);
-            vec4 copy_flash_color = vec4{ 1, 1, 1, 0.5f };
-
-            vec4 select_fill = color_from_uint32(settings.select_fill_color);
-
-            shader.select_color = XMVectorLerp(copy_flash_color, select_fill, copy_flash);
-        }
-    }
-
     //////////////////////////////////////////////////////////////////////
     // draw text overlays after drawing the image
 
@@ -2791,10 +2670,48 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // draw a rectangle at screen pixel coordinates
+
+    HRESULT draw_rectangle(rect_f const &rc)
+    {
+        // get viewport coordinates from pixel coordinates
+
+        float vp_left = rc.x * 2.0f / window_width - 1.0f;
+        float vp_top = rc.y * -2.0f / window_height + 1.0f;
+
+        float vp_width = rc.w * 2.0f / window_width;
+        float vp_height = rc.h * -2.0f / window_height;
+
+        shader.rect_position = { vp_left, vp_top };
+        shader.rect_size = { vp_width, vp_height };
+
+        // update shader constants
+
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+
+        CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
+
+        memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
+
+        d3d_context->Unmap(constant_buffer.Get(), 0);
+
+        d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+        d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+
+        // draw a quad
+
+        d3d_context->Draw(4, 0);
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // render a frame
 
     HRESULT render()
     {
+        // create d3d stuff if necessary
+
         if(d3d_device.Get() == null) {
             CHK_HR(create_device());
         }
@@ -2803,46 +2720,165 @@ namespace
             CHK_HR(create_resources());
         }
 
+        // setup rendertarget and viewport
+
         d3d_context->OMSetRenderTargets(1, rendertarget_view.GetAddressOf(), null);
 
-        DXGI_SWAP_CHAIN_DESC desc;
-        swap_chain->GetDesc(&desc);
-
-        float width = static_cast<float>(desc.BufferDesc.Width);
-        float height = static_cast<float>(desc.BufferDesc.Height);
-
-        CD3D11_VIEWPORT viewport(0.0f, 0.0f, width, height);
+        CD3D11_VIEWPORT viewport(0.0f, 0.0f, static_cast<float>(window_width), static_cast<float>(window_height));
 
         d3d_context->RSSetViewports(1, &viewport);
 
-        if(image_texture.Get() == null) {
+        // clear screen
 
-            vec4 border_color = color_from_uint32(settings.border_color);
-            d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float *>(&border_color));
+        vec4 border_color = color_from_uint32(settings.border_color);
+        d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float *>(&border_color));
 
-        } else {
-
-            setup_shader();
-
-            D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-            CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
-            memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
-            d3d_context->Unmap(constant_buffer.Get(), 0);
+        if(image_texture.Get() != null) {
 
             d3d_context->RSSetState(rasterizer_state.Get());
             d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
             d3d_context->VSSetShader(vertex_shader.Get(), null, 0);
-            d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-            d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
 
-            d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
-            d3d_context->PSSetShader(main_shader.Get(), null, 0);
+            // draw texture with checkerboard background
+
+            vec4 g1;
+            vec4 g2;
+
+            if(settings.checkerboard_enabled) {
+
+                g1 = color_from_uint32(settings.grid_color_1);
+                g2 = color_from_uint32(settings.grid_color_2);
+
+            } else {
+
+                g1 = color_from_uint32(settings.background_color);
+                g2 = g1;
+            }
+
+            shader.colors[0] = g1;
+            shader.colors[1] = g2;
+            shader.colors[2] = g2;
+            shader.colors[3] = g1;
+
+            vec2 grid_pos{ 0, 0 };
+
+            if(!settings.fixed_checkerboard) {
+
+                grid_pos = { -current_rect.x, -current_rect.y };
+            }
+
+            uint gs = settings.grid_size * (1 << settings.grid_multiplier);
+
+            shader.check_strip_size = 1.0f / std::max(4u, gs);
+            shader.checkerboard_offset = grid_pos;
+
+            d3d_context->OMSetBlendState(null, null, 0xffffffff);
+            d3d_context->PSSetShader(texture_shader.Get(), null, 0);
             d3d_context->PSSetShaderResources(0, 1, image_texture_view.GetAddressOf());
             d3d_context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
-            d3d_context->Draw(4, 0);
+            draw_rectangle(current_rect);
 
-            draw_text_overlays();
+            // draw selection overlay and selection outline
+
+            if(select_active) {
+
+                // first the solid rectangle selection overlay
+
+                d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
+                d3d_context->PSSetShader(solid_shader.Get(), null, 0);
+
+                vec2 tl = vec2::min(select_anchor, select_current);
+                vec2 br = vec2::max(select_anchor, select_current);
+
+                br = add_point(br, { 1.0f, 1.0f });
+
+                // TODO (chs): fix the rounding errors which can happen in here
+
+                tl = texture_to_screen_pos_unclamped(tl);
+                br = texture_to_screen_pos_unclamped(br);
+
+                shader.colors[0] = color_from_uint32(settings.select_fill_color);
+                CHK_HR(draw_rectangle({ tl.x, tl.y, br.x - tl.x, br.y - tl.y }));
+
+                // then the stripey outline
+
+                d3d_context->PSSetShader(stripe_shader.Get(), null, 0);
+
+                shader.colors[0] = color_from_uint32(settings.select_outline_color1);
+                shader.colors[1] = color_from_uint32(settings.select_outline_color2);
+
+                shader.check_strip_size = 1.0f / settings.dash_length;
+
+                // NOTE: dodgy fix for the stripe-near-zero problem is to add stripe * max(window_width, window_height)
+                // to the frame count so it doesn't wrap near the origin
+
+                shader.frame = fmodf(settings.dash_anim_speed * frame_count / 10.0f, settings.dash_length * -2.0f) +
+                               settings.dash_length * std::max(window_width, window_height);
+
+                float bw = static_cast<float>(settings.select_border_width);
+
+                // top
+                rect_f horiz{ tl.x - bw, tl.y - bw, (br.x - tl.x) + bw * 2.0f, bw };
+                CHK_HR(draw_rectangle(horiz));
+
+                // bottom
+                horiz.y = br.y;
+                CHK_HR(draw_rectangle(horiz));
+
+                // left
+                rect_f vert{ vert.x = tl.x - bw, tl.y, bw, br.y - tl.y };
+                CHK_HR(draw_rectangle(vert));
+
+                // right
+                vert.x = br.x;
+                CHK_HR(draw_rectangle(vert));
+            }
+
+            // draw crosshairs
+
+            if(crosshairs_active) {
+
+                d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
+                d3d_context->PSSetShader(stripe_shader.Get(), null, 0);
+
+                shader.colors[0] = color_from_uint32(settings.crosshair_color1);
+                shader.colors[1] = color_from_uint32(settings.crosshair_color2);
+
+                shader.check_strip_size = 1.0f / settings.crosshair_dash_length;
+
+                shader.colors[0] = color_from_uint32(settings.select_outline_color1);
+                shader.colors[1] = color_from_uint32(settings.select_outline_color2);
+
+                // NOTE: same dodgy fix for the stripe-near-zero problem
+
+                shader.frame = fmodf(settings.crosshair_dash_anim_speed * frame_count / 10.0f,
+                                     settings.crosshair_dash_length * -2.0f) +
+                               settings.crosshair_dash_length * std::max(window_width, window_height);
+
+                float bw = static_cast<float>(settings.crosshair_width);
+
+                // get screen position of center of texel under cursor
+
+                vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+                vec2 c = mul_point(texel_size(), { 0.5f, 0.5f });
+                c = add_point(texture_to_screen_pos(p), c);
+
+                // horizontal across the whole screen
+                rect_f horiz{ 0, c.y - bw / 2.0f, static_cast<float>(window_width), bw };
+                CHK_HR(draw_rectangle(horiz));
+
+                // top vertical bit
+                rect_f vert{ c.x - bw / 2.0f, 0, bw, c.y - bw / 2.0f };
+                CHK_HR(draw_rectangle(vert));
+
+                // botton vertical bit
+                vert.y = c.y + bw / 2.0f;
+                vert.h = window_height - vert.y;
+                CHK_HR(draw_rectangle(vert));
+            }
         }
+
+        draw_text_overlays();
 
         HRESULT hr = swap_chain->Present(1, 0);
 
@@ -2964,12 +3000,12 @@ namespace
             break;
 
         case ID_VIEW_ALPHA:
-            settings.grid_enabled = !settings.grid_enabled;
+            settings.checkerboard_enabled = !settings.checkerboard_enabled;
             settings_ui::new_settings_update();
             break;
 
         case ID_VIEW_FIXEDGRID:
-            settings.fixed_grid = !settings.fixed_grid;
+            settings.fixed_checkerboard = !settings.fixed_checkerboard;
             settings_ui::new_settings_update();
             break;
 
@@ -3059,7 +3095,7 @@ namespace
             break;
         }
 
-        if(id >= ID_RECENT_FILE_00 && id <= ID_RECENT_FILE_09) {
+        if(id >= ID_RECENT_FILE_00 && id <= ID_RECENT_FILE_19) {
             uint index = id - ID_RECENT_FILE_00;
             if(index < recent_files_list.size()) {
                 load_image_file(recent_files_list[index]);
@@ -3749,9 +3785,8 @@ namespace
     {
         current_file = f;
 
-        if(!f->is_clipboard) {
-            settings.last_file_loaded = f->filename;
-        }
+        FILETIME now;
+        GetSystemTimeAsFileTime(&now);
 
         std::wstring name;
 
@@ -3772,6 +3807,11 @@ namespace
 
         // set texture as current
         if(SUCCEEDED(hr)) {
+
+            if(!f->is_clipboard) {
+                settings.last_file_loaded = f->filename;
+                file::set_access_time(f->filename, now);
+            }
 
             image_texture.Attach(new_texture.Detach());
             image_texture_view.Attach(new_srv.Detach());

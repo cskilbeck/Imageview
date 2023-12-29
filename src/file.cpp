@@ -28,6 +28,7 @@ namespace imageview::file
     // buffer will be cleared in case of any error, on success contains file contents
     // set cancel_event to cancel the load, it will return E_ABORT in that case
     // cancel_event can be null, in which case the load can't be cancelled
+    // NOTE: this function suppresses the expected update of LastAccessTime
 
     HRESULT load(std::wstring const &filename, std::vector<byte> &buffer, HANDLE cancel_event)
     {
@@ -40,12 +41,22 @@ namespace imageview::file
         }
 
         // create an async file handle
-        HANDLE file_handle = CreateFileW(
-            filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
+        HANDLE file_handle = CreateFileW(filename.c_str(),
+                                         GENERIC_READ | GENERIC_WRITE,
+                                         FILE_SHARE_READ,
+                                         null,
+                                         OPEN_EXISTING,
+                                         FILE_FLAG_OVERLAPPED,
+                                         null);
         if(file_handle == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
         DEFER(CloseHandle(file_handle));
+
+        FILETIME dummy;
+        dummy.dwLowDateTime = 0xffffffff;
+        dummy.dwHighDateTime = 0xffffffff;
+        CHK_BOOL(SetFileTime(file_handle, null, &dummy, null));
 
         // get the size of the file
         LARGE_INTEGER file_size;
@@ -356,18 +367,69 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
+    HRESULT set_access_time(std::wstring const &filename, FILETIME const &time)
+    {
+        if(filename.empty()) {
+            return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
+        }
+
+        HANDLE file_handle =
+            CreateFileW(filename.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
+
+        if(file_handle == INVALID_HANDLE_VALUE) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        DEFER(CloseHandle(file_handle));
+
+        CHK_BOOL(SetFileTime(file_handle, null, &time, null));
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT get_time(std::wstring const &filename, FILETIME &create, FILETIME &access, FILETIME &write)
+    {
+        HANDLE file_handle = CreateFileW(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_ALWAYS, 0, null);
+        if(file_handle == INVALID_HANDLE_VALUE) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        DEFER(CloseHandle(file_handle));
+        CHK_BOOL(GetFileTime(file_handle, &create, &access, &write));
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     HRESULT paths_are_different(std::wstring const &a, std::wstring const &b, bool &differ)
     {
-        std::vector<wchar> pa(MAX_PATH * 2 + 1);
-        std::vector<wchar> pb(MAX_PATH * 2 + 1);
-        CHK_HR(PathCchCanonicalizeEx(pa.data(), pa.size(), a.c_str(), 0));
-        CHK_HR(PathCchCanonicalizeEx(pb.data(), pb.size(), b.c_str(), 0));
-        size_t la = wcslen(pa.data());
-        size_t lb = wcslen(pb.data());
-        differ = true;
-        if(la == lb) {
-            differ = _wcsicmp(pa.data(), pb.data()) != 0;
+#if 0
+        std::error_code err;
+        bool same = std::filesystem::equivalent(a, b, err);
+        if(err.value() != 0) {
+            return HRESULT_FROM_WIN32(err.value());
         }
+        differ = !same;
         return S_OK;
+#else
+        PWSTR pa;
+        CHK_HR(PathAllocCanonicalize(a.c_str(), PATHCCH_ALLOW_LONG_PATHS, &pa));
+        DEFER(LocalFree(pa));
+
+        PWSTR pb;
+        CHK_HR(PathAllocCanonicalize(b.c_str(), PATHCCH_ALLOW_LONG_PATHS, &pb));
+        DEFER(LocalFree(pb));
+
+        size_t la = wcslen(pa);
+        size_t lb = wcslen(pb);
+
+        differ = true;
+
+        if(la == lb) {
+            differ = _wcsicmp(pa, pb) != 0;
+        }
+
+        return S_OK;
+#endif
     }
 }

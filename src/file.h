@@ -10,6 +10,8 @@ namespace imageview::file
     HRESULT get_filename(std::wstring const &filename, std::wstring &name);
     HRESULT get_extension(std::wstring const &filename, std::wstring &extension);
     HRESULT get_size(std::wstring const &filename, uint64_t &size);
+    HRESULT get_time(std::wstring const &filename, FILETIME &create, FILETIME &access, FILETIME &write);
+    HRESULT set_access_time(std::wstring const &filename, FILETIME const &time);
     HRESULT paths_are_different(std::wstring const &a, std::wstring const &b, bool &differ);
     BOOL exists(std::wstring const &name);
 

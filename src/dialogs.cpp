@@ -15,13 +15,7 @@ namespace
         bool is_default{ false };
     };
 
-    struct GUID_compare
-    {
-        bool operator()(const GUID &a, const GUID &b) const
-        {
-            return memcmp(&a, &b, sizeof(GUID)) < 0;
-        }
-    };
+    using imageview::GUID_compare;
 
     std::map<GUID, filterspec, GUID_compare> slots;
     std::vector<COMDLG_FILTERSPEC> filter_specs;

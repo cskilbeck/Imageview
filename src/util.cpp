@@ -42,36 +42,6 @@ namespace
         }
         return result;
     }
-}
-
-namespace imageview
-{
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size)
-    {
-        if(buffer == null || size == null || type == null || id == 0) {
-            return E_INVALIDARG;
-        }
-
-
-        HRSRC rsrc;
-        CHK_NULL(rsrc = FindResourceW(app::instance, MAKEINTRESOURCEW(id), type));
-
-        size_t len;
-        CHK_ZERO(len = SizeofResource(app::instance, rsrc));
-
-        HGLOBAL mem;
-        CHK_NULL(mem = LoadResource(app::instance, rsrc));
-
-        void *data;
-        CHK_NULL(data = LockResource(mem));
-
-        *buffer = data;
-        *size = len;
-
-        return S_OK;
-    }
 
     //////////////////////////////////////////////////////////////////////
     // append helps because then we can prepend a BITMAPFILEHEADER
@@ -120,6 +90,36 @@ namespace imageview
         rc.right = rc.left + ww;
         rc.bottom = rc.top + wh;
         return rc;
+    }
+}
+
+namespace imageview
+{
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size)
+    {
+        if(buffer == null || size == null || type == null || id == 0) {
+            return E_INVALIDARG;
+        }
+
+
+        HRSRC rsrc;
+        CHK_NULL(rsrc = FindResourceW(app::instance, MAKEINTRESOURCEW(id), type));
+
+        size_t len;
+        CHK_ZERO(len = SizeofResource(app::instance, rsrc));
+
+        HGLOBAL mem;
+        CHK_NULL(mem = LoadResource(app::instance, rsrc));
+
+        void *data;
+        CHK_NULL(data = LockResource(mem));
+
+        *buffer = data;
+        *size = len;
+
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -378,10 +378,10 @@ namespace imageview
         if(err == 0) {
             err = GetLastError();
         }
-        HRESULT r = HRESULT_FROM_WIN32(err);
-        std::wstring err_str = windows_error_message(r);
-        LOG_ERROR(L"ERROR {:08x} ({}) {}", err, message, err_str);
-        return r;
+        HRESULT hr = HRESULT_FROM_WIN32(err);
+        std::wstring err_str = windows_error_message(hr);
+        LOG_ERROR(L"ERROR {:08x} ({}) {}", hr, message, err_str);
+        return hr;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -403,9 +403,9 @@ namespace imageview
 
     float get_window_dpi(HWND w)
     {
-        UINT dpi = 0;
+        int dpi = 0;
 
-        HMODULE h = LoadLibraryA("user32.dll");
+        HMODULE h = LoadLibraryW(L"user32.dll");
         if(h != null) {
 
             typedef UINT (*GetDpiForWindowFN)(HWND w);
@@ -418,11 +418,10 @@ namespace imageview
 
         if(dpi == 0) {
             HDC dc = GetDC(null);
-            dpi = (UINT)GetDeviceCaps(dc, LOGPIXELSX);
+            dpi = GetDeviceCaps(dc, LOGPIXELSX);
             ReleaseDC(null, dc);
         }
-
-        return (float)dpi;
+        return static_cast<float>(dpi);
     }
 
     //////////////////////////////////////////////////////////////////////

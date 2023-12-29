@@ -115,6 +115,7 @@ using Microsoft::WRL::ComPtr;
 #include <cstdlib>
 #include <string_view>
 #include <ranges>
+#include <filesystem>
 
 //////////////////////////////////////////////////////////////////////
 // Resource IDs

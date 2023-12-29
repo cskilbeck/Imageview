@@ -101,7 +101,102 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT enum_codecs()
+    using imageview::GUID_compare;
+
+    std::map<GUID const, wchar const *, GUID_compare> pixel_format_names{
+        { GUID_WICPixelFormatDontCare, L"DontCare" },
+        { GUID_WICPixelFormat1bppIndexed, L"1bppIndexed" },
+        { GUID_WICPixelFormat2bppIndexed, L"2bppIndexed" },
+        { GUID_WICPixelFormat4bppIndexed, L"4bppIndexed" },
+        { GUID_WICPixelFormat8bppIndexed, L"8bppIndexed" },
+        { GUID_WICPixelFormatBlackWhite, L"BlackWhite" },
+        { GUID_WICPixelFormat2bppGray, L"2bppGray" },
+        { GUID_WICPixelFormat4bppGray, L"4bppGray" },
+        { GUID_WICPixelFormat8bppGray, L"8bppGray" },
+        { GUID_WICPixelFormat8bppAlpha, L"8bppAlpha" },
+        { GUID_WICPixelFormat16bppBGR555, L"16bppBGR555" },
+        { GUID_WICPixelFormat16bppBGR565, L"16bppBGR565" },
+        { GUID_WICPixelFormat16bppBGRA5551, L"16bppBGRA5551" },
+        { GUID_WICPixelFormat16bppGray, L"16bppGray" },
+        { GUID_WICPixelFormat24bppBGR, L"24bppBGR" },
+        { GUID_WICPixelFormat24bppRGB, L"24bppRGB" },
+        { GUID_WICPixelFormat32bppBGR, L"32bppBGR" },
+        { GUID_WICPixelFormat32bppBGRA, L"32bppBGRA" },
+        { GUID_WICPixelFormat32bppPBGRA, L"32bppPBGRA" },
+        { GUID_WICPixelFormat32bppGrayFloat, L"32bppGrayFloat" },
+        //        { GUID_WICPixelFormat32bppRGB, L"32bppRGB" },
+        { GUID_WICPixelFormat32bppRGBA, L"32bppRGBA" },
+        { GUID_WICPixelFormat32bppPRGBA, L"32bppPRGBA" },
+        { GUID_WICPixelFormat48bppRGB, L"48bppRGB" },
+        { GUID_WICPixelFormat48bppBGR, L"48bppBGR" },
+        //        { GUID_WICPixelFormat64bppRGB, L"64bppRGB" },
+        { GUID_WICPixelFormat64bppRGBA, L"64bppRGBA" },
+        { GUID_WICPixelFormat64bppBGRA, L"64bppBGRA" },
+        { GUID_WICPixelFormat64bppPRGBA, L"64bppPRGBA" },
+        { GUID_WICPixelFormat64bppPBGRA, L"64bppPBGRA" },
+        { GUID_WICPixelFormat16bppGrayFixedPoint, L"16bppGrayFixedPoint" },
+        { GUID_WICPixelFormat32bppBGR101010, L"32bppBGR101010" },
+        { GUID_WICPixelFormat48bppRGBFixedPoint, L"48bppRGBFixedPoint" },
+        { GUID_WICPixelFormat48bppBGRFixedPoint, L"48bppBGRFixedPoint" },
+        { GUID_WICPixelFormat96bppRGBFixedPoint, L"96bppRGBFixedPoint" },
+        //        { GUID_WICPixelFormat96bppRGBFloat, L"96bppRGBFloat" },
+        { GUID_WICPixelFormat128bppRGBAFloat, L"128bppRGBAFloat" },
+        { GUID_WICPixelFormat128bppPRGBAFloat, L"128bppPRGBAFloat" },
+        { GUID_WICPixelFormat128bppRGBFloat, L"128bppRGBFloat" },
+        { GUID_WICPixelFormat32bppCMYK, L"32bppCMYK" },
+        { GUID_WICPixelFormat64bppRGBAFixedPoint, L"64bppRGBAFixedPoint" },
+        { GUID_WICPixelFormat64bppBGRAFixedPoint, L"64bppBGRAFixedPoint" },
+        { GUID_WICPixelFormat64bppRGBFixedPoint, L"64bppRGBFixedPoint" },
+        { GUID_WICPixelFormat128bppRGBAFixedPoint, L"128bppRGBAFixedPoint" },
+        { GUID_WICPixelFormat128bppRGBFixedPoint, L"128bppRGBFixedPoint" },
+        { GUID_WICPixelFormat64bppRGBAHalf, L"64bppRGBAHalf" },
+        //        { GUID_WICPixelFormat64bppPRGBAHalf, L"64bppPRGBAHalf" },
+        { GUID_WICPixelFormat64bppRGBHalf, L"64bppRGBHalf" },
+        { GUID_WICPixelFormat48bppRGBHalf, L"48bppRGBHalf" },
+        { GUID_WICPixelFormat32bppRGBE, L"32bppRGBE" },
+        { GUID_WICPixelFormat16bppGrayHalf, L"16bppGrayHalf" },
+        { GUID_WICPixelFormat32bppGrayFixedPoint, L"32bppGrayFixedPoint" },
+        { GUID_WICPixelFormat32bppRGBA1010102, L"32bppRGBA1010102" },
+        { GUID_WICPixelFormat32bppRGBA1010102XR, L"32bppRGBA1010102XR" },
+        { GUID_WICPixelFormat32bppR10G10B10A2, L"32bppR10G10B10A2" },
+        { GUID_WICPixelFormat32bppR10G10B10A2HDR10, L"32bppR10G10B10A2HDR10" },
+        { GUID_WICPixelFormat64bppCMYK, L"64bppCMYK" },
+        { GUID_WICPixelFormat24bpp3Channels, L"24bpp3Channels" },
+        { GUID_WICPixelFormat32bpp4Channels, L"32bpp4Channels" },
+        { GUID_WICPixelFormat40bpp5Channels, L"40bpp5Channels" },
+        { GUID_WICPixelFormat48bpp6Channels, L"48bpp6Channels" },
+        { GUID_WICPixelFormat56bpp7Channels, L"56bpp7Channels" },
+        { GUID_WICPixelFormat64bpp8Channels, L"64bpp8Channels" },
+        { GUID_WICPixelFormat48bpp3Channels, L"48bpp3Channels" },
+        { GUID_WICPixelFormat64bpp4Channels, L"64bpp4Channels" },
+        { GUID_WICPixelFormat80bpp5Channels, L"80bpp5Channels" },
+        { GUID_WICPixelFormat96bpp6Channels, L"96bpp6Channels" },
+        { GUID_WICPixelFormat112bpp7Channels, L"112bpp7Channels" },
+        { GUID_WICPixelFormat128bpp8Channels, L"128bpp8Channels" },
+        { GUID_WICPixelFormat40bppCMYKAlpha, L"40bppCMYKAlpha" },
+        { GUID_WICPixelFormat80bppCMYKAlpha, L"80bppCMYKAlpha" },
+        { GUID_WICPixelFormat32bpp3ChannelsAlpha, L"32bpp3ChannelsAlpha" },
+        { GUID_WICPixelFormat40bpp4ChannelsAlpha, L"40bpp4ChannelsAlpha" },
+        { GUID_WICPixelFormat48bpp5ChannelsAlpha, L"48bpp5ChannelsAlpha" },
+        { GUID_WICPixelFormat56bpp6ChannelsAlpha, L"56bpp6ChannelsAlpha" },
+        { GUID_WICPixelFormat64bpp7ChannelsAlpha, L"64bpp7ChannelsAlpha" },
+        { GUID_WICPixelFormat72bpp8ChannelsAlpha, L"72bpp8ChannelsAlpha" },
+        { GUID_WICPixelFormat64bpp3ChannelsAlpha, L"64bpp3ChannelsAlpha" },
+        { GUID_WICPixelFormat80bpp4ChannelsAlpha, L"80bpp4ChannelsAlpha" },
+        { GUID_WICPixelFormat96bpp5ChannelsAlpha, L"96bpp5ChannelsAlpha" },
+        { GUID_WICPixelFormat112bpp6ChannelsAlpha, L"112bpp6ChannelsAlpha" },
+        { GUID_WICPixelFormat128bpp7ChannelsAlpha, L"128bpp7ChannelsAlpha" },
+        { GUID_WICPixelFormat144bpp8ChannelsAlpha, L"144bpp8ChannelsAlpha" },
+        { GUID_WICPixelFormat8bppY, L"8bppY" },
+        { GUID_WICPixelFormat8bppCb, L"8bppCb" },
+        { GUID_WICPixelFormat8bppCr, L"8bppCr" },
+        { GUID_WICPixelFormat16bppCbCr, L"16bppCbCr" },
+        { GUID_WICPixelFormat16bppYQuantizedDctCoefficients, L"16bppYQuantizedDctCoefficients" },
+        { GUID_WICPixelFormat16bppCbQuantizedDctCoefficients, L"16bppCbQuantizedDctCoefficients" },
+        { GUID_WICPixelFormat16bppCrQuantizedDctCoefficients, L"16bppCrQuantizedDctCoefficients" },
+    };
+
+    HRESULT enum_codecs(uint32 codec_type)
     {
         auto wic = get_wic();
 
@@ -109,7 +204,7 @@ namespace
 
         DWORD enumerate_options = WICComponentEnumerateDefault;
 
-        CHK_HR(wic->CreateComponentEnumerator(WICDecoder, enumerate_options, &enumerator));
+        CHK_HR(wic->CreateComponentEnumerator(codec_type, enumerate_options, &enumerator));
 
         ULONG fetched = 0;
         ComPtr<IUnknown> current = NULL;
@@ -136,7 +231,22 @@ namespace
             CHK_HR(get_string(codecinfo.Get(), std::mem_fn(&IWICBitmapCodecInfo::GetFriendlyName), name));
             CHK_HR(get_string(codecinfo.Get(), std::mem_fn(&IWICBitmapCodecInfo::GetFileExtensions), extensions));
 
+            uint num_pixel_formats;
+            std::vector<GUID> pixel_formats;
+            CHK_HR(codecinfo->GetPixelFormats(0, null, &num_pixel_formats));
+            pixel_formats.resize(num_pixel_formats);
+            CHK_HR(codecinfo->GetPixelFormats(num_pixel_formats, pixel_formats.data(), &num_pixel_formats));
+
             LOG_DEBUG(L"WIC CODEC {} supports {}", name, extensions);
+
+            for(auto const &g : pixel_formats) {
+                std::wstring pixel_format_name = L"?UNKNOWN?";
+                auto found = pixel_format_names.find(g);
+                if(found != pixel_format_names.end()) {
+                    pixel_format_name = found->second;
+                }
+                LOG_DEBUG(L"    WIC CODEC {} : {}", name, pixel_format_name);
+            }
         }
         return S_OK;
     }
@@ -202,7 +312,7 @@ namespace imageview::image
                                         format_flags{ with_alpha } };
         }
 
-        enum_codecs();
+        enum_codecs(WICEncoder);
 
         return S_OK;
     }
@@ -318,7 +428,7 @@ namespace imageview::image
 
         GlobalUnlock(hData);
 
-        CHK_BOOL(SetClipboardData(RegisterClipboardFormatA("PNG"), hData));
+        CHK_BOOL(SetClipboardData(RegisterClipboardFormatW(L"PNG"), hData));
 
         return S_OK;
     }
@@ -333,7 +443,11 @@ namespace imageview::image
         byte const *bytes = file->bytes.data();
         size_t file_size = file->bytes.size();
 
-        if(bytes == null || file_size == 0) {
+        if(file_size == 0) {
+            return HRESULT_FROM_WIN32(ERROR_FILE_CORRUPT);
+        }
+
+        if(bytes == null) {
             return E_INVALIDARG;
         }
 
@@ -346,6 +460,16 @@ namespace imageview::image
         if(!wic) {
             return E_NOINTERFACE;
         }
+
+        ComPtr<IWICColorContext> color_context;
+
+        CHK_HR(wic->CreateColorContext(&color_context));
+
+        CHK_HR(color_context->InitializeFromMemory(bytes, (uint)file_size));
+
+        WICColorContextType color_context_type;
+        CHK_HR(color_context->GetType(&color_context_type));
+        LOG_DEBUG(L"Color Context for {} is {}", file->filename, (uint)color_context_type);
 
         // get frame decoder
 
@@ -528,6 +652,9 @@ namespace imageview::image
     }
 
     //////////////////////////////////////////////////////////////////////
+    // alternatively....
+    // create a WIC bitmap on memory of a known format
+    // use a WICFormatConverter to create the final one
 
     HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch)
     {
@@ -540,7 +667,7 @@ namespace imageview::image
 
         extension = make_uppercase(extension);
 
-        decltype(image::formats.begin()) found;
+        decltype(image::formats)::const_iterator found;
 
         {
             auto iflock{ std::lock_guard(formats_mutex) };
@@ -658,20 +785,9 @@ namespace imageview::image
 
         // Create texture
 
-        D3D11_TEXTURE2D_DESC desc = {};
-        desc.Width = image.width;
-        desc.Height = image.height;
-        desc.MipLevels = 1u;
-        desc.ArraySize = 1;
-        desc.Format = format;
-        desc.SampleDesc.Count = 1;
-        desc.Usage = D3D11_USAGE_DEFAULT;
-        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        CD3D11_TEXTURE2D_DESC desc(format, image.width, image.height);
 
-        D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
-        SRVDesc.Format = desc.Format;
-        SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        SRVDesc.Texture2D.MipLevels = 1u;
+        CD3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc(D3D11_SRV_DIMENSION_TEXTURE2D, desc.Format);
 
         D3D11_SUBRESOURCE_DATA initData;
         initData.pSysMem = image.pixels;
@@ -722,7 +838,7 @@ namespace imageview::image
 
         ext = make_uppercase(ext);
 
-        decltype(image::formats.begin()) found;
+        decltype(image::formats)::const_iterator found;
 
         {
             auto iflock{ std::lock_guard(formats_mutex) };
