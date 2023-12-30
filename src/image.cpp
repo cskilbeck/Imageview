@@ -574,7 +574,7 @@ namespace imageview::image
 
         auto f = save_filetypes.container_formats.find(extension);
         if(f == save_filetypes.container_formats.end()) {
-            return E_INVALIDARG;    // unknown format
+            return WEB_E_UNSUPPORTED_FORMAT;    // unknown format
         }
 
         GUID const &container_format = f->second;

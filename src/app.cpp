@@ -3058,8 +3058,8 @@ namespace
                 image::image_t const &img = current_file->img;
                 HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
                 if(FAILED(hr)) {
-                    std::wstring msg =
-                        std::format(L"{}\r\n{}", localize(IDS_CANT_SAVE_FILE), windows_error_message(hr));
+                    std::wstring msg = std::format(
+                        L"{}\r\n\r\n{}\r\n\r\n{}", localize(IDS_CANT_SAVE_FILE), filename, windows_error_message(hr));
                     message_box(window, msg, MB_ICONEXCLAMATION);
                 } else {
                     set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), filename), 5);
