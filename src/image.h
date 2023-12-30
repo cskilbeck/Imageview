@@ -7,10 +7,11 @@
 namespace imageview::image
 {
     //////////////////////////////////////////////////////////////////////
+    // a raw BGRA32 decoded image
 
     struct image_t
     {
-        byte const *pixels;    // image_file::pixels vector or GlobalAlloc'ed buffer (copy/crop), just use it
+        byte const *pixels;    // points at image_file::pixels vector or GlobalAlloc'ed buffer (copy/crop), just use it
         uint width;            // width in pixels
         uint height;           // height in pixels
         uint row_pitch;        // row_pitch of buffer, almost certainly redundant
@@ -61,46 +62,9 @@ namespace imageview::image
 
     //////////////////////////////////////////////////////////////////////
 
-    enum format_flags : uint
-    {
-        without_alpha = 0,
-        with_alpha = 1,
-        is_default = 2,
-        use_name = 4,
-    };
+    HRESULT can_load_file_extension(std::wstring const &extension, bool &is_supported);
 
-    //////////////////////////////////////////////////////////////////////
-
-    struct image_format
-    {
-        GUID file_format;
-        WICPixelFormatGUID pixel_format;
-        format_flags flags;
-
-        bool supports_alpha() const
-        {
-            return (flags & format_flags::with_alpha) == format_flags::with_alpha;
-        }
-
-        bool is_default() const
-        {
-            return (flags & format_flags::is_default) == format_flags::is_default;
-        }
-
-        bool use_name() const
-        {
-            return (flags & format_flags::use_name) == format_flags::use_name;
-        }
-    };
-
-    extern std::map<std::wstring, image_format> formats;
-    extern std::mutex formats_mutex;
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT is_file_extension_supported(std::wstring const &extension, bool &is_supported);
-
-    HRESULT check_heif_support();
+    HRESULT init_filetypes();
 
     HRESULT get_size(std::wstring const &filename, uint32 &width, uint32 &height, uint64 &total_size);
 
@@ -109,4 +73,7 @@ namespace imageview::image
     HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 
     HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch);
+
+    HRESULT get_load_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs);
+    HRESULT get_save_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs);
 }

@@ -46,7 +46,6 @@ namespace imageview::file
     };
 
     HRESULT scan_folder(std::wstring const &path,
-                        std::vector<std::wstring> const &extensions,
                         scan_folder_sort_field sort_field,
                         scan_folder_sort_order order,
                         folder_scan_result **result,

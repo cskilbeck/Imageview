@@ -6,77 +6,6 @@
 
 namespace
 {
-    // get file type filter list from save_formats in image_decoder.cpp
-
-    struct filterspec
-    {
-        std::wstring description;
-        std::wstring filter;
-        bool is_default{ false };
-    };
-
-    using imageview::GUID_compare;
-
-    std::map<GUID, filterspec, GUID_compare> slots;
-    std::vector<COMDLG_FILTERSPEC> filter_specs;
-    uint num_filter_specs;
-
-    uint default_filter_spec{ 1 };
-
-    filterspec all_image_files{ L"Image files", {}, {} };
-
-    using namespace imageview;
-
-    //////////////////////////////////////////////////////////////////////
-    // make the array of COMDLG_FILTERSPEC from image::file_formats
-
-    HRESULT get_filter_specs()
-    {
-        if(filter_specs.empty()) {
-
-            // file type guid can be referenced by more than one extension (eg jpg, jpeg both point at same guid)
-            auto iflock{ std::lock_guard(image::formats_mutex) };
-
-            wchar const *all_sep = L"";
-
-            for(auto const &fmt : image::formats) {
-
-                std::wstring extension = fmt.first;
-                image::image_format const &image_format = fmt.second;
-
-                all_image_files.filter = std::format(L"{}{}*.{}", all_image_files.filter, all_sep, fmt.first);
-                all_sep = L";";
-
-                filterspec &spec = slots[image_format.file_format];
-
-                wchar const *sep = L";";
-
-                if(spec.description.empty()) {
-                    sep = L"";
-                }
-
-                spec.filter = std::format(L"{}{}*.{}", spec.filter, sep, extension);
-                spec.is_default = image_format.is_default();
-
-                if(image_format.use_name() || spec.description.empty()) {
-                    spec.description = std::format(L"{} files", extension);
-                }
-            }
-
-            filter_specs.clear();
-
-            for(auto &spec : slots) {
-                spec.second.filter = make_lowercase(spec.second.filter);
-                filter_specs.push_back({ spec.second.description.c_str(), spec.second.filter.c_str() });
-            }
-
-            all_image_files.filter = make_lowercase(all_image_files.filter);
-            filter_specs.push_back({ all_image_files.description.c_str(), all_image_files.filter.c_str() });
-        }
-        num_filter_specs = static_cast<uint>(filter_specs.size());
-        return S_OK;
-    }
-
     //////////////////////////////////////////////////////////////////////
 
     UINT_PTR CALLBACK select_color_dialog_hook_proc(HWND hdlg, UINT uiMsg, WPARAM wParam, LPARAM lParam)
@@ -97,10 +26,12 @@ namespace
 
 namespace imageview::dialog
 {
-
     HRESULT open_file(HWND window, std::wstring &path)
     {
-        CHK_HR(get_filter_specs());
+        COMDLG_FILTERSPEC *filter_specs;
+        uint num_filter_specs;
+
+        CHK_HR(image::get_load_filter_specs(filter_specs, num_filter_specs));
 
         ComPtr<IFileDialog> pfd;
         DWORD dwFlags;
@@ -112,8 +43,8 @@ namespace imageview::dialog
         CHK_HR(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
         CHK_HR(pfd->GetOptions(&dwFlags));
         CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
-        CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
-        CHK_HR(pfd->SetFileTypeIndex(num_filter_specs));
+        CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs));
+        CHK_HR(pfd->SetFileTypeIndex(1));
         CHK_HR(pfd->SetOkButtonLabel(localize(IDS_OPEN_FILE_OK_BUTTON).c_str()));
         CHK_HR(pfd->SetTitle(title.c_str()));
         CHK_HR(pfd->Show(window));
@@ -130,7 +61,10 @@ namespace imageview::dialog
 
     HRESULT save_file(HWND window, std::wstring &path)
     {
-        CHK_HR(get_filter_specs());
+        COMDLG_FILTERSPEC *filter_specs;
+        uint num_filter_specs;
+
+        CHK_HR(image::get_save_filter_specs(filter_specs, num_filter_specs));
 
         ComPtr<IFileDialog> pfd;
         DWORD dwFlags;
@@ -145,8 +79,8 @@ namespace imageview::dialog
         CHK_HR(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
         CHK_HR(pfd->GetOptions(&dwFlags));
         CHK_HR(pfd->SetOptions(dwFlags | options));
-        CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs.data()));
-        CHK_HR(pfd->SetFileTypeIndex(default_filter_spec));
+        CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs));
+        CHK_HR(pfd->SetFileTypeIndex(1));
         CHK_HR(pfd->SetTitle(title.c_str()));
         CHK_HR(pfd->Show(window));
         CHK_HR(pfd->GetResult(&psiResult));

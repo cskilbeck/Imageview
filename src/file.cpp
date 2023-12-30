@@ -140,7 +140,6 @@ namespace imageview::file
     //////////////////////////////////////////////////////////////////////
 
     HRESULT scan_folder(std::wstring const &path,
-                        std::vector<std::wstring> const &extensions,
                         scan_folder_sort_field sort_field,
                         scan_folder_sort_order order,
                         folder_scan_result **result,
@@ -214,30 +213,15 @@ namespace imageview::file
 
                     std::wstring filename = std::wstring(f->FileName, f->FileNameLength / sizeof(wchar));
 
-                    size_t dot = filename.find_last_of(L'.');
+                    std::wstring extension;
+                    CHK_HR(get_extension(filename, extension));
 
-                    if(dot != std::wstring::npos && dot < filename.size()) {
+                    bool supported;
+                    CHK_HR(image::can_load_file_extension(extension, supported));
+                    if(supported) {
 
-                        // check if extension is in the list
-                        for(auto const &ext : extensions) {
-
-                            size_t ext_len = ext.size();
-                            wchar const *find_ext = ext.c_str();
-                            size_t ext_dot = ext.find(L'.');
-                            if(ext_dot != std::string::npos) {
-                                find_ext += 1;
-                                ext_len -= 1;
-                            }
-
-                            size_t max_len = std::min(filename.size() - dot, ext_len);
-
-                            if(_wcsnicmp(&filename[dot] + 1, find_ext, max_len) == 0) {
-
-                                // it's in the list, add it to the vector of files
-                                files.emplace_back(filename, f->LastWriteTime.QuadPart);
-                                break;
-                            }
-                        }
+                        // it's in the list, add it to the vector of files
+                        files.emplace_back(filename, f->LastWriteTime.QuadPart);
                     }
                 }
 

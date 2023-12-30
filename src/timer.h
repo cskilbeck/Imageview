@@ -75,10 +75,15 @@ namespace imageview
             reset();
         }
 
-        ~stopwatch()
+        void report(wchar_t const *event)
         {
             update();
-            LOG_INFO(L"Stopwatch {} : {}", name, wall_time());
+            LOG_INFO(L"Stopwatch {} delta {:10.5f}, wall time {:10.5f} ({})", name, delta(), wall_time(), event);
+        }
+
+        ~stopwatch()
+        {
+            report(L"stopwatch ends");
         }
     };
 }

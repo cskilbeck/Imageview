@@ -85,7 +85,7 @@ namespace imageview::recent_files
                         file::get_extension(full_path, extension);
 
                         bool supported;
-                        image::is_file_extension_supported(extension, supported);
+                        image::can_load_file_extension(extension, supported);
 
                         if(supported) {
                             FILETIME create_time;

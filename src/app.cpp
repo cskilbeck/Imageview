@@ -76,8 +76,7 @@ namespace
 
     enum scanner_thread_user_message_t : uint
     {
-        WM_SCAN_FOLDER = WM_USER,              // please scan a folder (lparam -> path)
-        WM_CHECK_HEIF_SUPPORT = WM_USER + 1    // please check HEIF support (lparam -> bool result)
+        WM_SCAN_FOLDER = WM_USER,    // please scan a folder (lparam -> path)
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -1662,22 +1661,12 @@ namespace
 
         LOG_INFO(L"Scan folder {}", path);
 
-        std::vector<std::wstring> extensions;
-
-        {
-            auto iflock{ std::lock_guard(image::formats_mutex) };
-
-            for(auto const &f : image::formats) {
-                extensions.push_back(f.first);
-            }
-        }
-
         file::scan_folder_sort_field sort_field = file::scan_folder_sort_field::name;
         file::scan_folder_sort_order order = file::scan_folder_sort_order::ascending;
 
         file::folder_scan_result *results;
 
-        CHK_HR(scan_folder(path, extensions, sort_field, order, &results, quit_event));
+        CHK_HR(scan_folder(path, sort_field, order, &results, quit_event));
 
         // send the results to the window, it will forward them to the app
         WaitForSingleObject(window_created_event, INFINITE);
@@ -1727,10 +1716,6 @@ namespace
             case WAIT_OBJECT_0 + 1:
                 if(GetMessage(&msg, null, 0, 0) != 0) {
                     switch(msg.message) {
-
-                    case WM_CHECK_HEIF_SUPPORT:
-                        image::check_heif_support();
-                        break;
 
                     case WM_SCAN_FOLDER:
                         do_folder_scan(reinterpret_cast<wchar const *>(msg.lParam));
@@ -3873,6 +3858,8 @@ namespace
 
     HRESULT main()
     {
+        stopwatch main_stopwatch(L"main");
+
         app::instance = GetModuleHandle(null);
 
         // check for required CPU support (for DirectXMath SIMD)
@@ -3883,13 +3870,22 @@ namespace
             return 0;
         }
 
+        main_stopwatch.report(L"initial");
+
         recent_files::init();
+
+        main_stopwatch.report(L"recent_files::init");
 
         // com
 
         CHK_HR(CoInitializeEx(null, COINIT_APARTMENTTHREADED));
 
         CHK_HR(imageview::get_is_process_elevated(app::is_elevated));
+
+        // How much does this impact startup time?
+        image::init_filetypes();
+
+        main_stopwatch.report(L"init_filetypes");
 
         // in debug builds, hold middle mouse button at startup to reset settings to defaults
         {
@@ -3908,6 +3904,8 @@ namespace
         }
 
         std::wstring cmd_line{ GetCommandLineW() };
+
+        main_stopwatch.report(L"GetCommandLine");
 
         // if single window mode
 
@@ -3940,6 +3938,8 @@ namespace
             }
         }
 
+        main_stopwatch.report(L"reuse_window");
+
         // report system memory for log
 
         uint64 system_memory_size_kb{ 0 };
@@ -3949,6 +3949,8 @@ namespace
         app::system_memory_gb = system_memory_size_kb / 1048576;
 
         LOG_INFO(L"System has {}GB of memory", app::system_memory_gb);
+
+        main_stopwatch.report(L"get system memory");
 
         // load/create/init some things
 
@@ -3962,13 +3964,15 @@ namespace
 
         CHK_HR(thread_pool.create_thread_with_message_pump(&scanner_thread_id, []() { scanner_function(); }));
 
-        PostThreadMessage(scanner_thread_id, WM_CHECK_HEIF_SUPPORT, 0, 0);
-
         CHK_HR(thread_pool.create_thread_with_message_pump(&file_loader_thread_id, []() { file_loader_function(); }));
+
+        main_stopwatch.report(L"create some threads");
 
         // tee up a loadimage if specified on the command line
 
         CHK_HR(on_command_line(cmd_line));
+
+        main_stopwatch.report(L"on_command_line");
 
         // right, register window class
 

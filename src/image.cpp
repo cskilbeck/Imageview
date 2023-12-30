@@ -28,6 +28,23 @@ namespace
 
     uint64 constexpr bits_per_pixel = 32llu;
 
+    std::mutex formats_mutex;
+
+    struct filetypes
+    {
+        // file extension -> container format GUID
+        std::map<std::wstring, GUID> container_formats;
+
+        // file type friendly name -> filter spec (e.g. "BMP Files" -> "*.bmp;*.dib")
+        std::map<std::wstring, std::wstring> filter_specs;
+
+        // filter_specs for load/save dialogs
+        std::vector<COMDLG_FILTERSPEC> comdlg_filterspecs;
+    };
+
+    filetypes save_filetypes;
+    filetypes load_filetypes;
+
     //////////////////////////////////////////////////////////////////////
     // note exif is counter clockwise, WIC is clockwise, so 90/270 swapped
     // also flip/transpose/transverse not supported, but seem to be rarely used
@@ -100,105 +117,15 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // scan WIC supported file types for Decode or Encode
 
-    using imageview::GUID_compare;
-
-    std::map<GUID const, wchar const *, GUID_compare> pixel_format_names{
-        { GUID_WICPixelFormatDontCare, L"DontCare" },
-        { GUID_WICPixelFormat1bppIndexed, L"1bppIndexed" },
-        { GUID_WICPixelFormat2bppIndexed, L"2bppIndexed" },
-        { GUID_WICPixelFormat4bppIndexed, L"4bppIndexed" },
-        { GUID_WICPixelFormat8bppIndexed, L"8bppIndexed" },
-        { GUID_WICPixelFormatBlackWhite, L"BlackWhite" },
-        { GUID_WICPixelFormat2bppGray, L"2bppGray" },
-        { GUID_WICPixelFormat4bppGray, L"4bppGray" },
-        { GUID_WICPixelFormat8bppGray, L"8bppGray" },
-        { GUID_WICPixelFormat8bppAlpha, L"8bppAlpha" },
-        { GUID_WICPixelFormat16bppBGR555, L"16bppBGR555" },
-        { GUID_WICPixelFormat16bppBGR565, L"16bppBGR565" },
-        { GUID_WICPixelFormat16bppBGRA5551, L"16bppBGRA5551" },
-        { GUID_WICPixelFormat16bppGray, L"16bppGray" },
-        { GUID_WICPixelFormat24bppBGR, L"24bppBGR" },
-        { GUID_WICPixelFormat24bppRGB, L"24bppRGB" },
-        { GUID_WICPixelFormat32bppBGR, L"32bppBGR" },
-        { GUID_WICPixelFormat32bppBGRA, L"32bppBGRA" },
-        { GUID_WICPixelFormat32bppPBGRA, L"32bppPBGRA" },
-        { GUID_WICPixelFormat32bppGrayFloat, L"32bppGrayFloat" },
-        //        { GUID_WICPixelFormat32bppRGB, L"32bppRGB" },
-        { GUID_WICPixelFormat32bppRGBA, L"32bppRGBA" },
-        { GUID_WICPixelFormat32bppPRGBA, L"32bppPRGBA" },
-        { GUID_WICPixelFormat48bppRGB, L"48bppRGB" },
-        { GUID_WICPixelFormat48bppBGR, L"48bppBGR" },
-        //        { GUID_WICPixelFormat64bppRGB, L"64bppRGB" },
-        { GUID_WICPixelFormat64bppRGBA, L"64bppRGBA" },
-        { GUID_WICPixelFormat64bppBGRA, L"64bppBGRA" },
-        { GUID_WICPixelFormat64bppPRGBA, L"64bppPRGBA" },
-        { GUID_WICPixelFormat64bppPBGRA, L"64bppPBGRA" },
-        { GUID_WICPixelFormat16bppGrayFixedPoint, L"16bppGrayFixedPoint" },
-        { GUID_WICPixelFormat32bppBGR101010, L"32bppBGR101010" },
-        { GUID_WICPixelFormat48bppRGBFixedPoint, L"48bppRGBFixedPoint" },
-        { GUID_WICPixelFormat48bppBGRFixedPoint, L"48bppBGRFixedPoint" },
-        { GUID_WICPixelFormat96bppRGBFixedPoint, L"96bppRGBFixedPoint" },
-        //        { GUID_WICPixelFormat96bppRGBFloat, L"96bppRGBFloat" },
-        { GUID_WICPixelFormat128bppRGBAFloat, L"128bppRGBAFloat" },
-        { GUID_WICPixelFormat128bppPRGBAFloat, L"128bppPRGBAFloat" },
-        { GUID_WICPixelFormat128bppRGBFloat, L"128bppRGBFloat" },
-        { GUID_WICPixelFormat32bppCMYK, L"32bppCMYK" },
-        { GUID_WICPixelFormat64bppRGBAFixedPoint, L"64bppRGBAFixedPoint" },
-        { GUID_WICPixelFormat64bppBGRAFixedPoint, L"64bppBGRAFixedPoint" },
-        { GUID_WICPixelFormat64bppRGBFixedPoint, L"64bppRGBFixedPoint" },
-        { GUID_WICPixelFormat128bppRGBAFixedPoint, L"128bppRGBAFixedPoint" },
-        { GUID_WICPixelFormat128bppRGBFixedPoint, L"128bppRGBFixedPoint" },
-        { GUID_WICPixelFormat64bppRGBAHalf, L"64bppRGBAHalf" },
-        //        { GUID_WICPixelFormat64bppPRGBAHalf, L"64bppPRGBAHalf" },
-        { GUID_WICPixelFormat64bppRGBHalf, L"64bppRGBHalf" },
-        { GUID_WICPixelFormat48bppRGBHalf, L"48bppRGBHalf" },
-        { GUID_WICPixelFormat32bppRGBE, L"32bppRGBE" },
-        { GUID_WICPixelFormat16bppGrayHalf, L"16bppGrayHalf" },
-        { GUID_WICPixelFormat32bppGrayFixedPoint, L"32bppGrayFixedPoint" },
-        { GUID_WICPixelFormat32bppRGBA1010102, L"32bppRGBA1010102" },
-        { GUID_WICPixelFormat32bppRGBA1010102XR, L"32bppRGBA1010102XR" },
-        { GUID_WICPixelFormat32bppR10G10B10A2, L"32bppR10G10B10A2" },
-        { GUID_WICPixelFormat32bppR10G10B10A2HDR10, L"32bppR10G10B10A2HDR10" },
-        { GUID_WICPixelFormat64bppCMYK, L"64bppCMYK" },
-        { GUID_WICPixelFormat24bpp3Channels, L"24bpp3Channels" },
-        { GUID_WICPixelFormat32bpp4Channels, L"32bpp4Channels" },
-        { GUID_WICPixelFormat40bpp5Channels, L"40bpp5Channels" },
-        { GUID_WICPixelFormat48bpp6Channels, L"48bpp6Channels" },
-        { GUID_WICPixelFormat56bpp7Channels, L"56bpp7Channels" },
-        { GUID_WICPixelFormat64bpp8Channels, L"64bpp8Channels" },
-        { GUID_WICPixelFormat48bpp3Channels, L"48bpp3Channels" },
-        { GUID_WICPixelFormat64bpp4Channels, L"64bpp4Channels" },
-        { GUID_WICPixelFormat80bpp5Channels, L"80bpp5Channels" },
-        { GUID_WICPixelFormat96bpp6Channels, L"96bpp6Channels" },
-        { GUID_WICPixelFormat112bpp7Channels, L"112bpp7Channels" },
-        { GUID_WICPixelFormat128bpp8Channels, L"128bpp8Channels" },
-        { GUID_WICPixelFormat40bppCMYKAlpha, L"40bppCMYKAlpha" },
-        { GUID_WICPixelFormat80bppCMYKAlpha, L"80bppCMYKAlpha" },
-        { GUID_WICPixelFormat32bpp3ChannelsAlpha, L"32bpp3ChannelsAlpha" },
-        { GUID_WICPixelFormat40bpp4ChannelsAlpha, L"40bpp4ChannelsAlpha" },
-        { GUID_WICPixelFormat48bpp5ChannelsAlpha, L"48bpp5ChannelsAlpha" },
-        { GUID_WICPixelFormat56bpp6ChannelsAlpha, L"56bpp6ChannelsAlpha" },
-        { GUID_WICPixelFormat64bpp7ChannelsAlpha, L"64bpp7ChannelsAlpha" },
-        { GUID_WICPixelFormat72bpp8ChannelsAlpha, L"72bpp8ChannelsAlpha" },
-        { GUID_WICPixelFormat64bpp3ChannelsAlpha, L"64bpp3ChannelsAlpha" },
-        { GUID_WICPixelFormat80bpp4ChannelsAlpha, L"80bpp4ChannelsAlpha" },
-        { GUID_WICPixelFormat96bpp5ChannelsAlpha, L"96bpp5ChannelsAlpha" },
-        { GUID_WICPixelFormat112bpp6ChannelsAlpha, L"112bpp6ChannelsAlpha" },
-        { GUID_WICPixelFormat128bpp7ChannelsAlpha, L"128bpp7ChannelsAlpha" },
-        { GUID_WICPixelFormat144bpp8ChannelsAlpha, L"144bpp8ChannelsAlpha" },
-        { GUID_WICPixelFormat8bppY, L"8bppY" },
-        { GUID_WICPixelFormat8bppCb, L"8bppCb" },
-        { GUID_WICPixelFormat8bppCr, L"8bppCr" },
-        { GUID_WICPixelFormat16bppCbCr, L"16bppCbCr" },
-        { GUID_WICPixelFormat16bppYQuantizedDctCoefficients, L"16bppYQuantizedDctCoefficients" },
-        { GUID_WICPixelFormat16bppCbQuantizedDctCoefficients, L"16bppCbQuantizedDctCoefficients" },
-        { GUID_WICPixelFormat16bppCrQuantizedDctCoefficients, L"16bppCrQuantizedDctCoefficients" },
-    };
-
-    HRESULT enum_codecs(uint32 codec_type)
+    HRESULT enum_codecs(uint32 codec_type, filetypes &results)
     {
         auto wic = get_wic();
+
+        if(wic == null) {
+            return E_NOINTERFACE;
+        }
 
         ComPtr<IEnumUnknown> enumerator;
 
@@ -208,6 +135,8 @@ namespace
 
         ULONG fetched = 0;
         ComPtr<IUnknown> current = NULL;
+
+        std::map<std::wstring, std::vector<std::wstring>> filters;
 
         while(enumerator->Next(1, &current, &fetched) == S_OK) {
 
@@ -231,88 +160,64 @@ namespace
             CHK_HR(get_string(codecinfo.Get(), std::mem_fn(&IWICBitmapCodecInfo::GetFriendlyName), name));
             CHK_HR(get_string(codecinfo.Get(), std::mem_fn(&IWICBitmapCodecInfo::GetFileExtensions), extensions));
 
-            uint num_pixel_formats;
-            std::vector<GUID> pixel_formats;
-            CHK_HR(codecinfo->GetPixelFormats(0, null, &num_pixel_formats));
-            pixel_formats.resize(num_pixel_formats);
-            CHK_HR(codecinfo->GetPixelFormats(num_pixel_formats, pixel_formats.data(), &num_pixel_formats));
+            GUID container_format;
+            CHK_HR(codecinfo->GetContainerFormat(&container_format));
 
-            LOG_DEBUG(L"WIC CODEC {} supports {}", name, extensions);
+            // strip " Encoder" , " Decoder" from friendly name
+            // TODO (chs): find a better way!
+            name = name.substr(0, name.find_last_of(L' '));
 
-            for(auto const &g : pixel_formats) {
-                std::wstring pixel_format_name = L"?UNKNOWN?";
-                auto found = pixel_format_names.find(g);
-                if(found != pixel_format_names.end()) {
-                    pixel_format_name = found->second;
-                }
-                LOG_DEBUG(L"    WIC CODEC {} : {}", name, pixel_format_name);
+            extensions = imageview::make_lowercase(extensions);
+
+            std::vector<std::wstring> file_extensions;
+            imageview::tokenize(extensions, file_extensions, L",", imageview::discard_empty);
+
+            for(auto const &ext : file_extensions) {
+                results.container_formats[ext] = container_format;
+                filters[name].push_back(ext);
             }
         }
+
+        // TODO (chs): default for loading and saving is PNG - hard code the container format GUID,
+        // notice it in the enum and somehow... something
+
+        // make map of file type -> extensions filter spec
+
+        for(auto &n : filters) {
+            std::wstring pattern;
+            wchar const *sep = L"";
+            for(auto &e : n.second) {
+                pattern = std::format(L"{}{}*{}", pattern, sep, e);
+                sep = L";";
+            }
+            std::wstring filetype = std::format(L"{} files", n.first);
+            results.filter_specs[filetype] = pattern;
+        }
+
+        // make COMDLG_FILTERSPEC vector for load/save dialogs
+
+        for(auto const &r : results.filter_specs) {
+            results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ r.first.c_str(), r.second.c_str() });
+        }
+
+        // add in "All Files", seems to be the normal thing to do
+
+        results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ L"All files", L"*.*" });
+
         return S_OK;
     }
 }
 
 namespace imageview::image
 {
-    std::mutex formats_mutex;
-
-    // TODO(chs): get this table of image formats from WIC
-
-    std::map<std::wstring, image_format> formats{
-
-        { L"PNG", { GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha | is_default } } },
-        { L"JPEG",
-          { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha | use_name } } },
-        { L"JPG", { GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { L"BMP", { GUID_ContainerFormatBmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { L"TIFF", { GUID_ContainerFormatTiff, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
-        { L"ICO", { GUID_ContainerFormatIco, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
-        { L"DNG", { GUID_ContainerFormatAdng, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { L"WMP", { GUID_ContainerFormatWmp, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { L"WEBP", { GUID_ContainerFormatWebp, GUID_WICPixelFormat24bppRGB, format_flags{ with_alpha } } },
-        { L"RAW", { GUID_ContainerFormatRaw, GUID_WICPixelFormat24bppRGB, format_flags{ without_alpha } } },
-        { L"DDS", { GUID_ContainerFormatDds, GUID_WICPixelFormat32bppBGRA, format_flags{ with_alpha } } },
-    };
-
     //////////////////////////////////////////////////////////////////////
-    // add heif file support if it's installed
-    // only need to do this before showing a load/save dialog...
 
-    HRESULT check_heif_support()
+    HRESULT init_filetypes()
     {
-        CHK_HR(MFStartup(MF_VERSION));
-        DEFER(MFShutdown());
+        auto iflock{ std::lock_guard(formats_mutex) };
 
-        IMFActivate **activate{};
-        uint32 count{};
-
-        MFT_REGISTER_TYPE_INFO input;
-        input.guidMajorType = MFMediaType_Video;
-        input.guidSubtype = MFVideoFormat_HEVC;
-
-        CHK_HR(MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SYNCMFT, &input, null, &activate, &count));
-        DEFER(CoTaskMemFree(activate));
-
-        for(uint32 i = 0; i < count; i++) {
-            activate[i]->Release();
-        }
-
-        if(count > 0) {
-
-            LOG_INFO(L"HEIF support is enabled");
-
-            auto iflock{ std::lock_guard(formats_mutex) };
-
-            image::formats[L"HEIF"] = { GUID_ContainerFormatHeif,
-                                        GUID_WICPixelFormat32bppBGRA,
-                                        format_flags{ with_alpha | use_name } };
-
-            image::formats[L"HEIC"] = { GUID_ContainerFormatHeif,
-                                        GUID_WICPixelFormat32bppBGRA,
-                                        format_flags{ with_alpha } };
-        }
-
-        enum_codecs(WICEncoder);
+        CHK_HR(enum_codecs(WICEncoder, save_filetypes));
+        CHK_HR(enum_codecs(WICDecoder, load_filetypes));
 
         return S_OK;
     }
@@ -652,46 +557,53 @@ namespace imageview::image
     }
 
     //////////////////////////////////////////////////////////////////////
-    // alternatively....
-    // create a WIC bitmap on memory of a known format
-    // use a WICFormatConverter to create the final one
+    // create a WIC memory bitmap in 32bpp BGRA
+    // if necessary, interpose a WICFormatConverter
+    // then use a WICBitmapEncoder to save the file
 
     HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch)
     {
-        std::wstring extension;
-        CHK_HR(file::get_extension(filename, extension));
-
-        if(extension[0] == L'.') {
-            extension = extension.substr(1);
-        }
-
-        extension = make_uppercase(extension);
-
-        decltype(image::formats)::const_iterator found;
-
-        {
-            auto iflock{ std::lock_guard(formats_mutex) };
-            found = image::formats.find(extension);
-        }
-
-        if(found == image::formats.end()) {
-            return HRESULT_FROM_WIN32(ERROR_UNSUPPORTED_TYPE);
-        }
-
-        image_format const &format = found->second;
-
         auto wic = get_wic();
 
         if(wic == null) {
             return E_NOINTERFACE;
         }
 
+        std::wstring extension;
+        CHK_HR(file::get_extension(filename, extension));
+
+        auto f = save_filetypes.container_formats.find(extension);
+        if(f == save_filetypes.container_formats.end()) {
+            return E_INVALIDARG;    // unknown format
+        }
+
+        GUID const &container_format = f->second;
+
+        uint64 dst_size = static_cast<uint64>(pitch) * height;
+
+        if(dst_size > UINT_MAX) {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        uint32 size = static_cast<uint32>(dst_size);
+
+        std::vector<byte> data(size);
+        memcpy(data.data(), bytes, size);
+
+        GUID src_format = GUID_WICPixelFormat32bppBGRA;
+
+        ComPtr<IWICBitmap> memory_bitmap;
+        CHK_HR(wic->CreateBitmapFromMemory(width, height, src_format, pitch, size, data.data(), &memory_bitmap));
+
+        ComPtr<IWICBitmapSource> bmp_src;
+        bmp_src.Attach(memory_bitmap.Detach());
+
         ComPtr<IWICStream> file_stream;
         CHK_HR(wic->CreateStream(&file_stream));
         CHK_HR(file_stream->InitializeFromFilename(filename.c_str(), GENERIC_WRITE));
 
         ComPtr<IWICBitmapEncoder> encoder;
-        CHK_HR(wic->CreateEncoder(format.file_format, NULL, &encoder));
+        CHK_HR(wic->CreateEncoder(container_format, NULL, &encoder));
         CHK_HR(encoder->Initialize(file_stream.Get(), WICBitmapEncoderNoCache));
 
         ComPtr<IWICBitmapFrameEncode> frame;
@@ -700,52 +612,29 @@ namespace imageview::image
         CHK_HR(frame->Initialize(NULL));
         CHK_HR(frame->SetSize(width, height));
 
-        WICPixelFormatGUID pixel_format = format.pixel_format;
+        WICPixelFormatGUID pixel_format = src_format;
+        WICPixelFormatGUID original_pixel_format = pixel_format;
 
         CHK_HR(frame->SetPixelFormat(&pixel_format));
 
-        // create a new wicbitmap using the new pixel format
+        if(memcmp(&pixel_format, &original_pixel_format, sizeof(GUID)) != 0) {
 
-        uint dst_row_pitch = width * sizeof(uint32);
-        uint64 dst_size = (uint64)dst_row_pitch * height;
-        if(dst_size > UINT_MAX) {
-            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-        }
-        std::vector<byte> buffer(dst_size);
-        byte *dst = buffer.data();
-        byte const *src = bytes;
+            ComPtr<IWICFormatConverter> format_converter;
 
-        if(format.supports_alpha()) {
+            CHK_HR(wic->CreateFormatConverter(&format_converter));
 
-            for(uint y = 0; y < height; ++y) {
+            CHK_HR(format_converter->Initialize(bmp_src.Get(),
+                                                pixel_format,
+                                                WICBitmapDitherTypeErrorDiffusion,
+                                                null,
+                                                0.0f,
+                                                WICBitmapPaletteTypeMedianCut));
 
-                memcpy(dst, src, dst_row_pitch);
-                dst += dst_row_pitch;
-                src += pitch;
-            }
-
-        } else {
-
-            for(uint y = 0; y < height; ++y) {
-
-                uint32 const *src_pixel = reinterpret_cast<uint32 const *>(src);
-                byte *dst_pixel = dst;
-                for(uint x = 0; x < width; ++x) {
-                    uint32 pixel = *src_pixel++;
-                    byte red = pixel & 0xff;
-                    byte grn = (pixel >> 8) & 0xff;
-                    byte blu = (pixel >> 16) & 0xff;
-                    *dst_pixel++ = red;
-                    *dst_pixel++ = grn;
-                    *dst_pixel++ = blu;
-                }
-
-                dst += dst_row_pitch;
-                src += pitch;
-            }
+            bmp_src.Attach(format_converter.Detach());
         }
 
-        CHK_HR(frame->WritePixels(height, dst_row_pitch, (uint)dst_size, buffer.data()));
+        CHK_HR(frame->WriteSource(bmp_src.Get(), null));
+
         CHK_HR(frame->Commit());
         CHK_HR(encoder->Commit());
 
@@ -823,30 +712,33 @@ namespace imageview::image
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT is_file_extension_supported(std::wstring const &extension, bool &is_supported)
+    HRESULT can_load_file_extension(std::wstring const &extension, bool &is_supported)
     {
-        std::wstring ext;
+        std::wstring ext = make_lowercase(extension);
 
-        if(extension[0] == L'.') {
+        auto iflock{ std::lock_guard(formats_mutex) };
 
-            ext = extension.substr(1);
+        auto found = load_filetypes.container_formats.find(ext);
+        is_supported = found != load_filetypes.container_formats.end();
 
-        } else {
+        return S_OK;
+    }
 
-            ext = extension;
-        }
+    //////////////////////////////////////////////////////////////////////
 
-        ext = make_uppercase(ext);
+    HRESULT get_load_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs)
+    {
+        filter_specs = load_filetypes.comdlg_filterspecs.data();
+        num_filter_specs = static_cast<uint>(load_filetypes.comdlg_filterspecs.size());
+        return S_OK;
+    }
 
-        decltype(image::formats)::const_iterator found;
+    //////////////////////////////////////////////////////////////////////
 
-        {
-            auto iflock{ std::lock_guard(formats_mutex) };
-            found = image::formats.find(ext);
-        }
-
-        is_supported = found != image::formats.end();
-
+    HRESULT get_save_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs)
+    {
+        filter_specs = save_filetypes.comdlg_filterspecs.data();
+        num_filter_specs = static_cast<uint>(save_filetypes.comdlg_filterspecs.size());
         return S_OK;
     }
 }
