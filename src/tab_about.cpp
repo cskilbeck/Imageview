@@ -18,7 +18,7 @@ namespace
         CHK_ZERO(len = GetWindowTextLengthW(hwnd));
 
         HANDLE handle;
-        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, static_cast<size_t>(len * sizeof(wchar)) + 1));
+        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE | GMEM_ZEROINIT, (len + 1) * sizeof(wchar)));
 
         wchar *buffer;
         CHK_NULL(buffer = reinterpret_cast<wchar *>(GlobalLock(handle)));
@@ -30,6 +30,7 @@ namespace
         DEFER(CloseClipboard());
 
         CHK_BOOL(EmptyClipboard());
+
         CHK_BOOL(SetClipboardData(CF_UNICODETEXT, handle));
 
         return S_OK;
@@ -54,7 +55,7 @@ namespace
 
         Edit_SetReadOnly(about, true);
 
-        // populate the about box text
+        // populate the about box text - TODO (chs): localize the about text?
 
         std::vector<std::wstring> lines;
 

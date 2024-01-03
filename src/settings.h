@@ -4,14 +4,17 @@ namespace imageview
 {
     using enum_id_map = std::map<uint, uint>;
 
+    // what mode (fullscreen or windowed) to start up in
+
     enum fullscreen_startup_option : uint
     {
         start_windowed,      // start up windowed
         start_fullscreen,    // start up fullscreen
-        start_remember    // start up in whatever mode (fullscreen or windowed) it was in last time the app was exited
+        start_remember       // start up in whatever mode (fullscreen or windowed) it was in last time
     };
 
     // whether to remember the window position or not
+
     enum window_position_option : uint
     {
         window_pos_remember,    // restore last window position
@@ -74,6 +77,8 @@ namespace imageview
         // enums are special, just serialized as uints
 
 #define SETTING_HIDDEN 0
+
+#include "settings_reset_decls.h"
 
 #define DECL_SETTING_SECTION(name, string_id) \
     section_t name                            \

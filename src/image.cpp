@@ -12,11 +12,8 @@ LOG_CONTEXT("image_decoder");
 
 namespace
 {
-    struct size_u
-    {
-        uint w;
-        uint h;
-    };
+    using imageview::image::filetypes;
+    using imageview::localize;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -30,20 +27,7 @@ namespace
 
     std::mutex formats_mutex;
 
-    struct filetypes
-    {
-        // file extension -> container format GUID
-        std::map<std::wstring, GUID> container_formats;
-
-        // file type friendly name -> filter spec (e.g. "BMP Files" -> "*.bmp;*.dib")
-        std::map<std::wstring, std::wstring> filter_specs;
-
-        // filter_specs for load/save dialogs
-        std::vector<COMDLG_FILTERSPEC> comdlg_filterspecs;
-    };
-
-    filetypes save_filetypes;
-    filetypes load_filetypes;
+    GUID const default_container_format = GUID_ContainerFormatPng;
 
     //////////////////////////////////////////////////////////////////////
     // note exif is counter clockwise, WIC is clockwise, so 90/270 swapped
@@ -110,10 +94,10 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // get new width and height where neither exceeds max_texture_size
 
-    size_u constrain_dimensions(size_u const &s)
+    SIZE constrain_dimensions(SIZE const &s)
     {
-        float f = std::min(1.0f, (float)max_texture_size / std::max(s.w, s.h));
-        return { (uint)(s.w * f), (uint)(s.h * f) };
+        float f = std::min(1.0f, (float)max_texture_size / std::max(s.cx, s.cy));
+        return { static_cast<LONG>(s.cx * f), static_cast<LONG>(s.cy * f) };
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -170,7 +154,8 @@ namespace
             extensions = imageview::make_lowercase(extensions);
 
             std::vector<std::wstring> file_extensions;
-            imageview::tokenize(extensions, file_extensions, L",", imageview::discard_empty);
+            imageview::tokenize(
+                extensions, file_extensions, localize(IDS_COMMA_SEPARATOR).c_str(), imageview::discard_empty);
 
             for(auto const &ext : file_extensions) {
                 results.container_formats[ext] = container_format;
@@ -183,16 +168,27 @@ namespace
 
         // make map of file type -> extensions filter spec
 
+        uint index = 0;
+        uint default_index = 0;
+
         for(auto &n : filters) {
             std::wstring pattern;
             wchar const *sep = L"";
             for(auto &e : n.second) {
                 pattern = std::format(L"{}{}*{}", pattern, sep, e);
                 sep = L";";
+
+                // YUCK
+                if(memcmp(&results.container_formats[e], &default_container_format, sizeof(GUID)) == 0) {
+                    default_index = index + 1;
+                }
             }
-            std::wstring filetype = std::format(L"{} files", n.first);
+            std::wstring filetype = std::format(L"{} {}", n.first, localize(IDS_COMDLG_FILES));
             results.filter_specs[filetype] = pattern;
+            index += 1;
         }
+
+        results.default_index = default_index;
 
         // make COMDLG_FILTERSPEC vector for load/save dialogs
 
@@ -210,6 +206,9 @@ namespace
 
 namespace imageview::image
 {
+    filetypes save_filetypes;
+    filetypes load_filetypes;
+
     //////////////////////////////////////////////////////////////////////
 
     HRESULT init_filetypes()
@@ -246,14 +245,16 @@ namespace imageview::image
         ComPtr<IWICBitmapFrameDecode> frame;
         CHK_HR(decoder->GetFrame(0, &frame));
 
-        size_u s;
+        uint w, h;
 
-        CHK_HR(frame->GetSize(&s.w, &s.h));
+        CHK_HR(frame->GetSize(&w, &h));
 
-        s = constrain_dimensions(s);
-        width = s.w;
-        height = s.h;
-        total_size = bytes_per_row(s.w) * s.h;
+        SIZE s = constrain_dimensions(SIZE{ static_cast<LONG>(w), static_cast<LONG>(h) });
+
+        width = s.cx;
+        height = s.cy;
+
+        total_size = bytes_per_row(s.cx) * s.cy;
 
         return S_OK;
     }
@@ -417,19 +418,20 @@ namespace imageview::image
 
         // 1. rescale if src image exceeds max_texture_size
 
-        size_u src_size;
+        uint w, h;
 
-        CHK_HR(bmp_src->GetSize(&src_size.w, &src_size.h));
+        CHK_HR(bmp_src->GetSize(&w, &h));
 
-        size_u dst_size = constrain_dimensions(src_size);
+        SIZE dst_size{ static_cast<LONG>(w), static_cast<LONG>(h) };
+        SIZE src_size = constrain_dimensions(dst_size);
 
-        if(dst_size.w != src_size.w || dst_size.h != src_size.h) {
+        if(dst_size.cx != src_size.cx || dst_size.cy != src_size.cy) {
 
             ComPtr<IWICBitmapScaler> scaler;
             CHK_HR(wic->CreateBitmapScaler(&scaler));
 
             WICBitmapInterpolationMode interp_mode = WICBitmapInterpolationModeFant;
-            CHK_HR(scaler->Initialize(bmp_src.Get(), dst_size.w, dst_size.h, interp_mode));
+            CHK_HR(scaler->Initialize(bmp_src.Get(), dst_size.cx, dst_size.cy, interp_mode));
 
             bmp_src.Attach(scaler.Detach());
         }
@@ -479,14 +481,15 @@ namespace imageview::image
             // TODO(chs): ditch this and just maintain the transform as a member of the image struct,
             // although that makes drawing/copying from it more of a hassle
 
-            uint64 pitch = bytes_per_row(dst_size.w);
+            uint64 pitch = bytes_per_row(dst_size.cx);
 
-            if(pitch * dst_size.h >= UINT32_MAX) {
+            if(pitch * dst_size.cx >= UINT32_MAX) {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
 
             ComPtr<IWICBitmap> decoded_src;
-            CHK_HR(wic_factory->CreateBitmap(dst_size.w, dst_size.h, dst_format, WICBitmapCacheOnDemand, &decoded_src));
+            CHK_HR(
+                wic_factory->CreateBitmap(dst_size.cx, dst_size.cy, dst_format, WICBitmapCacheOnDemand, &decoded_src));
 
             // decode the image as-is into decoded_src
             {
@@ -514,16 +517,16 @@ namespace imageview::image
 
         // transforms are all lined up, get final size because rotate might have swapped width, height
 
-        CHK_HR(bmp_src->GetSize(&dst_size.w, &dst_size.h));
+        CHK_HR(bmp_src->GetSize(&w, &h));
 
-        if(dst_size.w == 0 || dst_size.h == 0) {
+        if(w == 0 || h == 0) {
             return E_UNEXPECTED;
         }
 
         // allocate output buffer
 
-        uint64 t_row_pitch = bytes_per_row(dst_size.w);
-        uint64 total_bytes = t_row_pitch * dst_size.h;
+        uint64 t_row_pitch = bytes_per_row(w);
+        uint64 total_bytes = t_row_pitch * h;
 
         if(total_bytes > UINT32_MAX) {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
@@ -547,8 +550,8 @@ namespace imageview::image
 
         // return dimensions to caller
 
-        file->img.width = dst_size.w;
-        file->img.height = dst_size.h;
+        file->img.width = w;
+        file->img.height = h;
         file->img.row_pitch = (uint32)t_row_pitch;
 
         file->img.pixels = file->pixels.data();
@@ -721,24 +724,6 @@ namespace imageview::image
         auto found = load_filetypes.container_formats.find(ext);
         is_supported = found != load_filetypes.container_formats.end();
 
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT get_load_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs)
-    {
-        filter_specs = load_filetypes.comdlg_filterspecs.data();
-        num_filter_specs = static_cast<uint>(load_filetypes.comdlg_filterspecs.size());
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT get_save_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs)
-    {
-        filter_specs = save_filetypes.comdlg_filterspecs.data();
-        num_filter_specs = static_cast<uint>(save_filetypes.comdlg_filterspecs.size());
         return S_OK;
     }
 }

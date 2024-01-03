@@ -2,6 +2,8 @@
 
 #include "pch.h"
 
+LOG_CONTEXT("dialogs");
+
 //////////////////////////////////////////////////////////////////////
 
 namespace
@@ -28,10 +30,17 @@ namespace imageview::dialog
 {
     HRESULT open_file(HWND window, std::wstring &path)
     {
-        COMDLG_FILTERSPEC *filter_specs;
-        uint num_filter_specs;
+        static uint filetype_index = 0;
 
-        CHK_HR(image::get_load_filter_specs(filter_specs, num_filter_specs));
+        COMDLG_FILTERSPEC *filter_specs = image::load_filetypes.comdlg_filterspecs.data();
+
+        uint num_filter_specs = static_cast<uint>(image::load_filetypes.comdlg_filterspecs.size());
+
+        uint default_index = image::load_filetypes.default_index;
+
+        if(filetype_index == 0) {
+            filetype_index = default_index;
+        }
 
         ComPtr<IFileDialog> pfd;
         DWORD dwFlags;
@@ -44,12 +53,14 @@ namespace imageview::dialog
         CHK_HR(pfd->GetOptions(&dwFlags));
         CHK_HR(pfd->SetOptions(dwFlags | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_OKBUTTONNEEDSINTERACTION));
         CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs));
-        CHK_HR(pfd->SetFileTypeIndex(1));
+        CHK_HR(pfd->SetFileTypeIndex(filetype_index));
         CHK_HR(pfd->SetOkButtonLabel(localize(IDS_OPEN_FILE_OK_BUTTON).c_str()));
         CHK_HR(pfd->SetTitle(title.c_str()));
         CHK_HR(pfd->Show(window));
         CHK_HR(pfd->GetResult(&psiResult));
         CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
+
+        CHK_HR(pfd->GetFileTypeIndex(&filetype_index));
 
         path = pszFilePath;
         CoTaskMemFree(pszFilePath);
@@ -59,12 +70,37 @@ namespace imageview::dialog
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT save_file(HWND window, std::wstring &path)
+    HRESULT save_file(HWND window, std::wstring const &filename, std::wstring &path)
     {
-        COMDLG_FILTERSPEC *filter_specs;
-        uint num_filter_specs;
+        static uint filetype_index = 0;
 
-        CHK_HR(image::get_save_filter_specs(filter_specs, num_filter_specs));
+        COMDLG_FILTERSPEC *filter_specs = image::load_filetypes.comdlg_filterspecs.data();
+
+        uint num_filter_specs = static_cast<uint>(image::load_filetypes.comdlg_filterspecs.size());
+
+        uint default_index = image::load_filetypes.default_index;
+
+        if(filetype_index != 0) {
+            default_index = filetype_index;
+        }
+
+        std::wstring ext;
+
+        // this is kind of janky - search for the file extension in the filter specs
+
+        if(!filename.empty() && filetype_index == 0) {
+
+            CHK_HR(file::get_extension(filename, ext));
+            ext = make_lowercase(ext);
+
+            for(uint i = 0; i < num_filter_specs; ++i) {
+
+                if(wcsstr(filter_specs[i].pszSpec, ext.c_str()) != null) {
+                    default_index = i + 1;
+                    break;
+                }
+            }
+        }
 
         ComPtr<IFileDialog> pfd;
         DWORD dwFlags;
@@ -79,12 +115,17 @@ namespace imageview::dialog
         CHK_HR(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
         CHK_HR(pfd->GetOptions(&dwFlags));
         CHK_HR(pfd->SetOptions(dwFlags | options));
+        CHK_HR(pfd->SetFileName(filename.c_str()));
         CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs));
-        CHK_HR(pfd->SetFileTypeIndex(1));
+        CHK_HR(pfd->SetFileTypeIndex(default_index));
+        CHK_HR(pfd->SetDefaultExtension(ext.c_str()));
         CHK_HR(pfd->SetTitle(title.c_str()));
         CHK_HR(pfd->Show(window));
         CHK_HR(pfd->GetResult(&psiResult));
+
         CHK_HR(psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
+
+        CHK_HR(pfd->GetFileTypeIndex(&filetype_index));
 
         path = pszFilePath;
         CoTaskMemFree(pszFilePath);

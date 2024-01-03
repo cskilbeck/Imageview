@@ -1,9 +1,37 @@
 //////////////////////////////////////////////////////////////////////
+// ImageView
+
+// Goals
+
+// Minimize application size and system resource usage
+// Minimalist, responsive UI
+// Flexible user input settings
+// Handle most common image file formats
+// Run standalone with no installer
+// Rotate/flip images
+// Can be localized without too much hassle
+
+// Limitations
+
+// Windows only (Windows 7 and newer)
+// Cannot edit or mark up images
+
+// Implementation
+
+// Native Win32 APIs
+// C++ std library
+// WIC for all image load/save operations
+// UTF16 exclusively
+// D3D11 for drawing
+// DirectWrite for text output
+// Registry to store settings
+
+//////////////////////////////////////////////////////////////////////
 // TO DO
 
+// file type association / handler thing
 // shortcut editor
 // mutual exclude mouse buttons
-// file type association / handler thing
 // remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
 // get all the mouse handling stuff out of update() and into mouse move handler
 // settings dialog : cache size not reet
@@ -28,17 +56,6 @@
 #include "pch.h"
 
 LOG_CONTEXT("app");
-
-// To register an application as a handler for the 'public' file extensions it supports:
-
-// Create these registry keys
-
-// HKEY_CLASSES_ROOT\ImageView.files
-// HKEY_CLASSES_ROOT\ImageView.files\DefaultIcon (Default REG_SZ exe_path,1)
-// HKEY_CLASSES_ROOT\ImageView.files\shell\open\command (Default REG_SZ "exe_path" "%1")
-
-// For each supported file extension
-// HKEY_CLASSES_ROOT\{.ext}\OpenWithProgids\ImageView.files (empty REG_SZ)
 
 //////////////////////////////////////////////////////////////////////
 
@@ -1562,22 +1579,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // recreate device and recreate current image texture if necessary
-
-    HRESULT on_device_lost()
-    {
-        CHK_HR(create_device());
-
-        CHK_HR(create_resources());
-
-        if(current_file != null) {
-            CHK_HR(display_image(current_file));
-        }
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // paste the clipboard - if it's a bitmap, paste that else if it's
     // a string, try to load that file
 
@@ -1703,6 +1704,8 @@ namespace
     void scanner_function()
     {
         LOG_CONTEXT("folder_scan");
+
+        CoInitialize(null);
 
         bool quit = false;
         MSG msg;
@@ -2289,7 +2292,7 @@ namespace
                         DeleteMenu(menu, ID_RECENT_DUMMY, MF_BYCOMMAND);
                     }
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
-
+                    clear_message();
                     m_timer.reset();
                     popup_menu_active = false;
                 }
@@ -2680,9 +2683,6 @@ namespace
 
         d3d_context->Unmap(constant_buffer.Get(), 0);
 
-        d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-        d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-
         // draw a quad
 
         d3d_context->Draw(4, 0);
@@ -2718,26 +2718,26 @@ namespace
         vec4 border_color = color_from_uint32(settings.border_color);
         d3d_context->ClearRenderTargetView(rendertarget_view.Get(), reinterpret_cast<float *>(&border_color));
 
+        // all the image related stuff
+
         if(image_texture.Get() != null) {
+
+            d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+            d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
 
             d3d_context->RSSetState(rasterizer_state.Get());
             d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
             d3d_context->VSSetShader(vertex_shader.Get(), null, 0);
 
-            // draw texture with checkerboard background
+            // draw texture with optional checkerboard background
 
-            vec4 g1;
-            vec4 g2;
+            vec4 g1 = color_from_uint32(settings.background_color);
+            vec4 g2 = g1;
 
             if(settings.checkerboard_enabled) {
 
                 g1 = color_from_uint32(settings.grid_color_1);
                 g2 = color_from_uint32(settings.grid_color_2);
-
-            } else {
-
-                g1 = color_from_uint32(settings.background_color);
-                g2 = g1;
             }
 
             shader.colors[0] = g1;
@@ -2752,10 +2752,10 @@ namespace
                 grid_pos = { -current_rect.x, -current_rect.y };
             }
 
-            uint gs = settings.grid_size * (1 << settings.grid_multiplier);
-
-            shader.check_strip_size = 1.0f / std::max(4u, gs);
             shader.checkerboard_offset = grid_pos;
+
+            uint gs = settings.grid_size * (1 << settings.grid_multiplier);
+            shader.check_strip_size = 1.0f / std::max(4u, gs);
 
             d3d_context->OMSetBlendState(null, null, 0xffffffff);
             d3d_context->PSSetShader(texture_shader.Get(), null, 0);
@@ -2783,6 +2783,7 @@ namespace
                 br = texture_to_screen_pos_unclamped(br);
 
                 shader.colors[0] = color_from_uint32(settings.select_fill_color);
+
                 CHK_HR(draw_rectangle({ tl.x, tl.y, br.x - tl.x, br.y - tl.y }));
 
                 // then the stripey outline
@@ -2831,16 +2832,11 @@ namespace
 
                 shader.check_strip_size = 1.0f / settings.crosshair_dash_length;
 
-                shader.colors[0] = color_from_uint32(settings.select_outline_color1);
-                shader.colors[1] = color_from_uint32(settings.select_outline_color2);
-
                 // NOTE: same dodgy fix for the stripe-near-zero problem
 
                 shader.frame = fmodf(settings.crosshair_dash_anim_speed * frame_count / 10.0f,
                                      settings.crosshair_dash_length * -2.0f) +
                                settings.crosshair_dash_length * std::max(window_width, window_height);
-
-                float bw = static_cast<float>(settings.crosshair_width);
 
                 // get screen position of center of texel under cursor
 
@@ -2848,16 +2844,19 @@ namespace
                 vec2 c = mul_point(texel_size(), { 0.5f, 0.5f });
                 c = add_point(texture_to_screen_pos(p), c);
 
+                float bw = static_cast<float>(settings.crosshair_width);
+                float hbw = bw / 2.0f;
+
                 // horizontal across the whole screen
-                rect_f horiz{ 0, c.y - bw / 2.0f, static_cast<float>(window_width), bw };
+                rect_f horiz{ 0, c.y - hbw, static_cast<float>(window_width), bw };
                 CHK_HR(draw_rectangle(horiz));
 
                 // top vertical bit
-                rect_f vert{ c.x - bw / 2.0f, 0, bw, c.y - bw / 2.0f };
+                rect_f vert{ c.x - hbw, 0, bw, c.y - hbw };
                 CHK_HR(draw_rectangle(vert));
 
                 // botton vertical bit
-                vert.y = c.y + bw / 2.0f;
+                vert.y = c.y + hbw;
                 vert.h = window_height - vert.y;
                 CHK_HR(draw_rectangle(vert));
             }
@@ -2868,7 +2867,14 @@ namespace
         HRESULT hr = swap_chain->Present(1, 0);
 
         if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-            hr = on_device_lost();
+
+            CHK_HR(create_device());
+
+            CHK_HR(create_resources());
+
+            if(current_file != null) {
+                CHK_HR(display_image(current_file));
+            }
         }
 
         return hr;
@@ -3052,17 +3058,25 @@ namespace
 
         case ID_FILE_SAVE: {
 
-            std::wstring filename;
-            if(SUCCEEDED(dialog::save_file(window, filename))) {
+            if(current_file != null) {
+                std::wstring filename;
+                if(!current_file->is_clipboard) {
+                    filename = current_file->filename;
+                }
+                std::wstring chosen_filename;
+                if(SUCCEEDED(dialog::save_file(window, filename, chosen_filename))) {
 
-                image::image_t const &img = current_file->img;
-                HRESULT hr = image::save(filename, img.pixels, img.width, img.height, img.row_pitch);
-                if(FAILED(hr)) {
-                    std::wstring msg = std::format(
-                        L"{}\r\n\r\n{}\r\n\r\n{}", localize(IDS_CANT_SAVE_FILE), filename, windows_error_message(hr));
-                    message_box(window, msg, MB_ICONEXCLAMATION);
-                } else {
-                    set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), filename), 5);
+                    image::image_t const &img = current_file->img;
+                    HRESULT hr = image::save(chosen_filename, img.pixels, img.width, img.height, img.row_pitch);
+                    if(FAILED(hr)) {
+                        std::wstring msg = std::format(L"{}\r\n\r\n{}\r\n\r\n{}",
+                                                       localize(IDS_CANT_SAVE_FILE),
+                                                       filename,
+                                                       windows_error_message(hr));
+                        message_box(window, msg, MB_ICONEXCLAMATION);
+                    } else {
+                        set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), filename), 5);
+                    }
                 }
             }
         } break;
@@ -3314,7 +3328,6 @@ namespace
             cur_mouse_pos = pos;
         }
 
-        // TODO (chs): also square snap mode!? Only works for defining selection currently....
         if(snap_mode == snap_mode_t::axis) {
 
             switch(snap_axis) {
@@ -4059,6 +4072,8 @@ namespace
         CHK_HR(settings.save());
 
         SetEvent(quit_event);
+
+        recent_files::wait_for_recent_files();
 
         thread_pool.cleanup();
 

@@ -188,7 +188,7 @@ DECL_SETTING_BOOL(auto_paste, IDS_SETTING_NAME_AUTO_PASTE, true);
 
 DECL_SETTING_BOOL(reload_last_file, IDS_SETTING_NAME_RELOAD_LAST_FILE, true);
 
-DECL_SETTING_RANGED(recent_files_count, IDS_SETTING_RECENT_FILES_COUNT, 10, 3, 20);
+DECL_SETTING_RANGED(recent_files_count, IDS_SETTING_NAME_RECENT_FILES_COUNT, 10, 3, 20);
 
 // what to do about exif metadata
 

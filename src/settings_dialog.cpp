@@ -37,8 +37,8 @@ namespace
     tab_page_t all_tabs[] = {
         { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, tab_flags_t::dont_care, -1, null },
         { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, tab_flags_t::dont_care, -1, null },
-        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, tab_flags_t::hide_if_not_elevated, -1, null },
-        { IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, tab_flags_t::hide_if_elevated, -1, null },
+        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, tab_flags_t::dont_care, -1, null },
+        //{ IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, tab_flags_t::hide_if_elevated, -1, null },
         { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, tab_flags_t::dont_care, -1, null },
     };
 

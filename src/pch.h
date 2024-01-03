@@ -90,32 +90,20 @@ using Microsoft::WRL::ComPtr;
 
 #include <stdio.h>
 #include <math.h>
-#include <time.h>
-#include <tchar.h>
 
 //////////////////////////////////////////////////////////////////////
 // New std lib
 
-#include <format>
 #include <string>
-#include <vector>
-#include <mutex>
-#include <locale>
-#include <codecvt>
+#include <format>
 #include <functional>
-#include <memory>
-#include <thread>
-#include <set>
 #include <algorithm>
+#include <mutex>
+#include <vector>
+#include <set>
 #include <map>
 #include <unordered_map>
 #include <stack>
-#include <utility>
-#include <array>
-#include <cstdlib>
-#include <string_view>
-#include <ranges>
-#include <filesystem>
 
 //////////////////////////////////////////////////////////////////////
 // Resource IDs
@@ -159,3 +147,4 @@ using Microsoft::WRL::ComPtr;
 #include "setting_ranged.h"
 #include "d3d.h"
 #include "recent_files.h"
+#include "file_types_handler.h"

@@ -15,6 +15,7 @@ namespace imageview
     std::wstring windows_error_message(uint32 err = 0);
     HRESULT log_win32_error(wchar const *message, DWORD err = 0);
     HRESULT display_error(std::wstring const &message, HRESULT hr = (HRESULT)0);
+    void fatal_error(std::wstring const &message);
     int message_box(HWND hwnd, std::wstring const &text, uint buttons);
 
     //////////////////////////////////////////////////////////////////////
@@ -34,7 +35,7 @@ namespace imageview
 
     HRESULT get_is_process_elevated(bool &is_elevated);
     float get_window_dpi(HWND w);
-    std::wstring get_app_filename();
+    HRESULT get_app_filename(std::wstring &filename);
     HRESULT get_app_version(std::wstring &version);
     HRESULT copy_string_to_clipboard(std::wstring const &string);
 
@@ -240,6 +241,14 @@ namespace imageview
         }                                                  \
     } while(false)
 
+#define _DO_LSTATUS(x, y)                                  \
+    do {                                                   \
+        LSTATUS ls##y = (x);                               \
+        if(ls##y != ERROR_SUCCESS) {                       \
+            return imageview::log_win32_error(L#x, ls##y); \
+        }                                                  \
+    } while(false)
+
 #define _DO_BOOL(x, y)                                      \
     do {                                                    \
         bool hr##y = (x);                                   \
@@ -259,6 +268,9 @@ namespace imageview
 
 // if(FAILED(x)) { return hresult; }
 #define CHK_HR(x) _DO_HR(x, __COUNTER__)
+
+// if(x != ERROR_SUCCESS) { return HRESULT_FROM_WIN32(x); }
+#define CHK_LSTATUS(x) _DO_LSTATUS(x, __COUNTER__)
 
 // if(!x) { return HRESULT_FROM_WIN32(GetLastError()); }
 #define CHK_BOOL(x) _DO_BOOL(x, __COUNTER__)

@@ -350,6 +350,17 @@ namespace
 
         refresh_sections(hwnd);
     }
+
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS page \ WM_SHOWWINDOW
+    // show/hide the Revert button
+
+    void on_showwindow_settings(HWND hwnd, BOOL fShow, UINT status)
+    {
+        HWND main_dialog = GetParent(hwnd);
+        HWND revert_button = GetDlgItem(main_dialog, IDC_SPLIT_BUTTON_SETTINGS);
+        ShowWindow(revert_button, fShow ? SW_SHOW : SW_HIDE);
+    }
 }
 
 namespace imageview::settings_ui
@@ -365,6 +376,7 @@ namespace imageview::settings_ui
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
             HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
             HANDLE_MSG(hWnd, WM_USER, on_user_settings);
+            HANDLE_MSG(hWnd, WM_SHOWWINDOW, on_showwindow_settings);
         }
         return ctlcolor_base(hWnd, msg, wParam, lParam);
     }

@@ -196,6 +196,14 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
+    void fatal_error(std::wstring const &message)
+    {
+        message_box(null, message, MB_ICONEXCLAMATION);
+        ExitProcess(0);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     uint32 color_lerp(uint32 ca, uint32 cb, int x)
     {
         uint a1 = (ca >> 24) & 0xff;
@@ -337,8 +345,6 @@ namespace imageview
             return f->second;
         }
 
-        // For some reason LoadStringA doesn't work...?
-
         wchar *str;
         int len = LoadStringW(app::instance, id, reinterpret_cast<wchar *>(&str), 0);
 
@@ -366,7 +372,9 @@ namespace imageview
         if(err == 0) {
             err = GetLastError();
         }
-        return std::wstring(_com_error(HRESULT_FROM_WIN32(err)).ErrorMessage());
+        wchar const *msg = _com_error(HRESULT_FROM_WIN32(err)).ErrorMessage();
+        DEFER(LocalFree(reinterpret_cast<HLOCAL>(const_cast<wchar *>(msg))));
+        return std::wstring(msg);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -426,22 +434,36 @@ namespace imageview
 
     //////////////////////////////////////////////////////////////////////
 
-    std::wstring get_app_filename()
+    HRESULT get_app_filename(std::wstring &filename)
     {
         std::wstring path;
-        wchar exe_path[MAX_PATH * 2];
-        uint32 got = GetModuleFileNameW(NULL, exe_path, _countof(exe_path));
-        if(got != 0 && got != ERROR_INSUFFICIENT_BUFFER) {
-            path = std::wstring(exe_path);
+
+        path.resize(MAX_PATH);
+
+        uint32 got = GetModuleFileNameW(NULL, path.data(), static_cast<uint32>(path.size()));
+
+        while(GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+
+            path.resize(path.size() * 2);
+
+            got = GetModuleFileNameW(NULL, path.data(), static_cast<uint32>(path.size()));
         }
-        return path;
+
+        if(got == 0) {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        filename = path.substr(0, got);
+
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
 
     HRESULT get_app_version(std::wstring &version)
     {
-        std::wstring app_filename = get_app_filename();
+        std::wstring app_filename;
+        CHK_HR(get_app_filename(app_filename));
 
         DWORD dummy;
         uint32 len = GetFileVersionInfoSizeW(app_filename.c_str(), &dummy);
@@ -453,7 +475,7 @@ namespace imageview
         std::vector<byte> buffer;
         buffer.resize(len);
 
-        CHK_BOOL(GetFileVersionInfoW(get_app_filename().c_str(), 0, len, buffer.data()));
+        CHK_BOOL(GetFileVersionInfoW(app_filename.c_str(), 0, len, buffer.data()));
 
         VS_FIXEDFILEINFO *version_info;
         uint version_size;

@@ -139,6 +139,12 @@
     <ClInclude Include="src\tab_page.h">
       <Filter>4_include\tab_pages</Filter>
     </ClInclude>
+    <ClInclude Include="src\file_types_handler.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\settings_reset_decls.h">
+      <Filter>4_include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\app.cpp">
@@ -222,8 +228,8 @@
     <ClCompile Include="src\tab_about.cpp">
       <Filter>3_src\tab_pages</Filter>
     </ClCompile>
-    <ClCompile Include="src\tab_relaunch.cpp">
-      <Filter>3_src\tab_pages</Filter>
+    <ClCompile Include="src\file_types_handler.cpp">
+      <Filter>3_src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -243,7 +249,13 @@
     <FxCompile Include="shaders\vs_rectangle.hlsl">
       <Filter>2_shaders</Filter>
     </FxCompile>
-    <FxCompile Include="shaders\ps_draw_everything.hlsl">
+    <FxCompile Include="shaders\ps_solid.hlsl">
+      <Filter>2_shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\ps_stripe.hlsl">
+      <Filter>2_shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\ps_texture.hlsl">
       <Filter>2_shaders</Filter>
     </FxCompile>
   </ItemGroup>

@@ -6,32 +6,6 @@ LOG_CONTEXT("recent_files");
 
 namespace
 {
-    HRESULT path_from_shortcut(std::wstring const &shortcut_filename, std::wstring &path)
-    {
-        ComPtr<IShellLinkW> shellLink;
-        CHK_HR(CoCreateInstance(CLSID_ShellLink,
-                                NULL,
-                                CLSCTX_INPROC_SERVER,
-                                IID_IShellLinkW,
-                                reinterpret_cast<LPVOID *>(shellLink.GetAddressOf())));
-        DEFER(shellLink->Release());
-
-        ComPtr<IPersistFile> persistFile;
-        CHK_HR(shellLink->QueryInterface(IID_IPersistFile, reinterpret_cast<LPVOID *>(persistFile.GetAddressOf())));
-        DEFER(persistFile->Release());
-
-        // silently fail because many permissions failures are not interesting
-        if(FAILED(persistFile->Load(shortcut_filename.c_str(), STGM_READ))) {
-            return S_FALSE;
-        }
-
-        WCHAR target_path[MAX_PATH];
-        CHK_HR(shellLink->GetPath(target_path, MAX_PATH, 0, SLGP_UNCPRIORITY));
-
-        path = std::wstring(target_path);
-        return S_OK;
-    }
-
     //////////////////////////////////////////////////////////////////////
 
     struct recent_file_t
@@ -45,6 +19,7 @@ namespace
         };
     };
 
+    HANDLE recent_files_event;
     std::mutex recent_files_mutex;
     std::set<recent_file_t> all_files;
 }
@@ -55,6 +30,12 @@ namespace imageview::recent_files
 
     void init()
     {
+        recent_files_event = CreateEventW(null, true, false, null);
+
+        if(recent_files_event == null) {
+            fatal_error(std::format(L"Can't create event: {}", windows_error_message(GetLastError())));
+        }
+
         std::thread([]() {
 
             (void)CoInitialize(null);
@@ -64,35 +45,43 @@ namespace imageview::recent_files
             SHGetKnownFolderPath(FOLDERID_Recent, KF_FLAG_DEFAULT, null, &recent_file_path);
             DEFER(CoTaskMemFree(recent_file_path));
 
-            // TODO (chs): use PathCchCombineEx
-            std::wstring wildcard = std::format(L"{}\\*", recent_file_path);
+            wchar *wild_path;
+            HRESULT hr = PathAllocCombine(recent_file_path, L"*.lnk", PATHCCH_NONE, &wild_path);
+            if(FAILED(hr)) {
+                LOG_ERROR(L"Can't PathAllocCombine? {}", windows_error_message(hr));
+                return;
+            }
+            DEFER(LocalFree(wild_path));
 
             auto rflock = std::lock_guard{ recent_files_mutex };
 
             WIN32_FIND_DATAW find_data;
             HANDLE f = FindFirstFileExW(
-                wildcard.c_str(), FindExInfoBasic, &find_data, FindExSearchNameMatch, null, FIND_FIRST_EX_LARGE_FETCH);
+                wild_path, FindExInfoBasic, &find_data, FindExSearchNameMatch, null, FIND_FIRST_EX_LARGE_FETCH);
+
             if(f != INVALID_HANDLE_VALUE) {
+
                 do {
 
                     std::wstring path = std::format(L"{}\\{}", recent_file_path, find_data.cFileName);
 
                     std::wstring full_path;
-
-                    if(path_from_shortcut(path, full_path) == S_OK) {
+                    if(SUCCEEDED(file::path_from_shortcut(path, full_path)) && file::exists(full_path)) {
 
                         std::wstring extension;
-                        file::get_extension(full_path, extension);
+                        if(SUCCEEDED(file::get_extension(full_path, extension))) {
 
-                        bool supported;
-                        image::can_load_file_extension(extension, supported);
+                            bool supported;
+                            if(SUCCEEDED(image::can_load_file_extension(extension, supported)) && supported) {
 
-                        if(supported) {
-                            FILETIME create_time;
-                            FILETIME access_time;
-                            FILETIME write_time;
-                            if(SUCCEEDED(file::get_time(full_path, create_time, access_time, write_time))) {
-                                all_files.emplace(full_path, access_time);
+                                FILETIME create_time;
+                                FILETIME access_time;
+                                FILETIME write_time;
+
+                                if(SUCCEEDED(file::get_time(full_path, create_time, access_time, write_time))) {
+
+                                    all_files.emplace(full_path, access_time);
+                                }
                             }
                         }
                     }
@@ -110,8 +99,16 @@ namespace imageview::recent_files
                 }
             }
             CoUninitialize();
+            SetEvent(recent_files_event);
         })
             .detach();
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void wait_for_recent_files()
+    {
+        WaitForSingleObject(recent_files_event, INFINITE);
     }
 
     //////////////////////////////////////////////////////////////////////

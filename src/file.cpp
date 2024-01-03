@@ -179,11 +179,15 @@ namespace imageview::file
         while(true) {
 
             if(!GetFileInformationByHandleEx(dir_handle, info_class, dir_info.data(), (DWORD)dir_info.size())) {
+
                 DWORD err = GetLastError();
+
                 if(err == ERROR_MORE_DATA) {
+
                     dir_info.resize(dir_info.size() * 2);
                     continue;
                 }
+
                 if(err == ERROR_NO_MORE_FILES) {
                     break;
                 }
@@ -207,9 +211,10 @@ namespace imageview::file
                     return E_ABORT;
                 }
 
-                // if it's a file
-                uint32 ignore = FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_VIRTUAL;
-                if((f->FileAttributes & ignore) == 0) {
+                // if it's a normal file
+
+                if((f->FileAttributes & (FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_VIRTUAL |
+                                         FILE_ATTRIBUTE_OFFLINE)) == 0) {
 
                     std::wstring filename = std::wstring(f->FileName, f->FileNameLength / sizeof(wchar));
 
@@ -220,7 +225,7 @@ namespace imageview::file
                     CHK_HR(image::can_load_file_extension(extension, supported));
                     if(supported) {
 
-                        // it's in the list, add it to the vector of files
+                        // it's something we can load, add it to the vector of files
                         files.emplace_back(filename, f->LastWriteTime.QuadPart);
                     }
                 }
@@ -298,11 +303,21 @@ namespace imageview::file
 
     //////////////////////////////////////////////////////////////////////
 
-    HRESULT get_filename(std::wstring const &filename, std::wstring &name)
+    HRESULT get_barename(std::wstring const &path, std::wstring &name)
     {
         path_parts p;
-        CHK_HR(get_path_parts(p, filename));
-        name = std::wstring(p.filename) + p.extension;
+        CHK_HR(get_path_parts(p, path));
+        name = std::wstring(p.filename);
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT get_filename(std::wstring const &path, std::wstring &filename)
+    {
+        path_parts p;
+        CHK_HR(get_path_parts(p, path));
+        filename = std::wstring(p.filename) + p.extension;
         return S_OK;
     }
 
@@ -338,14 +353,9 @@ namespace imageview::file
 
     HRESULT get_size(std::wstring const &filename, uint64_t &size)
     {
-        HANDLE f = CreateFileW(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
-        if(f == INVALID_HANDLE_VALUE) {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-        DEFER(CloseHandle(f));
-        LARGE_INTEGER file_size;
-        CHK_BOOL(GetFileSizeEx(f, &file_size));
-        size = file_size.QuadPart;
+        WIN32_FILE_ATTRIBUTE_DATA attr;
+        CHK_BOOL(GetFileAttributesExW(filename.c_str(), GetFileExInfoStandard, &attr));
+        size = (static_cast<uint64>(attr.nFileSizeHigh) << 32) | attr.nFileSizeLow;
         return S_OK;
     }
 
@@ -357,8 +367,8 @@ namespace imageview::file
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
 
-        HANDLE file_handle =
-            CreateFileW(filename.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
+        HANDLE file_handle = CreateFileW(
+            filename.c_str(), GENERIC_READ | FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ, null, OPEN_EXISTING, 0, null);
 
         if(file_handle == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -374,12 +384,41 @@ namespace imageview::file
 
     HRESULT get_time(std::wstring const &filename, FILETIME &create, FILETIME &access, FILETIME &write)
     {
-        HANDLE file_handle = CreateFileW(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, null, OPEN_ALWAYS, 0, null);
-        if(file_handle == INVALID_HANDLE_VALUE) {
-            return HRESULT_FROM_WIN32(GetLastError());
+        WIN32_FILE_ATTRIBUTE_DATA attr;
+        CHK_BOOL(GetFileAttributesExW(filename.c_str(), GetFileExInfoStandard, &attr));
+
+        create = attr.ftCreationTime;
+        access = attr.ftLastAccessTime;
+        write = attr.ftLastWriteTime;
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT path_from_shortcut(std::wstring const &shortcut_filename, std::wstring &path)
+    {
+        ComPtr<IShellLinkW> shell_link;
+        CHK_HR(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&shell_link)));
+
+        ComPtr<IPersistFile> persist_file;
+        CHK_HR(shell_link.As(&persist_file));
+
+        CHK_HR(persist_file->Load(shortcut_filename.c_str(), STGM_READ));
+
+        LPITEMIDLIST item_id_list;
+        CHK_HR(shell_link->GetIDList(&item_id_list));
+
+        DEFER(CoTaskMemFree(item_id_list));
+
+        wchar target_path[MAX_PATH * 4];
+
+        if(!SHGetPathFromIDList(item_id_list, target_path)) {
+            return E_FAIL;
         }
-        DEFER(CloseHandle(file_handle));
-        CHK_BOOL(GetFileTime(file_handle, &create, &access, &write));
+
+        path = std::wstring(target_path);
+
         return S_OK;
     }
 
@@ -387,15 +426,6 @@ namespace imageview::file
 
     HRESULT paths_are_different(std::wstring const &a, std::wstring const &b, bool &differ)
     {
-#if 0
-        std::error_code err;
-        bool same = std::filesystem::equivalent(a, b, err);
-        if(err.value() != 0) {
-            return HRESULT_FROM_WIN32(err.value());
-        }
-        differ = !same;
-        return S_OK;
-#else
         PWSTR pa;
         CHK_HR(PathAllocCanonicalize(a.c_str(), PATHCCH_ALLOW_LONG_PATHS, &pa));
         DEFER(LocalFree(pa));
@@ -407,13 +437,8 @@ namespace imageview::file
         size_t la = wcslen(pa);
         size_t lb = wcslen(pb);
 
-        differ = true;
-
-        if(la == lb) {
-            differ = _wcsicmp(pa, pb) != 0;
-        }
+        differ = (la != lb) || _wcsicmp(pa, pb) != 0;
 
         return S_OK;
-#endif
     }
 }

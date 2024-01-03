@@ -7,6 +7,26 @@
 namespace imageview::image
 {
     //////////////////////////////////////////////////////////////////////
+
+    struct filetypes
+    {
+        // file extension -> container format GUID
+        std::map<std::wstring, GUID> container_formats;
+
+        // file type friendly name -> filter spec (e.g. "BMP Files" -> "*.bmp;*.dib")
+        std::map<std::wstring, std::wstring> filter_specs;
+
+        // filter_specs for load/save dialogs
+        std::vector<COMDLG_FILTERSPEC> comdlg_filterspecs;
+
+        // default file type (PNG)
+        uint default_index;
+    };
+
+    extern filetypes save_filetypes;
+    extern filetypes load_filetypes;
+
+    //////////////////////////////////////////////////////////////////////
     // a raw BGRA32 decoded image
 
     struct image_t
@@ -73,7 +93,4 @@ namespace imageview::image
     HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 
     HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch);
-
-    HRESULT get_load_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs);
-    HRESULT get_save_filter_specs(COMDLG_FILTERSPEC *&filter_specs, uint &num_filter_specs);
 }
