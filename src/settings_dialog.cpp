@@ -35,11 +35,10 @@ namespace
     // all the tabs that can be created
 
     tab_page_t all_tabs[] = {
-        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc, tab_flags_t::dont_care, -1, null },
-        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc, tab_flags_t::dont_care, -1, null },
-        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc, tab_flags_t::dont_care, -1, null },
-        //{ IDD_DIALOG_SETTINGS_RELAUNCH, relaunch_dlgproc, tab_flags_t::hide_if_elevated, -1, null },
-        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc, tab_flags_t::dont_care, -1, null },
+        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc },
+        { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc },
+        { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc },
+        { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc },
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -76,17 +75,14 @@ namespace
 
             tab_page_t *tab = all_tabs + i;
 
-            if(!tab->should_hide()) {
-
-                std::wstring tab_text = localize((uint64)tab->resource_id);
-                TCITEMW tci;
-                tci.mask = TCIF_TEXT;
-                tci.pszText = const_cast<wchar *>(tab_text.c_str());
-                TabCtrl_InsertItem(tab_ctrl, index, &tci);
-                tab->index = index;
-                index += 1;
-                active_tabs.push_back(tab);
-            }
+            std::wstring tab_text = localize((uint64)tab->resource_id);
+            TCITEMW tci;
+            tci.mask = TCIF_TEXT;
+            tci.pszText = const_cast<wchar *>(tab_text.c_str());
+            TabCtrl_InsertItem(tab_ctrl, index, &tci);
+            tab->index = index;
+            index += 1;
+            active_tabs.push_back(tab);
         }
 
         // now the tabs are added, get the inner size of the tab control for adding dialogs for the pages
@@ -99,23 +95,20 @@ namespace
 
         for(auto t : active_tabs) {
 
-            if(!t->should_hide()) {
-
-                if(t->resource_id == requested_tab_resource_id) {
-                    active_tab_index = t->index;
-                }
-
-                t->hwnd =
-                    CreateDialogParamW((HMODULE)app::instance, MAKEINTRESOURCEW(t->resource_id), hwnd, t->dlg_proc, 0);
-
-                if(t->hwnd == null) {
-                    imageview::display_error(L"CreateDialogParamW failed!?");
-                    return false;
-                }
-
-                SetWindowPos(
-                    t->hwnd, HWND_TOP, tab_rect.left, tab_rect.top, rect_width(tab_rect), rect_height(tab_rect), 0);
+            if(t->resource_id == requested_tab_resource_id) {
+                active_tab_index = t->index;
             }
+
+            t->hwnd =
+                CreateDialogParamW((HMODULE)app::instance, MAKEINTRESOURCEW(t->resource_id), hwnd, t->dlg_proc, 0);
+
+            if(t->hwnd == null) {
+                imageview::display_error(L"CreateDialogParamW failed!?");
+                return false;
+            }
+
+            SetWindowPos(
+                t->hwnd, HWND_TOP, tab_rect.left, tab_rect.top, rect_width(tab_rect), rect_height(tab_rect), 0);
         }
 
         TabCtrl_SetCurSel(tab_ctrl, active_tab_index);

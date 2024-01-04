@@ -373,7 +373,6 @@ namespace imageview
             err = GetLastError();
         }
         wchar const *msg = _com_error(HRESULT_FROM_WIN32(err)).ErrorMessage();
-        DEFER(LocalFree(reinterpret_cast<HLOCAL>(const_cast<wchar *>(msg))));
         return std::wstring(msg);
     }
 

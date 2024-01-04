@@ -17,6 +17,3 @@ float check_strip_size;
 
 // current frame for animating stripe shader
 float frame;
-
-// 1.0 / stripe_length for stripe shader
-float stripe_length;
