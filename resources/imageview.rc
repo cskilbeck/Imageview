@@ -26,7 +26,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_NEUTRAL
 STRINGTABLE
 BEGIN
     IDS_AppName             "ImageView"
-    IDS_OldCpu              "Your computer is too old to run {}"
+    IDS_OldCpu              "Your computer is too old to run ImageView"
 END
 
 STRINGTABLE
@@ -218,8 +218,8 @@ LANGUAGE LANG_FRENCH, SUBLANG_NEUTRAL
 
 STRINGTABLE
 BEGIN
-    IDS_AppName             "L'ImageVieweur"
-    IDS_OldCpu              "Votre ordinateur est trop vieux pour exécuter %s"
+    IDS_AppName             "ImageVieweur"
+    IDS_OldCpu              "Votre ordinateur est trop vieux pour exécuter ImageVieweur"
 END
 
 STRINGTABLE
@@ -647,7 +647,7 @@ BEGIN
             VALUE "FileVersion", "1.0.0.1"
             VALUE "InternalName", "imageview.rc"
             VALUE "LegalCopyright", "Copyright (C) 2023 chs"
-            VALUE "OriginalFilename", "imageview.rc"
+            VALUE "OriginalFilename", "imageview.exe"
             VALUE "ProductName", "ImageView"
             VALUE "ProductVersion", "1.0.0.1"
         END

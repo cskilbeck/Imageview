@@ -20,6 +20,13 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////
+// 32 bit not supported
+
+#if !defined(_WIN64)
+#error 64 bit only
+#endif
+
+//////////////////////////////////////////////////////////////////////
 // Set SLOW_THINGS_DOWN to 1 to add some pauses to load_file and scan_folder for testing thread stuff
 
 #define SLOW_THINGS_DOWN 0

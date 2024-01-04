@@ -200,7 +200,7 @@ namespace imageview::file
 
             while(true) {
 
-#if SLOW_THINGS_DOWN    // artifically slow down file loading
+#if SLOW_THINGS_DOWN    // artifically slow down folder scanning
                 DWORD x = WaitForSingleObject(cancel_event, (std::rand() % 200) + 200);
                 if(x == WAIT_OBJECT_0) {
                     return E_ABORT;

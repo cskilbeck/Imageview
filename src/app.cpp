@@ -16,7 +16,7 @@
 // Windows only (Windows 7 and newer)
 // Cannot edit or mark up images
 
-// Implementation
+// ImplementationB
 
 // Native Win32 APIs
 // C++ std library
@@ -3878,8 +3878,7 @@ namespace
         // check for required CPU support (for DirectXMath SIMD)
 
         if(!XMVerifyCPUSupport()) {
-            std::wstring message = std::vformat(localize(IDS_OldCpu), std::make_wformat_args(localize(IDS_AppName)));
-            message_box(null, message, MB_ICONEXCLAMATION);
+            message_box(null, localize(IDS_OldCpu).c_str(), MB_ICONEXCLAMATION);
             return 0;
         }
 

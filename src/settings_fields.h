@@ -1,4 +1,7 @@
-// don't warn about structure padding in here
+//////////////////////////////////////////////////////////////////////
+// declare all the settings - this file is included from many places
+
+// Use these macros to declare settings
 
 // DECL_SETTING_SECTION(name, string_id)
 //
