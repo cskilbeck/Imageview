@@ -12,26 +12,11 @@ namespace
 
     HRESULT copy_window_text_to_clipboard(HWND hwnd)
     {
-        SetLastError(0);
+        std::wstring text;
 
-        int len;
-        CHK_ZERO(len = GetWindowTextLengthW(hwnd));
+        CHK_HR(get_window_text(hwnd, text));
 
-        HANDLE handle;
-        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE | GMEM_ZEROINIT, (len + 1) * sizeof(wchar)));
-
-        wchar *buffer;
-        CHK_NULL(buffer = reinterpret_cast<wchar *>(GlobalLock(handle)));
-        DEFER(GlobalUnlock(handle));
-
-        CHK_ZERO(GetWindowTextW(hwnd, buffer, len + 1));
-
-        CHK_BOOL(OpenClipboard(null));
-        DEFER(CloseClipboard());
-
-        CHK_BOOL(EmptyClipboard());
-
-        CHK_BOOL(SetClipboardData(CF_UNICODETEXT, handle));
+        CHK_HR(copy_string_to_clipboard(text));
 
         return S_OK;
     }
@@ -45,6 +30,7 @@ namespace
         return DefSubclassProc(dlg, msg, wparam, lparam);
     }
 
+    //////////////////////////////////////////////////////////////////////
     // ABOUT page \ WM_INITDIALOG
 
     BOOL on_initdialog_about(HWND hwnd, HWND hwndFocus, LPARAM lParam)
@@ -63,15 +49,17 @@ namespace
         get_app_version(ver);
 
         lines.push_back(localize(IDS_AppName));
-        lines.push_back(std::format(L"v{}", ver));
-        lines.push_back(std::format(L"Built {}", unicode(__TIMESTAMP__)));
+        lines.push_back(std::format(L"Version: {}", ver));
+        lines.push_back(std::format(L"Built: {}", unicode(__TIMESTAMP__)));
         lines.push_back(std::format(L"Running as admin: {}", app::is_elevated));
-        lines.push_back(std::format(L"System Memory {} GB", app::system_memory_gb));
+        lines.push_back(std::format(L"System Memory: {} GB", app::system_memory_gb));
+        lines.push_back(std::format(L"Command line: {}", GetCommandLineW()));
 
         std::wstring about_text;
         wchar const *sep = L"";
 
         for(auto const &s : lines) {
+            about_text.append(sep);
             about_text.append(sep);
             about_text.append(s);
             sep = L"\r\n";

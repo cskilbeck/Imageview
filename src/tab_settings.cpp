@@ -411,15 +411,17 @@ namespace
         RECT client_rect;
         GetClientRect(hwnd, &client_rect);
 
-        HPEN grey_pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_3DFACE));
-
         PAINTSTRUCT ps;
         BeginPaint(hwnd, &ps);
-        HGDIOBJ old_pen = SelectObject(ps.hdc, grey_pen);
+
+        SetDCPenColor(ps.hdc, GetSysColor(COLOR_3DSHADOW));
+        HGDIOBJ old_pen = SelectObject(ps.hdc, GetStockObject(DC_PEN));
+
         MoveToEx(ps.hdc, client_rect.left, settings_rect.bottom, null);
         LineTo(ps.hdc, client_rect.right, settings_rect.bottom);
+
         SelectObject(ps.hdc, old_pen);
-        DeleteObject(grey_pen);
+
         EndPaint(hwnd, &ps);
     }
 

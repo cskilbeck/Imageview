@@ -37,6 +37,11 @@ namespace imageview
     float get_window_dpi(HWND w);
     HRESULT get_app_filename(std::wstring &filename);
     HRESULT get_app_version(std::wstring &version);
+
+    //////////////////////////////////////////////////////////////////////
+    // odds and sods
+
+    HRESULT get_window_text(HWND hwnd, std::wstring &text);
     HRESULT copy_string_to_clipboard(std::wstring const &string);
 
     //////////////////////////////////////////////////////////////////////

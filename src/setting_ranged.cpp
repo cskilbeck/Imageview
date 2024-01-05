@@ -12,8 +12,6 @@ namespace
 
     void on_hscroll_setting_ranged(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
-        // slider was slid
-
         HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_RANGED);
         uint new_pos = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
         ranged_setting &ranged = get_controller<ranged_setting>(hwnd);
@@ -34,7 +32,6 @@ namespace imageview::settings_ui
         SendMessage(slider, TBM_SETRANGEMAX, false, max_value);
         SendMessage(slider, TBM_SETRANGEMIN, false, min_value);
         setting_controller::setup_controls(hwnd);
-
         SetWindowSubclass(slider, slider_subclass_handler, 0, 0);
     }
 

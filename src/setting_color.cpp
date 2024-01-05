@@ -68,13 +68,8 @@ namespace
 
             case EN_CHANGE: {
 
-                HWND edit_control = GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR);
-                int len = GetWindowTextLengthW(edit_control);
-                if(len > 0) {
-                    std::wstring txt;
-                    txt.resize(len + 1llu);
-                    GetWindowTextW(edit_control, txt.data(), len + 1);
-                    txt.pop_back();
+                std::wstring txt;
+                if(SUCCEEDED(get_window_text(GetDlgItem(hwnd, IDC_EDIT_SETTING_COLOR), txt))) {
                     uint32 new_color{};
                     if(SUCCEEDED(color_from_string(txt, new_color))) {
                         setting.value = new_color;

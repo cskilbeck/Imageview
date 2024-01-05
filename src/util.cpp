@@ -511,4 +511,20 @@ namespace imageview
 
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT get_window_text(HWND hwnd, std::wstring &text)
+    {
+        int len;
+        CHK_ZERO(len = GetWindowTextLengthW(hwnd));
+
+        std::wstring t(len + 1, 0);
+
+        CHK_ZERO(GetWindowTextW(hwnd, t.data(), len + 1));
+
+        text = t.substr(0, t.size() - 1);
+
+        return S_OK;
+    }
 }
