@@ -57,6 +57,14 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    HRESULT delete_registry_key(std::wstring const &path)
+    {
+        CHK_HR(RegDeleteTreeW(HKEY_CURRENT_USER, path.c_str()));
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     HRESULT parse_section(std::wstring const &value, settings_t::section_t &setting)
     {
         if(_wcsicmp(value.c_str(), L"expanded") == 0) {
@@ -281,6 +289,14 @@ namespace
 
 namespace imageview
 {
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT delete_settings_from_registry()
+    {
+        CHK_HR(delete_registry_key(key));
+        return S_OK;
+    }
+
     //////////////////////////////////////////////////////////////////////
     // load the settings
 

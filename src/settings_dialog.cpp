@@ -35,7 +35,7 @@ namespace
     // all the tabs that can be created
 
     tab_page_t all_tabs[] = {
-        { IDD_DIALOG_SETTINGS_MAIN, settings_dlgproc },
+        { IDD_DIALOG_SETTINGS_SETTINGS, settings_dlgproc },
         { IDD_DIALOG_SETTINGS_HOTKEYS, hotkeys_dlgproc },
         { IDD_DIALOG_SETTINGS_EXPLORER, explorer_dlgproc },
         { IDD_DIALOG_SETTINGS_ABOUT, about_dlgproc },
@@ -207,10 +207,6 @@ namespace
         switch(id) {
 
             // clicked the split button
-
-        case IDC_SPLIT_BUTTON_SETTINGS:
-            revert_settings();
-            break;
 
             // close button clicked (IDCLOSE) or window closed (IDCANCEL from DefDlgProc)
 

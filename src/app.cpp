@@ -2266,7 +2266,9 @@ namespace
 
                     popup_menu_active = true;
 
-                    recent_files::get_files(recent_files_list);
+                    if(FAILED(recent_files::get_files(recent_files_list))) {
+                        recent_files_list.push_back(std::format(L"<{}>", localize(IDS_SCANNING_RECENT_FILES)));
+                    }
 
                     // insert recent files into the recent files menu entry
                     MENUITEMINFOW dummy_info;
@@ -2572,7 +2574,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    //////////////////////////////////////////////////////////////////////
     // draw text overlays after drawing the image
 
     HRESULT draw_text_overlays()
@@ -2582,21 +2583,22 @@ namespace
         if(crosshairs_active) {
 
             vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
+            uint texel_x = static_cast<uint>(p.x);
+            uint texel_y = static_cast<uint>(p.y);
 
-            image::image_t const &img = current_file->img;
-            byte const *pixel = img.pixels + img.row_pitch * (uint64)p.y + (uint64)p.x * 4llu;
+            byte const *pixel = current_file->img.get_pixel(texel_x, texel_y);
 
-            vec2 screen_pos = add_point(texture_to_screen_pos(p), { texel_size().x / 2.0f, 0 });
+            vec2 screen_pos = add_point(texture_to_screen_pos(p), mul_point(texel_size(), { 0.5f, 0.5f }));
 
-            vec2 draw_pos = add_point(screen_pos, { -dpi_scale(label_pad * 2 + 8), -dpi_scale(4.0f) });
+            vec2 draw_pos = add_point(screen_pos, { -dpi_scale(label_pad * 4), -dpi_scale(label_pad * 2) });
 
-            std::wstring text{ std::format(L"{},{}", (int)p.x, (int)p.y) };
+            std::wstring text{ std::format(L"{},{}", texel_x, texel_y) };
             draw_string(text, label_format.Get(), draw_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
 
             // pixels are BGRA, show as RGBA
             rgb_pixel_text = std::format(L"{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
 
-            draw_pos = add_point(screen_pos, { dpi_scale(label_pad * 2 + 8), -dpi_scale(4.0f) });
+            draw_pos = add_point(screen_pos, { dpi_scale(label_pad * 4), -dpi_scale(label_pad * 2) });
 
             draw_string(rgb_pixel_text, label_format.Get(), draw_pos, { 0, 1 }, 1.0f, label_pad, label_pad);
         }
@@ -2886,7 +2888,7 @@ namespace
     HRESULT update()
     {
         // TODO (chs): allow crosshairs on another key
-        crosshairs_active = (GetKeyState(VK_MENU) & 0x8000) != 0;
+        crosshairs_active = current_file != null && (GetKeyState(VK_MENU) & 0x8000) != 0;
 
         m_timer.update();
 

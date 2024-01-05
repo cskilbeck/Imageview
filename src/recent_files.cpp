@@ -115,6 +115,10 @@ namespace imageview::recent_files
 
     HRESULT get_files(std::vector<std::wstring> &filenames)
     {
+        if(WaitForSingleObject(recent_files_event, 1) != WAIT_OBJECT_0) {
+            return E_NOT_SET;
+        }
+
         auto rflock = std::lock_guard{ recent_files_mutex };
 
         filenames.clear();

@@ -40,6 +40,11 @@ namespace imageview::image
         {
             return static_cast<size_t>(row_pitch) * height;
         }
+
+        byte const *get_pixel(uint x, uint y) const
+        {
+            return pixels + row_pitch * y + x * 4llu;
+        }
     };
 
     //////////////////////////////////////////////////////////////////////

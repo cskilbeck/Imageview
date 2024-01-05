@@ -11,6 +11,11 @@ namespace
     using namespace imageview::settings_ui;
 
     //////////////////////////////////////////////////////////////////////
+    // container for the settings
+
+    HWND settings_container;
+
+    //////////////////////////////////////////////////////////////////////
     // scroll info for the settings page
 
     scroll_pos settings_scrollpos;
@@ -66,12 +71,15 @@ namespace
     {
         if(sections_should_update) {
 
-            HWND parent = GetParent(hwnd);
-            HWND tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
-
             RECT tab_rect;
-            GetWindowRect(tab_ctrl, &tab_rect);
-            TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
+
+            // HWND page = GetParent(hwnd);
+            // HWND parent = GetParent(page);
+            // HWND tab_ctrl = GetDlgItem(parent, IDC_SETTINGS_TAB_CONTROL);
+            // GetWindowRect(tab_ctrl, &tab_rect);
+            // TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
+
+            GetClientRect(hwnd, &tab_rect);
 
             // update and get new heights of the sections
 
@@ -162,24 +170,43 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_VSCROLL
+    // SETTINGS container \ WM_VSCROLL
 
-    void on_vscroll_settings(HWND hwnd, HWND hwndCtl, UINT code, int pos)
+    void on_vscroll_settings_container(HWND hwnd, HWND hwndCtl, UINT code, int pos)
     {
         on_scroll(settings_scrollpos, hwnd, SB_VERT, code);
         refresh_sections(hwnd);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_INITDIALOG
+    // SETTINGS container \ WM_MOUSEWHEEL
 
-    BOOL on_initdialog_settings(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    void on_mousewheel_settings_container(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
     {
-        previous_settings = settings;    // for reverting
-        dialog_settings = settings;      // currently editing
+        scroll_window(settings_scrollpos, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
+        refresh_sections(hwnd);
+    }
 
-        settings_should_update = false;
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS container \ WM_USER
+    // WM_USER toggles section expand/collapse
 
+    void on_user_settings_container(HWND hwnd, WPARAM wparam, LPARAM lparam)
+    {
+        section_setting *section = reinterpret_cast<section_setting *>(lparam);
+
+        if(section->expanded) {
+            active_section = section;
+        }
+
+        refresh_sections(hwnd);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS container \ WM_INITDIALOG
+
+    BOOL on_initdialog_settings_container(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
         // create the list of settings controllers
         controllers.clear();
         section_setting::sections.clear();
@@ -216,14 +243,23 @@ namespace
 
 #include "settings_fields.h"
 
-        // get parent tab window rect
-        HWND main_dialog = GetParent(hwnd);
-        HWND tab_ctrl = GetDlgItem(main_dialog, IDC_SETTINGS_TAB_CONTROL);
+        // we need the size of the tab page
 
-        RECT tab_rect;
-        GetWindowRect(tab_ctrl, &tab_rect);
-        MapWindowPoints(null, main_dialog, reinterpret_cast<LPPOINT>(&tab_rect), 2);
-        TabCtrl_AdjustRect(tab_ctrl, false, &tab_rect);
+        HWND page = GetParent(hwnd);
+        HWND main_dialog = GetParent(page);
+
+        HWND placeholder = GetDlgItem(page, IDC_STATIC_CONTAINER_PLACEHOLDER);
+
+        RECT settings_rect;
+        GetWindowRect(placeholder, &settings_rect);
+        MapWindowPoints(HWND_DESKTOP, page, reinterpret_cast<LPPOINT>(&settings_rect), 2);
+
+        // placeholder was just for placement, destroy it
+
+        DestroyWindow(placeholder);
+        placeholder = null;
+
+        // add all the settings
 
         float dpi = get_window_dpi(main_dialog);
 
@@ -311,15 +347,50 @@ namespace
         }
 
         // size the window to fit within the tab control exactly
+        // We need the +1 because the dialog editor won't let us size
+        // the window to fill the area exactly
 
-        int tab_width = rect_width(tab_rect);
-
-        SetWindowPos(hwnd, null, 0, 0, tab_width, rect_height(tab_rect), SWP_NOZORDER | SWP_NOMOVE);
+        SetWindowPos(hwnd, null, 0, 0, rect_width(settings_rect) + 1, rect_height(settings_rect) + 1, SWP_NOZORDER);
 
         settings_scrollpos[SB_HORZ] = 0;
         settings_scrollpos[SB_VERT] = 0;
 
         refresh_sections(hwnd);
+
+        InvalidateRect(main_dialog, null, false);
+
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS container \ DLGPROC
+
+    INT_PTR settings_container_dlgproc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        switch(msg) {
+
+            HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_settings_container);
+            HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings_container);
+            HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings_container);
+            HANDLE_MSG(hWnd, WM_USER, on_user_settings_container);
+        }
+        return ctlcolor_base(hWnd, msg, wParam, lParam);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS page \ WM_INITDIALOG
+
+    BOOL on_initdialog_settings(HWND hwnd, HWND hwndFocus, LPARAM lParam)
+    {
+        previous_settings = settings;    // for reverting
+        dialog_settings = settings;      // currently editing
+
+        settings_should_update = false;
+
+        // create the settings container
+
+        settings_container = CreateDialogW(
+            app::instance, MAKEINTRESOURCEW(IDD_DIALOG_SETTINGS_CONTAINER), hwnd, settings_container_dlgproc);
 
         // uncork the settings notifier
         settings_should_update = true;
@@ -328,38 +399,92 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_MOUSEWHEEL
+    // SETTINGS page \ WM_PAINT
+    // draw a grey separator line between the settings and the controls underneath
 
-    void on_mousewheel_settings(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+    void on_paint_settings(HWND hwnd)
     {
-        scroll_window(settings_scrollpos, hwnd, SB_VERT, -zDelta / WHEEL_DELTA);
-        refresh_sections(hwnd);
+        RECT settings_rect;
+        GetClientRect(settings_container, &settings_rect);
+
+        RECT client_rect;
+        GetClientRect(hwnd, &client_rect);
+
+        HPEN grey_pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_3DFACE));
+
+        PAINTSTRUCT ps;
+        BeginPaint(hwnd, &ps);
+        HGDIOBJ old_pen = SelectObject(ps.hdc, grey_pen);
+        MoveToEx(ps.hdc, client_rect.left, settings_rect.bottom, null);
+        LineTo(ps.hdc, client_rect.right, settings_rect.bottom);
+        SelectObject(ps.hdc, old_pen);
+        DeleteObject(grey_pen);
+        EndPaint(hwnd, &ps);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_USER
-    // WM_USER toggles section expand/collapse
+    // SETTINGS page \ WM_NOTIFY
 
-    void on_user_settings(HWND hwnd, WPARAM wparam, LPARAM lparam)
+    int on_notify_settings(HWND hwnd, int idFrom, LPNMHDR nmhdr)
     {
-        section_setting *section = reinterpret_cast<section_setting *>(lparam);
+        switch(idFrom) {
 
-        if(section->expanded) {
-            active_section = section;
+            // clicked the little arrow on the split button
+
+        case IDC_SPLIT_BUTTON_SETTINGS: {
+
+#pragma warning(suppress : 26454)
+            if(nmhdr->code == (uint)(BCN_DROPDOWN)) {
+
+                RECT rc;
+                GetWindowRect(GetDlgItem(hwnd, IDC_SPLIT_BUTTON_SETTINGS), &rc);
+                HMENU menu = LoadMenuW(app::instance, MAKEINTRESOURCEW(IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON));
+                HMENU popup = GetSubMenu(menu, 0);
+                TPMPARAMS tpm;
+                tpm.cbSize = sizeof(TPMPARAMS);
+                tpm.rcExclude = rc;
+                uint choice = TrackPopupMenuEx(popup,
+                                               TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_VERTICAL | TPM_RETURNCMD,
+                                               rc.left,
+                                               rc.bottom,
+                                               hwnd,
+                                               &tpm);
+                DestroyMenu(menu);
+
+                switch(choice) {
+
+                case ID_POPUP_SETTINGS_RESET_DEFAULT:
+                    reset_settings_to_defaults();
+                    break;
+
+                case ID_POPUP_SETTINGS_SAVE:
+                    settings_ui::save_current_settings();
+                    break;
+
+                case ID_POPUP_SETTINGS_LOAD_SAVED:
+                    settings_ui::load_saved_settings();
+                    break;
+                }
+            }
+        } break;
         }
-
-        refresh_sections(hwnd);
+        return 0;
     }
 
-    //////////////////////////////////////////////////////////////////////
-    // SETTINGS page \ WM_SHOWWINDOW
-    // show/hide the Revert button
 
-    void on_showwindow_settings(HWND hwnd, BOOL fShow, UINT status)
+    //////////////////////////////////////////////////////////////////////
+    // SETTINGS page \ WM_COMMAND
+
+    void on_command_settings(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
-        HWND main_dialog = GetParent(hwnd);
-        HWND revert_button = GetDlgItem(main_dialog, IDC_SPLIT_BUTTON_SETTINGS);
-        ShowWindow(revert_button, fShow ? SW_SHOW : SW_HIDE);
+        switch(id) {
+
+            // clicked the split button
+
+        case IDC_SPLIT_BUTTON_SETTINGS:
+            settings_ui::revert_settings();
+            break;
+        }
     }
 }
 
@@ -372,11 +497,10 @@ namespace imageview::settings_ui
     {
         switch(msg) {
 
-            HANDLE_MSG(hWnd, WM_VSCROLL, on_vscroll_settings);
             HANDLE_MSG(hWnd, WM_INITDIALOG, on_initdialog_settings);
-            HANDLE_MSG(hWnd, WM_MOUSEWHEEL, on_mousewheel_settings);
-            HANDLE_MSG(hWnd, WM_USER, on_user_settings);
-            HANDLE_MSG(hWnd, WM_SHOWWINDOW, on_showwindow_settings);
+            HANDLE_MSG(hWnd, WM_PAINT, on_paint_settings);
+            HANDLE_MSG(hWnd, WM_COMMAND, on_command_settings);
+            HANDLE_MSG(hWnd, WM_NOTIFY, on_notify_settings);
         }
         return ctlcolor_base(hWnd, msg, wParam, lParam);
     }
@@ -441,6 +565,6 @@ namespace imageview::settings_ui
 
     void animate_settings_page(HWND hwnd)
     {
-        update_sections(hwnd);
+        update_sections(settings_container);
     }
 }

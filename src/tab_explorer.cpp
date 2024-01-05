@@ -74,7 +74,7 @@ namespace
 
         case IDC_BUTTON_EXPLORER_PURGE_REGISTRY: {
             remove_filetype_handler();
-            // settings::delete_settings_from_registry();
+            delete_settings_from_registry();
             update_controls(hwnd);
         } break;
         }

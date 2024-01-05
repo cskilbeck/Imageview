@@ -141,4 +141,6 @@ namespace imageview
 
     extern settings_t settings;
     extern settings_t default_settings;
+
+    HRESULT delete_settings_from_registry();
 }
