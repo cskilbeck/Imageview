@@ -127,6 +127,10 @@
 #define IDD_DIALOG_SETTINGS_CONTAINER   209
 #define IDS_CURRENT_USER                210
 #define IDS_SCANNING_RECENT_FILES       211
+#define IDS_ADDED_FILE_TYPES            212
+#define IDS_REMOVED_FILE_TYPES          213
+#define IDS_PURGE_EVERYTHING            214
+#define IDS_PURGED_EVERYTHING           214
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002
@@ -157,9 +161,7 @@
 #define IDC_COMBO_EXPLORER_ALL_USERS    1031
 #define IDC_STATIC_EXPLORER_STATUS      1032
 #define IDC_STATIC_EXPLORER_REQUIRES_ADMIN 1033
-#define IDC_SPLIT1                      1034
 #define IDC_STATIC_CONTAINER_PLACEHOLDER 1035
-#define IDC_STATIC_GROUPBOX_FOOTER      1036
 #define ID_RECENT_FILE_00               30000
 #define ID_RECENT_FILE_01               30001
 #define ID_RECENT_FILE_02               30002
@@ -225,7 +227,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        211
+#define _APS_NEXT_RESOURCE_VALUE        213
 #define _APS_NEXT_COMMAND_VALUE         40090
 #define _APS_NEXT_CONTROL_VALUE         1037
 #define _APS_NEXT_SYMED_VALUE           122

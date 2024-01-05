@@ -48,21 +48,6 @@ namespace
     bool sections_should_update{ false };
 
     //////////////////////////////////////////////////////////////////////
-    // setup all the controls when the settings have changed outside
-    // of the dialog handlers (i.e. from the main window hotkeys or menu)
-
-    void update_all_settings_controls()
-    {
-        settings_should_update = false;
-
-        for(auto s : controllers) {
-            s->update_controls();
-        }
-
-        settings_should_update = true;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // animate any expanding/contracting sections
     // update the scroll bars
     // position the sections based on the scrollbar position
@@ -158,6 +143,22 @@ namespace
                 active_section = null;
             }
         }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // setup all the controls when the settings have changed outside
+    // of the dialog handlers (i.e. from the main window hotkeys or menu)
+
+    void update_all_settings_controls()
+    {
+        settings_should_update = false;
+        sections_should_update = true;
+
+        for(auto s : controllers) {
+            s->update_controls();
+        }
+
+        settings_should_update = true;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -552,6 +553,8 @@ namespace imageview::settings_ui
 
     void post_new_settings()
     {
+        settings_changed = true;
+
         if(settings_should_update) {
 
             // main window is responsible for freeing this copy of the settings

@@ -4070,7 +4070,10 @@ namespace
 
         // window has been destroyed, save settings and clean up
 
-        CHK_HR(settings.save());
+        if(settings_changed) {
+
+            CHK_HR(settings.save());
+        }
 
         SetEvent(quit_event);
 

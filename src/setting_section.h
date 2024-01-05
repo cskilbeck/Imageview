@@ -23,6 +23,11 @@ namespace imageview::settings_ui
 
         void update_controls() override
         {
+            if(expanded) {
+                target_height = expanded_height;
+            } else {
+                target_height = banner_height;
+            }
         }
 
         bool is_section_header() const override

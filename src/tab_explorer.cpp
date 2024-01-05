@@ -9,6 +9,24 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    void clear_message(HWND hwnd)
+    {
+        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_EXPLORER_STATUS), L"");
+        KillTimer(hwnd, 1);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void show_message(HWND hwnd, uint timeout, std::wstring const &msg)
+    {
+        SetWindowTextW(GetDlgItem(hwnd, IDC_STATIC_EXPLORER_STATUS), msg.c_str());
+        if(timeout != 0) {
+            SetTimer(hwnd, 1, timeout, null);
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     void update_controls(HWND dlg)
     {
         bool elevated = false;
@@ -48,6 +66,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // EXPLORER page \ WM_COMMAND
 
     void on_command_explorer(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
     {
@@ -60,11 +79,13 @@ namespace
         case IDC_BUTTON_EXPLORER_ADD_FILE_TYPES: {
             install_filetype_handler();
             update_controls(hwnd);
+            show_message(hwnd, 2000, localize(IDS_ADDED_FILE_TYPES));
         } break;
 
         case IDC_BUTTON_EXPLORER_REMOVE_FILE_TYPES: {
             remove_filetype_handler();
             update_controls(hwnd);
+            show_message(hwnd, 2000, localize(IDS_REMOVED_FILE_TYPES));
         } break;
 
         case IDC_BUTTON_EXPLORER_RESTART_AS_ADMIN: {
@@ -76,8 +97,17 @@ namespace
             remove_filetype_handler();
             delete_settings_from_registry();
             update_controls(hwnd);
+            show_message(hwnd, 2000, localize(IDS_PURGED_EVERYTHING));
         } break;
         }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // EXPLORER page \ WM_TIMER
+
+    void on_timer_explorer(HWND hwnd, UINT id)
+    {
+        clear_message(hwnd);
     }
 }
 
@@ -91,6 +121,7 @@ namespace imageview::settings_ui
         switch(msg) {
             HANDLE_MSG(dlg, WM_INITDIALOG, on_initdialog_explorer);
             HANDLE_MSG(dlg, WM_COMMAND, on_command_explorer);
+            HANDLE_MSG(dlg, WM_TIMER, on_timer_explorer);
         }
         return ctlcolor_base(dlg, msg, wParam, lParam);
     }

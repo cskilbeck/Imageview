@@ -199,6 +199,9 @@ BEGIN
     IDS_ALL_USERS           "All Users"
     IDS_CURRENT_USER        "Current User"
     IDS_SCANNING_RECENT_FILES "Scanning recent files..."
+    IDS_ADDED_FILE_TYPES    "File type handler added"
+    IDS_REMOVED_FILE_TYPES  "File type handler removed"
+    IDS_PURGED_EVERYTHING   "Purged all settings from registry"
 END
 
 #endif    // English (Neutral) resources
@@ -451,7 +454,7 @@ BEGIN
     RTEXT           "Remove file types handler",IDC_STATIC,47,109,83,8
     PUSHBUTTON      "Purge",IDC_BUTTON_EXPLORER_PURGE_REGISTRY,139,130,50,14
     RTEXT           "Purge all registry settings",IDC_STATIC,47,133,83,8
-    LTEXT           "",IDC_STATIC_EXPLORER_STATUS,11,167,225,8
+    LTEXT           "",IDC_STATIC_EXPLORER_STATUS,6,187,239,8
     COMBOBOX        IDC_COMBO_EXPLORER_ALL_USERS,136,27,70,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     RTEXT           "Set file types handler for",IDC_STATIC,19,30,109,8
     PUSHBUTTON      "Restart as Admin",IDC_BUTTON_EXPLORER_RESTART_AS_ADMIN,136,44,70,14
