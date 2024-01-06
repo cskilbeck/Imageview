@@ -129,8 +129,9 @@
 #define IDS_SCANNING_RECENT_FILES       211
 #define IDS_ADDED_FILE_TYPES            212
 #define IDS_REMOVED_FILE_TYPES          213
-#define IDS_PURGE_EVERYTHING            214
 #define IDS_PURGED_EVERYTHING           214
+#define IDS_CLIPBOARD_FILENAME          215
+#define IDS_CROPPED_FILENAME            216
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002

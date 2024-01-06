@@ -202,6 +202,8 @@ BEGIN
     IDS_ADDED_FILE_TYPES    "File type handler added"
     IDS_REMOVED_FILE_TYPES  "File type handler removed"
     IDS_PURGED_EVERYTHING   "Purged all settings from registry"
+    IDS_CLIPBOARD_FILENAME  "Clipboard"
+    IDS_CROPPED_FILENAME    "Cropped"
 END
 
 #endif    // English (Neutral) resources

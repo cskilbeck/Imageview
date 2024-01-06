@@ -29,10 +29,9 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
 
-// file type association / handler thing
+// file type association / handler thing ('open with' menu)
 // shortcut editor
 // mutual exclude mouse buttons
-// remove ImageView from this PC (file associations, settings from registry, optionally delete exe)
 // get all the mouse handling stuff out of update() and into mouse move handler
 // settings dialog : cache size not reet
 // pause render()/update() when app loses focus
@@ -1622,7 +1621,7 @@ namespace
 
         if(!f.bytes.empty()) {
             clear_selection();
-            f.filename = L"Clipboard";
+            f.filename = localize(IDS_CLIPBOARD_FILENAME);
             f.hresult = S_OK;
             f.index = -1;
             f.is_cache_load = true;
@@ -2474,7 +2473,7 @@ namespace
         f.is_clipboard = true;
         f.bytes.clear();
         f.pixels.clear();
-        f.filename = L"Cropped";
+        f.filename = localize(IDS_CROPPED_FILENAME);
         f.hresult = S_OK;
         f.index = -1;
         f.is_cache_load = true;
@@ -2496,21 +2495,6 @@ namespace
         clear_selection();
 
         return show_image(&f);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    void reset_settings()
-    {
-        if(message_box(window, localize(IDS_RESET_SETTINGS), MB_YESNO) == IDYES) {
-
-            bool old_fullscreen = settings.fullscreen;
-            WINDOWPLACEMENT old_windowplacement = settings.window_placement;
-            settings = default_settings;
-            if(old_fullscreen != settings.fullscreen) {
-                toggle_fullscreen();
-            }
-        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2968,7 +2952,7 @@ namespace
 
         case ID_COPY_RGB:
             if(crosshairs_active && SUCCEEDED(copy_string_to_clipboard(rgb_pixel_text))) {
-                set_message(std::format(L"Copied {}", rgb_pixel_text), 3);
+                set_message(std::format(L"{} {}", localize(IDS_COPIED), rgb_pixel_text), 3);
             }
             break;
 

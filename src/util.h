@@ -43,9 +43,6 @@ namespace imageview
 
     HRESULT get_window_text(HWND hwnd, std::wstring &text);
     HRESULT copy_string_to_clipboard(std::wstring const &string);
-
-    //////////////////////////////////////////////////////////////////////
-
     HRESULT load_resource(DWORD id, wchar const *type, void **buffer, size_t *size);
 
     //////////////////////////////////////////////////////////////////////
