@@ -231,6 +231,9 @@
     <ClCompile Include="src\file_types_handler.cpp">
       <Filter>3_src</Filter>
     </ClCompile>
+    <ClCompile Include="src\rect.cpp">
+      <Filter>3_src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="resources\magnifying_glass.ico">

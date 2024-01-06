@@ -4,6 +4,18 @@
 
 //////////////////////////////////////////////////////////////////////
 
+namespace imageview
+{
+    enum rotation_angle_t : uint
+    {
+        rotate_0 = 0,
+        rotate_90 = 1,
+        rotate_180 = 2,
+        rotate_270 = 3,
+        rotate_max = 4
+    };
+}
+
 namespace imageview::app
 {
     //////////////////////////////////////////////////////////////////////

@@ -16,6 +16,8 @@ using int16 = std::int16_t;
 using int32 = std::int32_t;
 using int64 = std::int64_t;
 
+using uint = uint32;
+
 using wchar = wchar_t;
 
 // share some types with the HLSL header
@@ -27,8 +29,5 @@ namespace imageview
 
 using matrix = XMMATRIX;
 using vec4 = XMVECTOR;
-using uint = uint32;
 using float4 = vec4;
 using float2 = imageview::vec2;
-using int4 = int[4];
-using int2 = int[2];

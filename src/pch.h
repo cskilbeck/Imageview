@@ -111,6 +111,7 @@ using Microsoft::WRL::ComPtr;
 #include <map>
 #include <unordered_map>
 #include <stack>
+#include <numbers>
 
 //////////////////////////////////////////////////////////////////////
 // Resource IDs

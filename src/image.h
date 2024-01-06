@@ -41,9 +41,13 @@ namespace imageview::image
             return static_cast<size_t>(row_pitch) * height;
         }
 
-        byte const *get_pixel(uint x, uint y) const
+        HRESULT get_pixel(uint x, uint y, byte const *&pixel) const
         {
-            return pixels + row_pitch * y + x * 4llu;
+            if(x >= width || y >= height) {
+                return ERROR_BAD_ARGUMENTS;
+            }
+            pixel = pixels + row_pitch * y + x * 4llu;
+            return S_OK;
         }
     };
 
@@ -98,4 +102,11 @@ namespace imageview::image
     HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 
     HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch);
+
+    // image transforms
+
+    HRESULT image_flip_horizontal(image_t &image);
+    HRESULT image_flip_vertical(image_t &image);
+    HRESULT image_rotate_clockwise(image_t &image);
+    HRESULT image_rotate_counter_clockwise(image_t &image);
 }

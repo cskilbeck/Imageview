@@ -171,6 +171,29 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
+    // for x/y flip
+
+    float __declspec(align(16)) x_reflect[4] = { 1, 0, 0, 0 };
+    float __declspec(align(16)) y_reflect[4] = { 0, 1, 0, 0 };
+
+    matrix x_flip_matrix = XMMatrixReflect(_mm_load_ps(x_reflect));
+    matrix y_flip_matrix = XMMatrixReflect(_mm_load_ps(y_reflect));
+
+    //////////////////////////////////////////////////////////////////////
+    // valid rotation angles are 0, 90, 270
+
+    float rotation_angles[rotate_max] = {
+        0, std::numbers::pi_v<float> * 1.5f, std::numbers::pi_v<float>, std::numbers::pi_v<float> * 0.5f
+    };
+
+    rotation_angle_t rotation = rotate_0;
+
+    //////////////////////////////////////////////////////////////////////
+
+    bool flip_x;
+    bool flip_y;
+
+    //////////////////////////////////////////////////////////////////////
     // fonts are hard coded for now, embedded as resources
 
     char const *label_font_family_name{ "Noto Sans" };
@@ -1215,35 +1238,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // select nothing
-
-    void clear_selection()
-    {
-        drag_selection = false;
-        grabbing_selection = false;
-        select_active = false;
-        set_mouse_cursor(null);
-        SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // select the whole image
-
-    void select_all()
-    {
-        if(image_texture.Get() != null) {
-            drag_select_pos = { 0, 0 };
-            select_anchor = { 0, 0 };
-            select_current = sub_point(texture_size(), { 1, 1 });
-            selection_size = select_current;
-            select_active = true;
-            selecting = false;
-            drag_selection = false;
-            grabbing_selection = false;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // reset the zoom mode to one of `reset_zoom_mode`
 
     void reset_zoom(zoom_mode_t mode)
@@ -1275,6 +1269,58 @@ namespace
 
         last_zoom_mode = mode;
         has_been_zoomed_or_dragged = false;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // select nothing
+
+    void clear_selection()
+    {
+        drag_selection = false;
+        grabbing_selection = false;
+        select_active = false;
+        set_mouse_cursor(null);
+        SetCursor(current_mouse_cursor);    // update cursor now, don't wait for a mouse move
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // select the whole image
+
+    void select_all()
+    {
+        if(image_texture.Get() != null) {
+            drag_select_pos = { 0, 0 };
+            select_anchor = { 0, 0 };
+            select_current = sub_point(texture_size(), { 1, 1 });
+            selection_size = select_current;
+            select_active = true;
+            selecting = false;
+            drag_selection = false;
+            grabbing_selection = false;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    float get_rotation_angle(rotation_angle_t rot)
+    {
+        return rotation_angles[static_cast<int>(rot)];
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void rotate(int direction)
+    {
+        rotation = static_cast<rotation_angle_t>(static_cast<uint>(rotation + direction) % rotate_max);
+        std::swap(texture_width, texture_height);
+
+        // rotate the draw rectangle by 90 degrees
+
+        target_rect = target_rect.rotate90();
+
+        current_rect = target_rect;
+
+        clear_selection();    // can't be arsed to rotate the selection
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1402,6 +1448,8 @@ namespace
 
         CD3D11_SAMPLER_DESC sampler_desc(D3D11_DEFAULT);
         sampler_desc.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+        sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+        sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
         CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
         D3D_SET_NAME(sampler_state);
 
@@ -2566,22 +2614,37 @@ namespace
 
         if(crosshairs_active) {
 
-            vec2 p = clamp_to_texture(screen_to_texture_pos(cur_mouse_pos));
-            uint texel_x = static_cast<uint>(p.x);
-            uint texel_y = static_cast<uint>(p.y);
+            vec2 p = clamp_to_texture(vec2::floor(screen_to_texture_pos(cur_mouse_pos)));
 
-            byte const *pixel = current_file->img.get_pixel(texel_x, texel_y);
+            vec2 texel_pos = vec2::rotate(texture_size(), p, rotation);
 
-            vec2 screen_pos = add_point(texture_to_screen_pos(p), mul_point(texel_size(), { 0.5f, 0.5f }));
+            if(flip_x) {
+                texel_pos.x = (texture_width - 1) - texel_pos.x;
+            }
+
+            if(flip_y) {
+                texel_pos.y = (texture_height - 1) - texel_pos.y;
+            }
+
+            byte const *pixel{ null };
+            CHK_HR(current_file->img.get_pixel(static_cast<uint>(texel_pos.x), static_cast<uint>(texel_pos.y), pixel));
+
+            vec2 half_texel = mul_point(texel_size(), { 0.5f, 0.5f });
+            vec2 screen_pos = add_point(texture_to_screen_pos(p), half_texel);
 
             vec2 draw_pos = add_point(screen_pos, { -dpi_scale(label_pad * 4), -dpi_scale(label_pad * 2) });
 
-            std::wstring text{ std::format(L"{},{}", texel_x, texel_y) };
+            // std::wstring text{ std::format(L"{},{}", p.x, p.y) };
+            std::wstring text{ std::format(
+                L"After {},{} from Before {},{} ({})", texel_pos.x, texel_pos.y, p.x, p.y, (uint)rotation) };
             draw_string(text, label_format.Get(), draw_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
 
             // pixels are BGRA, show as RGBA
-            rgb_pixel_text = std::format(L"{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
-
+            if(pixel != null) {
+                rgb_pixel_text = std::format(L"{:02X}{:02X}{:02X}{:02X}", pixel[2], pixel[1], pixel[0], pixel[3]);
+            } else {
+                rgb_pixel_text = L"????????";
+            }
             draw_pos = add_point(screen_pos, { dpi_scale(label_pad * 4), -dpi_scale(label_pad * 2) });
 
             draw_string(rgb_pixel_text, label_format.Get(), draw_pos, { 0, 1 }, 1.0f, label_pad, label_pad);
@@ -2650,14 +2713,20 @@ namespace
     {
         // get viewport coordinates from pixel coordinates
 
-        float vp_left = rc.x * 2.0f / window_width - 1.0f;
-        float vp_top = rc.y * -2.0f / window_height + 1.0f;
+        float x = rc.x;
+        float y = rc.y;
+        float w = rc.w;
+        float h = rc.h;
 
-        float vp_width = rc.w * 2.0f / window_width;
-        float vp_height = rc.h * -2.0f / window_height;
+        float left = x * 2.0f / window_width - 1.0f;
+        float top = y * -2.0f / window_height + 1.0f;
 
-        shader.rect_position = { vp_left, vp_top };
-        shader.rect_size = { vp_width, vp_height };
+        float width = w * 2.0f / window_width;
+        float height = h * -2.0f / window_height;
+
+        // if rotated 90 or 270, swap some stuff around
+
+        shader.rect = { left, top, width, height };
 
         // update shader constants
 
@@ -2731,6 +2800,18 @@ namespace
             shader.colors[2] = g2;
             shader.colors[3] = g1;
 
+            shader.texture_transform = XMMatrixIdentity();
+
+            shader.texture_transform =
+                XMMatrixMultiply(XMMatrixRotationZ(get_rotation_angle(rotation)), shader.texture_transform);
+
+            if(flip_x) {
+                shader.texture_transform = XMMatrixMultiply(x_flip_matrix, shader.texture_transform);
+            }
+            if(flip_y) {
+                shader.texture_transform = XMMatrixMultiply(y_flip_matrix, shader.texture_transform);
+            }
+
             vec2 grid_pos{ 0, 0 };
 
             if(!settings.fixed_checkerboard) {
@@ -2781,8 +2862,8 @@ namespace
 
                 shader.check_strip_size = 1.0f / settings.dash_length;
 
-                // NOTE: dodgy fix for the stripe-near-zero problem is to add stripe * max(window_width, window_height)
-                // to the frame count so it doesn't wrap near the origin
+                // NOTE: dodgy fix for the stripe-near-zero problem is to add stripe * max(window_width,
+                // window_height) to the frame count so it doesn't wrap near the origin
 
                 shader.frame = fmodf(settings.dash_anim_speed * frame_count / 10.0f, settings.dash_length * -2.0f) +
                                settings.dash_length * std::max(window_width, window_height);
@@ -3004,6 +3085,22 @@ namespace
                 settings_ui::new_settings_update();
             }
         } break;
+
+        case ID_ROTATE_CLOCKWISE:
+            rotate(1);
+            break;
+
+        case ID_ROTATE_COUNTER_CLOCKWISE:
+            rotate(-1);
+            break;
+
+        case ID_FLIP_HORIZONTAL:
+            flip_x = !flip_x;
+            break;
+
+        case ID_FLIP_VERTICAL:
+            flip_y = !flip_y;
+            break;
 
         case ID_ZOOM_1:
             settings.zoom_mode = zoom_mode_t::one_to_one;
@@ -3767,6 +3864,8 @@ namespace
 
     HRESULT show_image(image::image_file *f)
     {
+        rotation = rotate_0;
+
         current_file = f;
 
         FILETIME now;

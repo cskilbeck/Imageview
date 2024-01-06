@@ -191,6 +191,10 @@ END
 STRINGTABLE
 BEGIN
     ID_COPY_RGB             "Copy pixel RGB"
+    ID_ROTATE_CLOCKWISE     "Rotate clockwise"
+    ID_ROTATE_COUNTER_CLOCKWISE "Rotate counter clockwise"
+    ID_FLIP_VERTICAL        "Flip Vertical"
+    ID_FLIP_HORIZONTAL      "Flip Horizontal"
 END
 
 STRINGTABLE
@@ -340,6 +344,12 @@ BEGIN
     "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
+    VK_RIGHT,       ID_ROTATE_CLOCKWISE,    VIRTKEY, SHIFT, NOINVERT
+    VK_LEFT,        ID_ROTATE_COUNTER_CLOCKWISE, VIRTKEY, SHIFT, NOINVERT
+    VK_UP,          ID_FLIP_VERTICAL,       VIRTKEY, CONTROL, NOINVERT
+    VK_DOWN,        ID_FLIP_VERTICAL,       VIRTKEY, CONTROL, NOINVERT
+    VK_LEFT,        ID_FLIP_HORIZONTAL,     VIRTKEY, CONTROL, NOINVERT
+    VK_RIGHT,       ID_FLIP_HORIZONTAL,     VIRTKEY, CONTROL, NOINVERT
 END
 
 
@@ -377,6 +387,13 @@ BEGIN
             MENUITEM "Set border color",            ID_VIEW_SETBORDERCOLOR
             MENUITEM "Cycle grid size",             ID_VIEW_GRIDSIZE
             MENUITEM "Fixed grid",                  ID_VIEW_FIXEDGRID
+        END
+        POPUP "Tranform"
+        BEGIN
+            MENUITEM "Rotate clockwise",            ID_ROTATE_CLOCKWISE
+            MENUITEM "Rotate counter clockwise",    ID_ROTATE_COUNTER_CLOCKWISE
+            MENUITEM "Flip Horizontal",             ID_FLIP_HORIZONTAL
+            MENUITEM "Flip Vertical",               ID_FLIP_VERTICAL
         END
         POPUP "Select"
         BEGIN

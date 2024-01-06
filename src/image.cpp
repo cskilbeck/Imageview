@@ -726,4 +726,32 @@ namespace imageview::image
 
         return S_OK;
     }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT image_flip_horizontal(image_t &image)
+    {
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT image_flip_vertical(image_t &image)
+    {
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT image_rotate_clockwise(image_t &image)
+    {
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT image_rotate_counter_clockwise(image_t &image)
+    {
+        return S_OK;
+    }
 }

@@ -1,14 +1,20 @@
+// alignment matters here
+
+// for image flip/rotate
+matrix texture_transform;
 
 // for draw_rectangle
-float2 rect_position;
-float2 rect_size;
+float4 rect;
 
 // colors[0] for solid shader
 // colors[0], [1] for stripey shader
 // colors[0],[1],[2],[3] for checkerboard
 float4 colors[4];
 
+// up to 4 trailing floats can be specified without packing into a struct
+
 // checkerboard offset is {0,0} for 'floating', otherwise based on image position
+
 float2 checkerboard_offset;
 
 // 1.0 / grid size in screen pixels

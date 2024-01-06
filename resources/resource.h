@@ -223,13 +223,23 @@
 #define ID_POPUP_SAVESETTINGS           40086
 #define ID_POPUP_SETTINGS_SAVE          40087
 #define ID_COPY_RGB                     40088
+#define ID_ROTATE_CLOCKWISE             40090
+#define ID_ROTATE_COUNTER_CLOCKWISE     40091
+#define ID_FLIP_VERTICAL                40092
+#define ID_FLIP_HORIZONTAL              40095
+#define ID_POPUP_TRANFORM               40097
+#define ID_TRANFORM_ROTATECLOCKWISE     40098
+#define ID_TRANFORM_ROTATECOUNTERCLOCK  40099
+#define ID_TRANFORM_FLIPHORIZONTAL      40100
+#define ID_TRANFORM_FLIPVERTICAL        40101
+#define ID_ROTATE_COUNTER_CLOCK         40102
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        213
-#define _APS_NEXT_COMMAND_VALUE         40090
+#define _APS_NEXT_RESOURCE_VALUE        219
+#define _APS_NEXT_COMMAND_VALUE         40103
 #define _APS_NEXT_CONTROL_VALUE         1037
 #define _APS_NEXT_SYMED_VALUE           122
 #endif
