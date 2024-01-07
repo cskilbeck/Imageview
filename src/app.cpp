@@ -1302,6 +1302,45 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    void flip(flip_type_t flip_type)
+    {
+        flip_type_t select_flip = flip_type;
+
+        // if the image is on its side, flip the other axis
+
+        if(rotation == rotate_90 || rotation == rotate_270) {
+
+            flip_type = static_cast<flip_type_t>(1 - flip_type);
+        }
+
+        // flip_x / flip_y are used for drawing the texture
+
+        if(flip_type == flip_horizontal) {
+            flip_x = !flip_x;
+        } else {
+            flip_y = !flip_y;
+        }
+
+        // flip the selection visually
+
+        switch(select_flip) {
+
+        case flip_horizontal: {
+            vec2 t = sub_point(texture_size(), { 1, 1 });
+            select_anchor.x = t.x - select_anchor.x;
+            select_current.x = t.x - select_current.x;
+        } break;
+
+        case flip_vertical: {
+            vec2 t = sub_point(texture_size(), { 1, 1 });
+            select_anchor.y = t.y - select_anchor.y;
+            select_current.y = t.y - select_current.y;
+        } break;
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     float get_rotation_angle(rotation_angle_t rot)
     {
         return rotation_angles[static_cast<int>(rot)];
@@ -1312,15 +1351,35 @@ namespace
     void rotate(int direction)
     {
         rotation = static_cast<rotation_angle_t>(static_cast<uint>(rotation + direction) % rotate_max);
+
+        // rotate the selection
+
+        selecting = false;
+
+        if(select_active) {
+
+            vec2 t = sub_point(texture_size(), { 1, 1 });
+
+            if(direction > 0) {
+
+                select_anchor = { t.y - select_anchor.y, select_anchor.x };
+                select_current = { t.y - select_current.y, select_current.x };
+
+            } else {
+
+                select_anchor = { select_anchor.y, t.x - select_anchor.x };
+                select_current = { select_current.y, t.x - select_current.x };
+            }
+        }
+
+        // dimensions are swapped for any 90 degree rotation
+
         std::swap(texture_width, texture_height);
 
         // rotate the draw rectangle by 90 degrees
 
         target_rect = target_rect.rotate90();
-
         current_rect = target_rect;
-
-        clear_selection();    // can't be arsed to rotate the selection
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1331,10 +1390,10 @@ namespace
         ComPtr<IDWriteTextLayout> text_layout;
 
         CHK_HR(dwrite_factory->CreateTextLayout(text.c_str(),
-                                                (UINT32)text.size(),
+                                                static_cast<UINT32>(text.size()),
                                                 format,
-                                                (float)window_width * 2,
-                                                (float)window_height * 2,
+                                                static_cast<float>(window_width * 2),
+                                                static_cast<float>(window_height * 2),
                                                 &text_layout));
 
         DWRITE_TEXT_METRICS m;
@@ -1575,9 +1634,6 @@ namespace
 #endif
         }
 
-
-
-
         ComPtr<ID3D11Texture2D> back_buffer;
         CHK_HR(swap_chain->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
         D3D_SET_NAME(back_buffer);
@@ -1617,6 +1673,8 @@ namespace
 
         CHK_HR(
             d2d_factory->CreateDxgiSurfaceRenderTarget(render_surface.Get(), &props, d2d_render_target.GetAddressOf()));
+
+        // TODO (chs): settings colors for these elements
 
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.9f }, &text_fg_brush));
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 1, 1, 1, 0.25f }, &text_outline_brush));
@@ -2786,6 +2844,28 @@ namespace
 
             // draw texture with optional checkerboard background
 
+            // transform texture coordinates based on flip/rotate
+
+            shader.texture_transform = XMMatrixIdentity();
+
+            matrix rotate_matrix = XMMatrixRotationZ(get_rotation_angle(rotation));
+
+            shader.texture_transform = XMMatrixMultiply(rotate_matrix, shader.texture_transform);
+
+            if((flip_x && (rotation == rotate_90 || rotation == rotate_270)) ||
+               (flip_y && (rotation == rotate_0 || rotation == rotate_180))) {
+
+                shader.texture_transform = XMMatrixMultiply(y_flip_matrix, shader.texture_transform);
+            }
+
+            if((flip_x && (rotation == rotate_0 || rotation == rotate_180)) ||
+               (flip_y && (rotation == rotate_90 || rotation == rotate_270))) {
+
+                shader.texture_transform = XMMatrixMultiply(x_flip_matrix, shader.texture_transform);
+            }
+
+            // setup checkerboard colors
+
             vec4 g1 = color_from_uint32(settings.background_color);
             vec4 g2 = g1;
 
@@ -2800,29 +2880,21 @@ namespace
             shader.colors[2] = g2;
             shader.colors[3] = g1;
 
-            shader.texture_transform = XMMatrixIdentity();
+            // setup checkerboard offset
 
-            shader.texture_transform =
-                XMMatrixMultiply(XMMatrixRotationZ(get_rotation_angle(rotation)), shader.texture_transform);
-
-            if(flip_x) {
-                shader.texture_transform = XMMatrixMultiply(x_flip_matrix, shader.texture_transform);
-            }
-            if(flip_y) {
-                shader.texture_transform = XMMatrixMultiply(y_flip_matrix, shader.texture_transform);
-            }
-
-            vec2 grid_pos{ 0, 0 };
+            shader.checkerboard_offset = { 0, 0 };
 
             if(!settings.fixed_checkerboard) {
 
-                grid_pos = { -current_rect.x, -current_rect.y };
+                shader.checkerboard_offset = { -current_rect.x, -current_rect.y };
             }
 
-            shader.checkerboard_offset = grid_pos;
+            // setup checkerboard size
 
             uint gs = settings.grid_size * (1 << settings.grid_multiplier);
             shader.check_strip_size = 1.0f / std::max(4u, gs);
+
+            // draw the image
 
             d3d_context->OMSetBlendState(null, null, 0xffffffff);
             d3d_context->PSSetShader(texture_shader.Get(), null, 0);
@@ -3094,13 +3166,16 @@ namespace
             rotate(-1);
             break;
 
-        case ID_FLIP_HORIZONTAL:
-            flip_x = !flip_x;
+        case ID_FLIP_HORIZONTAL: {
+            flip(flip_horizontal);
+            break;
+        } break;
+
+        case ID_FLIP_VERTICAL: {
+            flip(flip_vertical);
             break;
 
-        case ID_FLIP_VERTICAL:
-            flip_y = !flip_y;
-            break;
+        } break;
 
         case ID_ZOOM_1:
             settings.zoom_mode = zoom_mode_t::one_to_one;

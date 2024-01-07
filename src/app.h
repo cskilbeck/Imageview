@@ -14,6 +14,12 @@ namespace imageview
         rotate_270 = 3,
         rotate_max = 4
     };
+
+    enum flip_type_t : uint
+    {
+        flip_horizontal = 0,
+        flip_vertical = 1
+    };
 }
 
 namespace imageview::app

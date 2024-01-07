@@ -308,7 +308,6 @@
     <ClCompile Include="src\wm_names.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="resources\grab.bmp" />
     <Image Include="resources\magnifying_glass.ico" />
   </ItemGroup>
   <ItemGroup>
