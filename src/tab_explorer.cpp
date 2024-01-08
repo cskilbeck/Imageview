@@ -94,10 +94,16 @@ namespace
         } break;
 
         case IDC_BUTTON_EXPLORER_PURGE_REGISTRY: {
-            remove_filetype_handler();
-            delete_settings_from_registry();
-            update_controls(hwnd);
-            show_message(hwnd, 2000, localize(IDS_PURGED_EVERYTHING));
+            if(MessageBox(hwnd,
+                          localize(IDS_REALLY_PURGE).c_str(),
+                          localize(IDS_AppName).c_str(),
+                          MB_YESNO | MB_ICONQUESTION) == IDYES) {
+                remove_filetype_handler();
+                delete_settings_from_registry();
+                update_controls(hwnd);
+                show_message(hwnd, 2000, localize(IDS_PURGED_EVERYTHING));
+                settings_purged = true;
+            }
         } break;
         }
     }

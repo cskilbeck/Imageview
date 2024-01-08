@@ -4228,7 +4228,7 @@ namespace
 
         // window has been destroyed, save settings and clean up
 
-        if(settings_changed) {
+        if(!settings_purged) {
 
             CHK_HR(settings.save());
         }

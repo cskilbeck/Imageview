@@ -208,6 +208,7 @@ BEGIN
     IDS_PURGED_EVERYTHING   "Purged all settings from registry"
     IDS_CLIPBOARD_FILENAME  "Clipboard"
     IDS_CROPPED_FILENAME    "Cropped"
+    IDS_REALLY_PURGE        "Really purge all registry settings? Subsequent changes to the settings will not be saved."
 END
 
 #endif    // English (Neutral) resources

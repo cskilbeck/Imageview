@@ -555,8 +555,6 @@ namespace imageview::settings_ui
 
     void post_new_settings()
     {
-        settings_changed = true;
-
         if(settings_should_update) {
 
             // main window is responsible for freeing this copy of the settings

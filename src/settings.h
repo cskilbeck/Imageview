@@ -142,7 +142,7 @@ namespace imageview
     extern settings_t settings;
     extern settings_t default_settings;
 
-    extern bool settings_changed;
+    extern bool settings_purged;
 
     HRESULT delete_settings_from_registry();
 }

@@ -10,7 +10,7 @@ namespace imageview
 
     settings_t default_settings;
 
-    bool settings_changed{ false };
+    bool settings_purged{ false };
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -367,8 +367,6 @@ namespace imageview
 #define DECL_SETTING_BINARY(name, string_id, type, ...) SAVE_SETTING(name, binary)
 
 #include "settings_fields.h"
-
-        settings_changed = false;
 
         return S_OK;
     }

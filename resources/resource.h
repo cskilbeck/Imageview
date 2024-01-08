@@ -132,6 +132,7 @@
 #define IDS_PURGED_EVERYTHING           214
 #define IDS_CLIPBOARD_FILENAME          215
 #define IDS_CROPPED_FILENAME            216
+#define IDS_REALLY_PURGE                220
 #define IDC_TAB_CONTROL                 1001
 #define IDC_SETTINGS_TAB_CONTROL        1001
 #define IDC_LIST_HOTKEYS                1002
@@ -238,7 +239,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        220
+#define _APS_NEXT_RESOURCE_VALUE        221
 #define _APS_NEXT_COMMAND_VALUE         40103
 #define _APS_NEXT_CONTROL_VALUE         1037
 #define _APS_NEXT_SYMED_VALUE           122
