@@ -1354,6 +1354,20 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    void reset_transform()
+    {
+        flip_x = false;
+        flip_y = false;
+        rotation = rotate_0;
+        texture_width = actual_texture_width;
+        texture_height = actual_texture_height;
+        reset_zoom(last_zoom_mode);
+        current_rect = target_rect;
+        clear_selection();
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     void flip(flip_type_t flip_type)
     {
         flip_type_t select_flip = flip_type;
@@ -3235,14 +3249,7 @@ namespace
             break;
 
         case ID_RESET_TRANSFORM:
-            flip_x = false;
-            flip_y = false;
-            rotation = rotate_0;
-            texture_width = actual_texture_width;
-            texture_height = actual_texture_height;
-            reset_zoom(last_zoom_mode);
-            current_rect = target_rect;
-            clear_selection();
+            reset_transform();
             break;
 
         case ID_ZOOM_1:
@@ -4054,9 +4061,7 @@ namespace
             texture_width = actual_texture_width;
             texture_height = actual_texture_height;
 
-            reset_zoom(settings.zoom_mode);
-
-            current_rect = target_rect;
+            reset_transform();
 
             m_timer.reset();
 
