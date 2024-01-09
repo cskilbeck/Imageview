@@ -236,6 +236,8 @@
 #define ID_ROTATE_COUNTER_CLOCK         40102
 #define ID_RESET_TRANSFORM              40103
 #define ID_TRANFORM_RESET               40104
+#define IDS_ALL_FILES                   40104
+#define IDS_IMAGE_FILES                 40105
 
 // Next default values for new objects
 // 

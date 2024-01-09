@@ -214,6 +214,8 @@ END
 STRINGTABLE
 BEGIN
     ID_RESET_TRANSFORM      "Reset transform"
+    IDS_ALL_FILES           "All files"
+    IDS_IMAGE_FILES         "Image files"
 END
 
 #endif    // English (Neutral) resources

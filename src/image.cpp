@@ -175,7 +175,12 @@ namespace
             std::wstring pattern;
             wchar const *sep = L"";
             for(auto &e : n.second) {
-                pattern = std::format(L"{}{}*{}", pattern, sep, e);
+
+                std::wstring ext = std::format(L"{}*{}", sep, e);
+
+                results.all_extensions.append(ext);
+                pattern.append(ext);
+
                 sep = L";";
 
                 // YUCK
@@ -188,17 +193,26 @@ namespace
             index += 1;
         }
 
-        results.default_index = default_index;
-
         // make COMDLG_FILTERSPEC vector for load/save dialogs
 
         for(auto const &r : results.filter_specs) {
             results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ r.first.c_str(), r.second.c_str() });
         }
 
-        // add in "All Files", seems to be the normal thing to do
+        // add in "All Files" (*.*)
 
-        results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ L"All files", L"*.*" });
+        static std::wstring all_files = localize(IDS_ALL_FILES);
+
+        results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ all_files.c_str(), L"*.*" });
+
+        // add in "Image Files" (all supported extensions)
+
+        static std::wstring image_files = localize(IDS_IMAGE_FILES);
+
+        results.comdlg_filterspecs.emplace_back(
+            COMDLG_FILTERSPEC{ image_files.c_str(), results.all_extensions.c_str() });
+
+        results.default_index = static_cast<uint>(results.comdlg_filterspecs.size());
 
         return S_OK;
     }

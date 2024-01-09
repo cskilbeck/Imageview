@@ -19,6 +19,8 @@ namespace imageview::image
         // filter_specs for load/save dialogs
         std::vector<COMDLG_FILTERSPEC> comdlg_filterspecs;
 
+        std::wstring all_extensions;
+
         // default file type (PNG)
         uint default_index;
     };
