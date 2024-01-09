@@ -16,7 +16,7 @@
 // Windows only (Windows 7 and newer)
 // Cannot edit or mark up images
 
-// ImplementationB
+// Implementation
 
 // Native Win32 APIs
 // C++ std library
@@ -171,19 +171,22 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
-    // for x/y flip
+    // valid rotation angles are 0, 90, 180, 270
 
-    float __declspec(align(16)) x_reflect[4] = { 1, 0, 0, 0 };
-    float __declspec(align(16)) y_reflect[4] = { 0, 1, 0, 0 };
+    matrix rotate_matrix[4] = {
+        XMMatrixSet(+1, +0, 0, 0, +0, +1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(+0, -1, 0, 0, +1, +0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(-1, +0, 0, 0, +0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(+0, +1, 0, 0, -1, +0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+    };
 
-    matrix x_flip_matrix = XMMatrixReflect(_mm_load_ps(x_reflect));
-    matrix y_flip_matrix = XMMatrixReflect(_mm_load_ps(y_reflect));
+    // flip [neither, x, y, x & y]
 
-    //////////////////////////////////////////////////////////////////////
-    // valid rotation angles are 0, 90, 270
-
-    float rotation_angles[rotate_max] = {
-        0, std::numbers::pi_v<float> * 1.5f, std::numbers::pi_v<float>, std::numbers::pi_v<float> * 0.5f
+    matrix flip_matrix[4] = {
+        XMMatrixSet(+1, 0, 0, 0, 0, +1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(-1, 0, 0, 0, 0, +1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(+1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
     };
 
     rotation_angle_t rotation = rotate_0;
@@ -389,7 +392,11 @@ namespace
     // texture rectangle target for animated zoom etc
     rect_f target_rect;
 
-    // texture dimensions
+    // true texture dimensions (with no transform)
+    int actual_texture_width{ 0 };
+    int actual_texture_height{ 0 };
+
+    // texture dimensions after transform (rotate 90 or 270)
     int texture_width{ 0 };
     int texture_height{ 0 };
 
@@ -920,56 +927,101 @@ namespace
 
     HRESULT copy_selection_to_texture(ID3D11Texture2D **texture)
     {
+        vec2 t = vec2(sub_point(POINT{ texture_width, texture_height }, { 1, 1 }));
+
         vec2 tl{ 0, 0 };
         vec2 br{ static_cast<float>(texture_width) - 1, static_cast<float>(texture_height) - 1 };
 
         if(select_active) {
-            tl = vec2::min(select_anchor, select_current);
-            br = vec2::max(select_anchor, select_current);
+            tl = select_anchor;
+            br = select_current;
         }
 
-        // 1. Copy region into a texture
+        LOG_DEBUG(L"Was {:4.0f},{:4.0f}..{:4.0f},{:4.0f} ({:4.0f},{:4.0f})",
+                  tl.x,
+                  tl.y,
+                  br.x,
+                  br.y,
+                  br.x - tl.x,
+                  br.y - tl.y);
 
-        D3D11_BOX copy_box;
-        copy_box.left = (int)tl.x;
-        copy_box.right = std::min(texture_width, (int)br.x + 1);
-        copy_box.top = (int)tl.y;
-        copy_box.bottom = std::min(texture_height, (int)br.y + 1);
-        copy_box.back = 1;
-        copy_box.front = 0;
+        // unfsck the selection rect
 
-        int w = copy_box.right - copy_box.left;
-        int h = copy_box.bottom - copy_box.top;
+        switch(rotation) {
 
-        if(w < 1 || h < 1) {
-            return E_BOUNDS;
+        case rotate_90:
+            tl = { tl.y, t.x - tl.x };
+            br = { br.y, t.x - br.x };
+            break;
+
+        case rotate_180:
+            tl = { t.x - tl.x, t.y - tl.y };
+            br = { t.x - br.x, t.y - br.y };
+            break;
+
+        case rotate_270:
+            tl = { t.y - tl.y, tl.x };
+            br = { t.y - br.y, br.x };
+            break;
         }
 
-        D3D11_TEXTURE2D_DESC desc;
-        image_texture->GetDesc(&desc);
+        tl = vec2::min(tl, br);
+        br = vec2::max(tl, br);
 
-        desc.Width = w;
-        desc.Height = h;
-        desc.MipLevels = 1;
-        desc.ArraySize = 1;
-        desc.SampleDesc.Count = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Usage = D3D11_USAGE_STAGING;
-        desc.BindFlags = 0;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-        desc.MiscFlags = 0;
+        LOG_DEBUG(L"Now {:4.0f},{:4.0f}..{:4.0f},{:4.0f} ({:4.0f},{:4.0f})",
+                  tl.x,
+                  tl.y,
+                  br.x,
+                  br.y,
+                  br.x - tl.x,
+                  br.y - tl.y);
 
-        ComPtr<ID3D11Texture2D> tex;
-        CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
-        D3D_SET_NAME(tex);
+        return E_FAIL;
 
-        d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
+        //// 1. Copy region into a texture
 
-        d3d_context->Flush();
+        //// TODO (chs): transform the selection by some version of current flip/rotate matrix
 
-        *texture = tex.Detach();
+        // D3D11_BOX copy_box;
+        // copy_box.left = (int)tl.x;
+        // copy_box.right = std::min(texture_width, (int)br.x + 1);
+        // copy_box.top = (int)tl.y;
+        // copy_box.bottom = std::min(texture_height, (int)br.y + 1);
+        // copy_box.back = 1;
+        // copy_box.front = 0;
 
-        return S_OK;
+        // int w = copy_box.right - copy_box.left;
+        // int h = copy_box.bottom - copy_box.top;
+
+        // if(w < 1 || h < 1) {
+        //    return E_BOUNDS;
+        //}
+
+        // D3D11_TEXTURE2D_DESC desc;
+        // image_texture->GetDesc(&desc);
+
+        // desc.Width = w;
+        // desc.Height = h;
+        // desc.MipLevels = 1;
+        // desc.ArraySize = 1;
+        // desc.SampleDesc.Count = 1;
+        // desc.SampleDesc.Quality = 0;
+        // desc.Usage = D3D11_USAGE_STAGING;
+        // desc.BindFlags = 0;
+        // desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        // desc.MiscFlags = 0;
+
+        // ComPtr<ID3D11Texture2D> tex;
+        // CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
+        // D3D_SET_NAME(tex);
+
+        // d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
+
+        // d3d_context->Flush();
+
+        //*texture = tex.Detach();
+
+        // return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1341,13 +1393,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    float get_rotation_angle(rotation_angle_t rot)
-    {
-        return rotation_angles[static_cast<int>(rot)];
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
     void rotate(int direction)
     {
         rotation = static_cast<rotation_angle_t>(static_cast<uint>(rotation + direction) % rotate_max);
@@ -1681,6 +1726,12 @@ namespace
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 0, 0, 0, 0.4f }, &text_bg_brush));
 
         return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    HRESULT create_render_texture(int width, int height, ID3D11RenderTargetView **rtv, ID3D11Texture2D **render_texture)
+    {
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2674,14 +2725,16 @@ namespace
 
             vec2 p = clamp_to_texture(vec2::floor(screen_to_texture_pos(cur_mouse_pos)));
 
-            vec2 texel_pos = vec2::rotate(texture_size(), p, rotation);
+            vec2 ts = sub_point(texture_size(), { 1, 1 });
+
+            vec2 texel_pos = vec2::rotate(ts, p, rotation);
 
             if(flip_x) {
-                texel_pos.x = (texture_width - 1) - texel_pos.x;
+                texel_pos.x = ts.x - texel_pos.x;
             }
 
             if(flip_y) {
-                texel_pos.y = (texture_height - 1) - texel_pos.y;
+                texel_pos.y = ts.y - texel_pos.y;
             }
 
             byte const *pixel{ null };
@@ -2692,9 +2745,9 @@ namespace
 
             vec2 draw_pos = add_point(screen_pos, { -dpi_scale(label_pad * 4), -dpi_scale(label_pad * 2) });
 
-            // std::wstring text{ std::format(L"{},{}", p.x, p.y) };
-            std::wstring text{ std::format(
-                L"After {},{} from Before {},{} ({})", texel_pos.x, texel_pos.y, p.x, p.y, (uint)rotation) };
+            std::wstring text{ std::format(L"{},{}", p.x, p.y) };
+            // std::wstring text{ std::format(
+            //    L"After {},{} from Before {},{} ({})", texel_pos.x, texel_pos.y, p.x, p.y, (uint)rotation) };
             draw_string(text, label_format.Get(), draw_pos, { 1, 1 }, 1.0f, label_pad, label_pad);
 
             // pixels are BGRA, show as RGBA
@@ -2835,44 +2888,55 @@ namespace
 
         if(image_texture.Get() != null) {
 
-            d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-            d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-
-            d3d_context->RSSetState(rasterizer_state.Get());
-            d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-            d3d_context->VSSetShader(vertex_shader.Get(), null, 0);
-
             // draw texture with optional checkerboard background
 
-            // transform texture coordinates based on flip/rotate
+            // setup UV transform based on flip/rotate
 
-            shader.texture_transform = XMMatrixIdentity();
+            shader.texture_transform = rotate_matrix[static_cast<uint>(rotation)];
 
-            matrix rotate_matrix = XMMatrixRotationZ(get_rotation_angle(rotation));
+            if(flip_x || flip_y) {
 
-            shader.texture_transform = XMMatrixMultiply(rotate_matrix, shader.texture_transform);
+                bool xflip = flip_x;
+                bool yflip = flip_y;
 
-            if((flip_x && (rotation == rotate_90 || rotation == rotate_270)) ||
-               (flip_y && (rotation == rotate_0 || rotation == rotate_180))) {
+                if(rotation == rotate_90 || rotation == rotate_270) {
 
-                shader.texture_transform = XMMatrixMultiply(y_flip_matrix, shader.texture_transform);
+                    std::swap(xflip, yflip);
+                }
+
+                uint flipper = (xflip ? 1 : 0) + (yflip ? 2 : 0);
+
+                shader.texture_transform = XMMatrixMultiply(flip_matrix[flipper], shader.texture_transform);
             }
 
-            if((flip_x && (rotation == rotate_0 || rotation == rotate_180)) ||
-               (flip_y && (rotation == rotate_90 || rotation == rotate_270))) {
+            // setup checkerboard or background color
 
-                shader.texture_transform = XMMatrixMultiply(x_flip_matrix, shader.texture_transform);
-            }
+            vec4 g1;
+            vec4 g2;
 
-            // setup checkerboard colors
+            if(!settings.checkerboard_enabled) {
 
-            vec4 g1 = color_from_uint32(settings.background_color);
-            vec4 g2 = g1;
+                g1 = color_from_uint32(settings.background_color);
+                g2 = g1;
 
-            if(settings.checkerboard_enabled) {
+            } else {
 
                 g1 = color_from_uint32(settings.grid_color_1);
                 g2 = color_from_uint32(settings.grid_color_2);
+
+                // setup checkerboard offset
+
+                shader.checkerboard_offset = { 0, 0 };
+
+                if(!settings.fixed_checkerboard) {
+
+                    shader.checkerboard_offset = { -current_rect.x, -current_rect.y };
+                }
+
+                // setup checkerboard size
+
+                uint gs = settings.grid_size * (1 << settings.grid_multiplier);
+                shader.check_strip_size = 1.0f / std::max(4u, gs);
             }
 
             shader.colors[0] = g1;
@@ -2880,26 +2944,22 @@ namespace
             shader.colors[2] = g2;
             shader.colors[3] = g1;
 
-            // setup checkerboard offset
-
-            shader.checkerboard_offset = { 0, 0 };
-
-            if(!settings.fixed_checkerboard) {
-
-                shader.checkerboard_offset = { -current_rect.x, -current_rect.y };
-            }
-
-            // setup checkerboard size
-
-            uint gs = settings.grid_size * (1 << settings.grid_multiplier);
-            shader.check_strip_size = 1.0f / std::max(4u, gs);
-
             // draw the image
 
-            d3d_context->OMSetBlendState(null, null, 0xffffffff);
+            d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+            d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+            d3d_context->VSSetShader(vertex_shader.Get(), null, 0);
+
+            d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
             d3d_context->PSSetShader(texture_shader.Get(), null, 0);
             d3d_context->PSSetShaderResources(0, 1, image_texture_view.GetAddressOf());
             d3d_context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
+
+            d3d_context->RSSetState(rasterizer_state.Get());
+
+            d3d_context->OMSetBlendState(null, null, 0xffffffff);
+
             draw_rectangle(current_rect);
 
             // draw selection overlay and selection outline
@@ -2908,8 +2968,8 @@ namespace
 
                 // first the solid rectangle selection overlay
 
-                d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
                 d3d_context->PSSetShader(solid_shader.Get(), null, 0);
+                d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
 
                 vec2 tl = vec2::min(select_anchor, select_current);
                 vec2 br = vec2::max(select_anchor, select_current);
@@ -2963,8 +3023,8 @@ namespace
 
             if(crosshairs_active) {
 
-                d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
                 d3d_context->PSSetShader(stripe_shader.Get(), null, 0);
+                d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
 
                 shader.colors[0] = color_from_uint32(settings.crosshair_color1);
                 shader.colors[1] = color_from_uint32(settings.crosshair_color2);
@@ -3144,19 +3204,19 @@ namespace
             settings_ui::new_settings_update();
             break;
 
-        case ID_VIEW_SETBACKGROUNDCOLOR: {
+        case ID_VIEW_SETBACKGROUNDCOLOR:
             if(SUCCEEDED(dialog::select_color(
                    window, settings.background_color, localize(IDS_SETTING_NAME_BACKGROUND_COLOR).c_str()))) {
                 settings_ui::new_settings_update();
             }
-        } break;
+            break;
 
-        case ID_VIEW_SETBORDERCOLOR: {
+        case ID_VIEW_SETBORDERCOLOR:
             if(SUCCEEDED(dialog::select_color(
                    window, settings.border_color, localize(IDS_SETTING_NAME_BORDER_COLOR).c_str()))) {
                 settings_ui::new_settings_update();
             }
-        } break;
+            break;
 
         case ID_ROTATE_CLOCKWISE:
             rotate(1);
@@ -3166,16 +3226,24 @@ namespace
             rotate(-1);
             break;
 
-        case ID_FLIP_HORIZONTAL: {
+        case ID_FLIP_HORIZONTAL:
             flip(flip_horizontal);
             break;
-        } break;
 
-        case ID_FLIP_VERTICAL: {
+        case ID_FLIP_VERTICAL:
             flip(flip_vertical);
             break;
 
-        } break;
+        case ID_RESET_TRANSFORM:
+            flip_x = false;
+            flip_y = false;
+            rotation = rotate_0;
+            texture_width = actual_texture_width;
+            texture_height = actual_texture_height;
+            reset_zoom(last_zoom_mode);
+            current_rect = target_rect;
+            clear_selection();
+            break;
 
         case ID_ZOOM_1:
             settings.zoom_mode = zoom_mode_t::one_to_one;
@@ -3239,13 +3307,13 @@ namespace
             }
         } break;
 
-        case ID_FILE_SETTINGS_EXPLORER: {
+        case ID_FILE_SETTINGS_EXPLORER:
             settings_ui::show_settings_dialog(window, IDD_DIALOG_SETTINGS_EXPLORER);
-        } break;
+            break;
 
-        case ID_FILE_SETTINGS: {
+        case ID_FILE_SETTINGS:
             settings_ui::show_settings_dialog(window, IDD_DIALOG_SETTINGS_MAIN);
-        } break;
+            break;
 
         case ID_EXIT:
             DestroyWindow(window);
@@ -3980,8 +4048,11 @@ namespace
             D3D11_TEXTURE2D_DESC image_texture_desc;
             image_texture->GetDesc(&image_texture_desc);
 
-            texture_width = image_texture_desc.Width;
-            texture_height = image_texture_desc.Height;
+            actual_texture_width = image_texture_desc.Width;
+            actual_texture_height = image_texture_desc.Height;
+
+            texture_width = actual_texture_width;
+            texture_height = actual_texture_height;
 
             reset_zoom(settings.zoom_mode);
 

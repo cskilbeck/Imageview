@@ -211,6 +211,11 @@ BEGIN
     IDS_REALLY_PURGE        "Really purge all registry settings? Subsequent changes to the settings will not be saved."
 END
 
+STRINGTABLE
+BEGIN
+    ID_RESET_TRANSFORM      "Reset transform"
+END
+
 #endif    // English (Neutral) resources
 /////////////////////////////////////////////////////////////////////////////
 
@@ -327,7 +332,13 @@ BEGIN
     VK_LEFT,        ID_FILE_PREV,           VIRTKEY, NOINVERT
     "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL, NOINVERT
     VK_F1,          ID_FILE_SETTINGS,       VIRTKEY, NOINVERT
+    VK_LEFT,        ID_FLIP_HORIZONTAL,     VIRTKEY, SHIFT, NOINVERT
+    VK_RIGHT,       ID_FLIP_HORIZONTAL,     VIRTKEY, SHIFT, NOINVERT
+    VK_DOWN,        ID_FLIP_VERTICAL,       VIRTKEY, SHIFT, NOINVERT
+    VK_UP,          ID_FLIP_VERTICAL,       VIRTKEY, SHIFT, NOINVERT
     "V",            ID_PASTE,               VIRTKEY, CONTROL, NOINVERT
+    VK_RIGHT,       ID_ROTATE_CLOCKWISE,    VIRTKEY, CONTROL, NOINVERT
+    VK_LEFT,        ID_ROTATE_COUNTER_CLOCKWISE, VIRTKEY, CONTROL, NOINVERT
     "A",            ID_SELECT_ALL,          VIRTKEY, CONTROL, NOINVERT
     "C",            ID_SELECT_CROP,         VIRTKEY, SHIFT, CONTROL, NOINVERT
     "N",            ID_SELECT_NONE,         VIRTKEY, NOINVERT
@@ -345,12 +356,7 @@ BEGIN
     "Z",            ID_ZOOM_RESET,          VIRTKEY, NOINVERT
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
-    VK_RIGHT,       ID_ROTATE_CLOCKWISE,    VIRTKEY, CONTROL, NOINVERT
-    VK_LEFT,        ID_ROTATE_COUNTER_CLOCKWISE, VIRTKEY, CONTROL, NOINVERT
-    VK_UP,          ID_FLIP_VERTICAL,       VIRTKEY, SHIFT, NOINVERT
-    VK_DOWN,        ID_FLIP_VERTICAL,       VIRTKEY, SHIFT, NOINVERT
-    VK_LEFT,        ID_FLIP_HORIZONTAL,     VIRTKEY, SHIFT, NOINVERT
-    VK_RIGHT,       ID_FLIP_HORIZONTAL,     VIRTKEY, SHIFT, NOINVERT
+    VK_SPACE,       ID_RESET_TRANSFORM,     VIRTKEY, CONTROL, NOINVERT
 END
 
 
@@ -395,6 +401,7 @@ BEGIN
             MENUITEM "Rotate counter clockwise",    ID_ROTATE_COUNTER_CLOCKWISE
             MENUITEM "Flip Horizontal",             ID_FLIP_HORIZONTAL
             MENUITEM "Flip Vertical",               ID_FLIP_VERTICAL
+            MENUITEM "Reset",                       ID_RESET_TRANSFORM
         END
         POPUP "Select"
         BEGIN

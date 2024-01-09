@@ -234,13 +234,15 @@
 #define ID_TRANFORM_FLIPHORIZONTAL      40100
 #define ID_TRANFORM_FLIPVERTICAL        40101
 #define ID_ROTATE_COUNTER_CLOCK         40102
+#define ID_RESET_TRANSFORM              40103
+#define ID_TRANFORM_RESET               40104
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        221
-#define _APS_NEXT_COMMAND_VALUE         40103
+#define _APS_NEXT_COMMAND_VALUE         40105
 #define _APS_NEXT_CONTROL_VALUE         1037
 #define _APS_NEXT_SYMED_VALUE           122
 #endif
