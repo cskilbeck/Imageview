@@ -1006,9 +1006,9 @@ namespace
 
         D3D11_BOX copy_box;
         copy_box.left = (int)tl.x;
-        copy_box.right = std::min(texture_width, (int)br.x + 1);
+        copy_box.right = std::min(actual_texture_width, (int)br.x + 1);
         copy_box.top = (int)tl.y;
-        copy_box.bottom = std::min(texture_height, (int)br.y + 1);
+        copy_box.bottom = std::min(actual_texture_height, (int)br.y + 1);
         copy_box.back = 1;
         copy_box.front = 0;
 
