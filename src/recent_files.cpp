@@ -63,28 +63,57 @@ namespace imageview::recent_files
 
                 do {
 
+                    // this is a bit hacky
+                    // assume that the .lnk filename is {original_filename.ext}.lnk
+                    // check the file extension before resolving the shortcut (which is slow)
+                    // seems to be ok...
+
+                    std::wstring name = make_lowercase(std::wstring(find_data.cFileName));
+
+                    if(!name.ends_with(L".lnk")) {
+                        continue;
+                    }
+
+                    name = name.substr(0, name.size() - 4);
+
+                    std::wstring extension;
+                    if(FAILED(file::get_extension(name, extension))) {
+                        continue;
+                    }
+
+                    bool supported;
+                    if(FAILED(image::can_load_file_extension(extension, supported)) || !supported) {
+                        continue;
+                    }
+
+                    // we can _probably_ load the file that this shortcut points at, but check for sure
+
                     std::wstring path = std::format(L"{}\\{}", recent_file_path, find_data.cFileName);
 
                     std::wstring full_path;
-                    if(SUCCEEDED(file::path_from_shortcut(path, full_path)) && file::exists(full_path)) {
-
-                        std::wstring extension;
-                        if(SUCCEEDED(file::get_extension(full_path, extension))) {
-
-                            bool supported;
-                            if(SUCCEEDED(image::can_load_file_extension(extension, supported)) && supported) {
-
-                                FILETIME create_time;
-                                FILETIME access_time;
-                                FILETIME write_time;
-
-                                if(SUCCEEDED(file::get_time(full_path, create_time, access_time, write_time))) {
-
-                                    all_files.emplace(full_path, access_time);
-                                }
-                            }
-                        }
+                    if(FAILED(file::path_from_shortcut(path, full_path)) && file::exists(full_path)) {
+                        continue;
                     }
+
+                    if(FAILED(file::get_extension(full_path, extension))) {
+                        continue;
+                    }
+
+                    if(FAILED(image::can_load_file_extension(extension, supported)) && supported) {
+                        continue;
+                    }
+
+                    // can definitely load it, add it to the list
+
+                    FILETIME create_time;
+                    FILETIME access_time;
+                    FILETIME write_time;
+
+                    if(FAILED(file::get_time(full_path, create_time, access_time, write_time))) {
+                        continue;
+                    }
+
+                    all_files.emplace(full_path, access_time);
 
                 } while(FindNextFileW(f, &find_data));
 

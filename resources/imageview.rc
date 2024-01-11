@@ -374,6 +374,10 @@ BEGIN
         POPUP "File"
         BEGIN
             MENUITEM "Open",                        ID_FILE_OPEN
+            POPUP "Open recent"
+            BEGIN
+                MENUITEM "Open file",                   ID_RECENT_DUMMY, GRAYED
+            END
             MENUITEM "Save",                        ID_FILE_SAVE
             MENUITEM "Next",                        ID_FILE_NEXT
             MENUITEM "Previous",                    ID_FILE_PREV
@@ -415,10 +419,6 @@ BEGIN
         MENUITEM "Copy",                        ID_COPY
         MENUITEM "Paste",                       ID_PASTE
         MENUITEM SEPARATOR
-        POPUP "Open recent"
-        BEGIN
-            MENUITEM "Open file",                   ID_RECENT_DUMMY, GRAYED
-        END
         MENUITEM "Settings",                    ID_FILE_SETTINGS
         MENUITEM "Exit",                        ID_EXIT
     END

@@ -25,8 +25,6 @@ namespace
 
     uint64 constexpr bits_per_pixel = 32llu;
 
-    std::mutex formats_mutex;
-
     GUID const default_container_format = GUID_ContainerFormatPng;
 
     //////////////////////////////////////////////////////////////////////
@@ -230,8 +228,6 @@ namespace imageview::image
 
     HRESULT init_filetypes()
     {
-        auto iflock{ std::lock_guard(formats_mutex) };
-
         CHK_HR(enum_codecs(WICEncoder, save_filetypes));
         CHK_HR(enum_codecs(WICDecoder, load_filetypes));
 
@@ -779,8 +775,6 @@ namespace imageview::image
     HRESULT can_load_file_extension(std::wstring const &extension, bool &is_supported)
     {
         std::wstring ext = make_lowercase(extension);
-
-        auto iflock{ std::lock_guard(formats_mutex) };
 
         auto found = load_filetypes.container_formats.find(ext);
         is_supported = found != load_filetypes.container_formats.end();
