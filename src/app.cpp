@@ -29,22 +29,16 @@
 //////////////////////////////////////////////////////////////////////
 // TO DO
 
+// colorspace / SRGB / HDR
 // file type association / handler thing ('open with' menu)
-// shortcut editor
+// shortcut/hotkey editor
 // mutual exclude mouse buttons
-// get all the mouse handling stuff out of update() and into mouse move handler
 // settings dialog : cache size not reet
 // pause render()/update() when app loses focus
 // make render() pixel correct for select rect etc
-
-// flip/rotate
-// colorspace / SRGB / HDR
-
 // fix the cache
 // fix all the leaks
 // proper error handling/reporting
-
-// ?folder scanning broken after on_command_line from external?
 
 // get these into another file:
 //      d3d
