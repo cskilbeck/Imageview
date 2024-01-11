@@ -192,16 +192,14 @@ namespace
 
     rotation_angle_t rotation = rotate_0;
 
-    //////////////////////////////////////////////////////////////////////
-
-    bool flip_horiz;
-    bool flip_vert;
+    bool flip_horiz{ false };
+    bool flip_vert{ false };
 
     //////////////////////////////////////////////////////////////////////
     // fonts are hard coded for now, embedded as resources
 
-    char const *label_font_family_name{ "Noto Sans" };
-    char const *banner_font_family_name{ "Roboto Mono" };
+    wchar const *label_font_family_name{ L"Noto Sans" };
+    wchar const *banner_font_family_name{ L"Roboto Mono" };
 
     // folder containing most recently loaded file (so we know if a folder scan is in the same folder as current file)
     std::wstring current_folder;
@@ -229,20 +227,23 @@ namespace
     // how many files loaded so far in this run
     int files_loaded{ 0 };
 
+    // the most recently requested file to show - when a file_load succeeds, if it's this one, show it
     image::image_file *requested_file{ null };
 
-    // the most recently requested file to show - when a file_load succeeds, if it's this one, show it
+    // dummy image file for showing the clipboard
     image::image_file clipboard_image_file;
 
     // folder scanner thread id so we can PostMessage to it
     uint scanner_thread_id{ (uint)-1 };
+
+    // file loading happens in this thread
     uint file_loader_thread_id{ (uint)-1 };
 
     // set this to signal that the application is exiting
     // all threads should quit asap when this is set
-    HANDLE quit_event;
+    HANDLE quit_event{ null };
 
-    // which image currently being displayed
+    // which image currently being displayed (which might be that dodgy clipboard one)
     image::image_file *current_file{ null };
 
     // wait on this before sending a message to the window which must arrive safely
@@ -256,20 +257,23 @@ namespace
     vec2 small_label_size{ 0, 0 };
     float label_pad{ 2.0f };
 
+    // hex text of current pixel being hovered over (if alt key held down)
     std::wstring rgb_pixel_text;
 
+    // cache admin
     uint64 cache_in_use{ 0 };
     std::mutex cache_mutex;
 
-    // how many times WM_SHOWWINDOW
+    // how many times WM_SHOWWINDOW (because startup hassle)
     int window_show_count{ 0 };
 
-    // cached window size
+    // window size admin
     int window_width{ 1280 };
     int window_height{ 720 };
     int old_window_width{ 1280 };
     int old_window_height{ 720 };
 
+    // if popup_menu_active, disable some mouse zoom stuff
     bool popup_menu_active{ false };
 
     // when we're calling SetWindowPos, suppress DPI change handling because it causes a weird problem
@@ -277,14 +281,12 @@ namespace
     bool ignore_dpi_for_a_moment{ false };
 
     // current dpi for the window, updated by WM_DPICHANGED
-    float dpi;
+    float dpi{ 96.0f };
 
     // on exit, relaunch as admin
-
     bool relaunch_as_admin{ false };
 
     // some window admin
-
     bool s_in_sizemove = false;
     bool s_in_suspend = false;
     bool s_minimized = false;
@@ -359,9 +361,9 @@ namespace
     POINT mouse_pos[btn_count] = {};
     POINT mouse_offset[btn_count] = {};
     POINT mouse_click[btn_count] = {};
-    POINT cur_mouse_pos;
-    POINT shift_mouse_pos;
-    POINT ctrl_mouse_pos;
+    POINT cur_mouse_pos{};
+    POINT shift_mouse_pos{};
+    POINT ctrl_mouse_pos{};
     uint64 mouse_click_timestamp[btn_count];
     bool crosshairs_active{ false };
 
@@ -929,6 +931,78 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    matrix get_texture_transform()
+    {
+        matrix m = rotate_matrix[static_cast<uint>(rotation)];
+
+        if(flip_horiz || flip_vert) {
+
+            bool xflip = flip_horiz;
+            bool yflip = flip_vert;
+
+            if(rotation == rotate_90 || rotation == rotate_270) {
+
+                std::swap(xflip, yflip);
+            }
+
+            uint flipper = (xflip ? 1 : 0) + (yflip ? 2 : 0);
+
+            m = XMMatrixMultiply(flip_matrix[flipper], m);
+        }
+        return m;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // draw a rectangle at screen pixel coordinates
+
+    HRESULT draw_rectangle(rect_f const &rc, D3D11_VIEWPORT const &vp)
+    {
+        // get viewport coordinates from pixel coordinates
+
+        float x = rc.x;
+        float y = rc.y;
+        float w = rc.w;
+        float h = rc.h;
+
+        float left = x * 2.0f / vp.Width - 1.0f;
+        float top = y * -2.0f / vp.Height + 1.0f;
+
+        float width = w * 2.0f / vp.Width;
+        float height = h * -2.0f / vp.Height;
+
+        // if rotated 90 or 270, swap some stuff around
+
+        shader.rect = { left, top, width, height };
+
+        // update shader constants
+
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+
+        CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
+
+        memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
+
+        d3d_context->Unmap(constant_buffer.Get(), 0);
+
+        // draw a quad
+
+        d3d_context->Draw(4, 0);
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    //
+    // copy_selection_to_texture
+    //
+    // This is all rather involved due to the idiotic decision to keep
+    // the original image untransformed and apply transformations (flip/rotate)
+    // when drawing it so we have to 'untransform' the selection rectangle, then
+    // copy the resulting piece, then apply the transform back to the copied bit.
+    // Most of which could be avoided by just modifying the image when
+    // flip/rotate are applied. But... hey ho, who knows what strange problems
+    // that might entail...
+
     HRESULT copy_selection_to_texture(ID3D11Texture2D **texture)
     {
         vec2 t = vec2(sub_point(POINT{ texture_width, texture_height }, { 1, 1 }));
@@ -1012,18 +1086,18 @@ namespace
         copy_box.back = 1;
         copy_box.front = 0;
 
-        int w = copy_box.right - copy_box.left;
-        int h = copy_box.bottom - copy_box.top;
+        int copy_w = copy_box.right - copy_box.left;
+        int copy_h = copy_box.bottom - copy_box.top;
 
-        if(w < 1 || h < 1) {
+        if(copy_w < 1 || copy_h < 1) {
             return E_BOUNDS;
         }
 
         D3D11_TEXTURE2D_DESC desc;
         image_texture->GetDesc(&desc);
 
-        desc.Width = w;
-        desc.Height = h;
+        desc.Width = copy_w;
+        desc.Height = copy_h;
         desc.MipLevels = 1;
         desc.ArraySize = 1;
         desc.SampleDesc.Count = 1;
@@ -1041,80 +1115,6 @@ namespace
 
         d3d_context->Flush();
 
-        *texture = tex.Detach();
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    matrix get_texture_transform()
-    {
-        matrix m = rotate_matrix[static_cast<uint>(rotation)];
-
-        if(flip_horiz || flip_vert) {
-
-            bool xflip = flip_horiz;
-            bool yflip = flip_vert;
-
-            if(rotation == rotate_90 || rotation == rotate_270) {
-
-                std::swap(xflip, yflip);
-            }
-
-            uint flipper = (xflip ? 1 : 0) + (yflip ? 2 : 0);
-
-            m = XMMatrixMultiply(flip_matrix[flipper], m);
-        }
-        return m;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // draw a rectangle at screen pixel coordinates
-
-    HRESULT draw_rectangle(rect_f const &rc, D3D11_VIEWPORT const &vp)
-    {
-        // get viewport coordinates from pixel coordinates
-
-        float x = rc.x;
-        float y = rc.y;
-        float w = rc.w;
-        float h = rc.h;
-
-        float left = x * 2.0f / vp.Width - 1.0f;
-        float top = y * -2.0f / vp.Height + 1.0f;
-
-        float width = w * 2.0f / vp.Width;
-        float height = h * -2.0f / vp.Height;
-
-        // if rotated 90 or 270, swap some stuff around
-
-        shader.rect = { left, top, width, height };
-
-        // update shader constants
-
-        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-
-        CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
-
-        memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
-
-        d3d_context->Unmap(constant_buffer.Get(), 0);
-
-        // draw a quad
-
-        d3d_context->Draw(4, 0);
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // Note, this is synchronous and will block render()
-    // Cannot be called from a different thread
-    // returns a texture which can be mapped and read from
-
-    HRESULT transform_texture(ID3D11Texture2D *source_texture, ID3D11Texture2D **dest_texture)
-    {
         ComPtr<ID3D11Texture2D> tex_2d;
         ComPtr<ID3D11RenderTargetView> rtv_2d;
 
@@ -1122,7 +1122,7 @@ namespace
 
         D3D11_TEXTURE2D_DESC source_desc;
 
-        source_texture->GetDesc(&source_desc);
+        tex->GetDesc(&source_desc);
 
         // swap w/h if rotated 90/270 degrees
 
@@ -1161,11 +1161,10 @@ namespace
 
         // create srv for source texture
 
-        CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc(
-            source_texture, D3D11_SRV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
+        CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc(tex.Get(), D3D11_SRV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
 
         ComPtr<ID3D11ShaderResourceView> srv;
-        CHK_HR(d3d_device->CreateShaderResourceView(source_texture, &srv_desc, srv.GetAddressOf()));
+        CHK_HR(d3d_device->CreateShaderResourceView(tex.Get(), &srv_desc, srv.GetAddressOf()));
 
         // setup query so we know when the copy is finished
 
@@ -1206,7 +1205,7 @@ namespace
 
         d3d_context->Flush();
 
-        *dest_texture = staging_texture.Detach();
+        *texture = staging_texture.Detach();
 
         return S_OK;
     }
@@ -1218,11 +1217,6 @@ namespace
     {
         ComPtr<ID3D11Texture2D> tex;
         CHK_HR(copy_selection_to_texture(tex.GetAddressOf()));
-
-        ComPtr<ID3D11Texture2D> dst;
-        CHK_HR(transform_texture(tex.Get(), dst.GetAddressOf()));
-
-        tex.Attach(dst.Detach());
 
         D3D11_TEXTURE2D_DESC desc;
         tex->GetDesc(&desc);
@@ -1671,7 +1665,7 @@ namespace
 
         // TODO (chs): localization
 
-        CHK_HR(dwrite_factory->CreateTextFormat(unicode(label_font_family_name).c_str(),
+        CHK_HR(dwrite_factory->CreateTextFormat(label_font_family_name,
                                                 font_collection.Get(),
                                                 weight,
                                                 style,
@@ -1679,7 +1673,7 @@ namespace
                                                 banner_font_size,
                                                 L"en-us",
                                                 banner_format.ReleaseAndGetAddressOf()));
-        CHK_HR(dwrite_factory->CreateTextFormat(unicode(banner_font_family_name).c_str(),
+        CHK_HR(dwrite_factory->CreateTextFormat(banner_font_family_name,
                                                 font_collection.Get(),
                                                 weight,
                                                 style,
@@ -3127,15 +3121,42 @@ namespace
 
             // draw selection overlay and selection outline
 
-            if(select_active) {
+            uint32 select_color = settings.select_fill_color;
+            bool draw_selection = select_active;
+
+            vec2 tl = vec2::min(select_anchor, select_current);
+            vec2 br = vec2::max(select_anchor, select_current);
+
+            if(!select_active) {
+                tl = vec2{ 0, 0 };
+                br = texture_size();
+                select_color = 0x00000000;
+            }
+
+            double const select_flash_time = settings.copy_flash_time / 10.0;
+
+            if(copy_timestamp != 0.0) {
+
+                double since = m_timer.current() - copy_timestamp;
+
+                if(since <= select_flash_time) {
+
+                    draw_selection = true;
+                    int lerp = static_cast<int>((since / select_flash_time) * 255.0);
+                    select_color = color_lerp(settings.copy_flash_color, select_color, lerp);
+
+                } else {
+
+                    copy_timestamp = 0.0;
+                }
+            }
+
+            if(draw_selection) {
 
                 // first the solid rectangle selection overlay
 
                 d3d_context->PSSetShader(solid_shader.Get(), null, 0);
                 d3d_context->OMSetBlendState(blend_state.Get(), null, 0xffffffff);
-
-                vec2 tl = vec2::min(select_anchor, select_current);
-                vec2 br = vec2::max(select_anchor, select_current);
 
                 br = add_point(br, { 1.0f, 1.0f });
 
@@ -3144,42 +3165,45 @@ namespace
                 tl = texture_to_screen_pos_unclamped(tl);
                 br = texture_to_screen_pos_unclamped(br);
 
-                shader.colors[0] = color_from_uint32(settings.select_fill_color);
+                shader.colors[0] = color_from_uint32(select_color);
 
                 CHK_HR(draw_rectangle({ tl.x, tl.y, br.x - tl.x, br.y - tl.y }, viewport));
 
-                // then the stripey outline
+                if(select_active) {
 
-                d3d_context->PSSetShader(stripe_shader.Get(), null, 0);
+                    // then the stripey outline
 
-                shader.colors[0] = color_from_uint32(settings.select_outline_color1);
-                shader.colors[1] = color_from_uint32(settings.select_outline_color2);
+                    d3d_context->PSSetShader(stripe_shader.Get(), null, 0);
 
-                shader.check_strip_size = 1.0f / settings.dash_length;
+                    shader.colors[0] = color_from_uint32(settings.select_outline_color1);
+                    shader.colors[1] = color_from_uint32(settings.select_outline_color2);
 
-                // NOTE: dodgy fix for the stripe-near-zero problem is to add stripe * max(window_width,
-                // window_height) to the frame count so it doesn't wrap near the origin
+                    shader.check_strip_size = 1.0f / settings.dash_length;
 
-                shader.frame = fmodf(settings.dash_anim_speed * frame_count / 10.0f, settings.dash_length * -2.0f) +
-                               settings.dash_length * std::max(window_width, window_height);
+                    // NOTE: dodgy fix for the stripe-near-zero problem is to add stripe * max(window_width,
+                    // window_height) to the frame count so it doesn't wrap near the origin
 
-                float bw = static_cast<float>(settings.select_border_width);
+                    shader.frame = fmodf(settings.dash_anim_speed * frame_count / 10.0f, settings.dash_length * -2.0f) +
+                                   settings.dash_length * std::max(window_width, window_height);
 
-                // top
-                rect_f horiz{ tl.x - bw, tl.y - bw, (br.x - tl.x) + bw * 2.0f, bw };
-                CHK_HR(draw_rectangle(horiz, viewport));
+                    float bw = static_cast<float>(settings.select_border_width);
 
-                // bottom
-                horiz.y = br.y;
-                CHK_HR(draw_rectangle(horiz, viewport));
+                    // top
+                    rect_f horiz{ tl.x - bw, tl.y - bw, (br.x - tl.x) + bw * 2.0f, bw };
+                    CHK_HR(draw_rectangle(horiz, viewport));
 
-                // left
-                rect_f vert{ vert.x = tl.x - bw, tl.y, bw, br.y - tl.y };
-                CHK_HR(draw_rectangle(vert, viewport));
+                    // bottom
+                    horiz.y = br.y;
+                    CHK_HR(draw_rectangle(horiz, viewport));
 
-                // right
-                vert.x = br.x;
-                CHK_HR(draw_rectangle(vert, viewport));
+                    // left
+                    rect_f vert{ vert.x = tl.x - bw, tl.y, bw, br.y - tl.y };
+                    CHK_HR(draw_rectangle(vert, viewport));
+
+                    // right
+                    vert.x = br.x;
+                    CHK_HR(draw_rectangle(vert, viewport));
+                }
             }
 
             // draw crosshairs

@@ -208,6 +208,8 @@ BEGIN
     IDS_PURGED_EVERYTHING   "Purged all settings from registry"
     IDS_CLIPBOARD_FILENAME  "Clipboard"
     IDS_CROPPED_FILENAME    "Cropped"
+    IDS_SETTING_NAME_SELECT_FLASH_COLOR "Copy flash color"
+    IDS_SETTING_NAME_COPY_FLASH_TIME "Copy flash time"
     IDS_REALLY_PURGE        "Really purge all registry settings? Subsequent changes to the settings will not be saved."
 END
 

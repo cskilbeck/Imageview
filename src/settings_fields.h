@@ -94,6 +94,14 @@ DECL_SETTING_RANGED(dash_length, IDS_SETTING_NAME_SELECT_DASH_LENGTH, 8, 4, 64);
 
 DECL_SETTING_RANGED(dash_anim_speed, IDS_SETTING_NAME_SELECT_DASH_ANIM_SPEED, 10, 0, 100);
 
+// what color to flash when selection is copied
+
+DECL_SETTING_COLOR24(copy_flash_color, IDS_SETTING_NAME_SELECT_FLASH_COLOR, 0xffffff);
+
+// how long to flash when copied
+
+DECL_SETTING_RANGED(copy_flash_time, IDS_SETTING_NAME_COPY_FLASH_TIME, 5, 0, 20);
+
 //////////////////////////////////////////////////////////////////////
 // crosshair
 
