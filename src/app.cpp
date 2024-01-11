@@ -4209,7 +4209,13 @@ namespace
 
             if(!f->is_clipboard) {
                 settings.last_file_loaded = f->filename;
-                file::set_access_time(f->filename, now);
+
+                // this will fail with E_ACCESSDENIED if it's on a read-only volume, that's... ok I think?
+                hr = file::set_access_time(f->filename, now);
+                if(FAILED(hr) && hr != E_ACCESSDENIED) {
+                    LOG_ERROR(L"Error setting file last access time: {}", windows_error_message(hr));
+                    return hr;
+                }
             }
 
             image_texture.Attach(new_texture.Detach());

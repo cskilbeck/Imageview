@@ -113,7 +113,7 @@ namespace imageview::recent_files
                         continue;
                     }
 
-                    all_files.emplace(full_path, access_time);
+                    all_files.emplace(full_path, create_time);
 
                 } while(FindNextFileW(f, &find_data));
 
