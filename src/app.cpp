@@ -84,6 +84,7 @@ namespace
 
 #include "shader_inc/vs_rectangle.h"
 #include "shader_inc/ps_texture.h"
+#include "shader_inc/ps_copy_texture.h"
 #include "shader_inc/ps_solid.h"
 #include "shader_inc/ps_stripe.h"
 
@@ -175,26 +176,26 @@ namespace
 
     matrix rotate_matrix[4] = {
         XMMatrixSet(+1, +0, 0, 0, +0, +1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        XMMatrixSet(+0, -1, 0, 0, +1, +0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        XMMatrixSet(-1, +0, 0, 0, +0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        XMMatrixSet(+0, +1, 0, 0, -1, +0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(+0, -1, 0, 0, +1, +0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1),
+        XMMatrixSet(-1, +0, 0, 0, +0, -1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1),
+        XMMatrixSet(+0, +1, 0, 0, -1, +0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1),
     };
 
     // flip [neither, x, y, x & y]
 
     matrix flip_matrix[4] = {
         XMMatrixSet(+1, 0, 0, 0, 0, +1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        XMMatrixSet(-1, 0, 0, 0, 0, +1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        XMMatrixSet(+1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        XMMatrixSet(-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        XMMatrixSet(-1, 0, 0, 0, 0, +1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1),
+        XMMatrixSet(+1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1),
+        XMMatrixSet(-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1),
     };
 
     rotation_angle_t rotation = rotate_0;
 
     //////////////////////////////////////////////////////////////////////
 
-    bool flip_x;
-    bool flip_y;
+    bool flip_horiz;
+    bool flip_vert;
 
     //////////////////////////////////////////////////////////////////////
     // fonts are hard coded for now, embedded as resources
@@ -323,6 +324,8 @@ namespace
     ComPtr<ID3D11PixelShader> texture_shader;
     ComPtr<ID3D11PixelShader> solid_shader;
     ComPtr<ID3D11PixelShader> stripe_shader;
+
+    ComPtr<ID3D11PixelShader> copy_texture_shader;
 
     ComPtr<ID3D11VertexShader> vertex_shader;
 
@@ -843,6 +846,7 @@ namespace
 
                 CHK_HR(file::get_filename(name, name));
             }
+            // TODO (chs): localize 'x'
             details = std::format(L" {}x{}", current_file->img.width, current_file->img.height);
         }
         SetWindowTextW(window, std::format(L"{}{}{}", admin, name, details).c_str());
@@ -947,6 +951,23 @@ namespace
 
         // unfsck the selection rect
 
+        bool fh = flip_horiz;
+        bool fv = flip_vert;
+
+        if(rotation == rotate_90 || rotation == rotate_270) {
+            std::swap(fh, fv);
+        }
+
+        if(fh) {
+            tl.x = t.x - tl.x;
+            br.x = t.x - br.x;
+        }
+
+        if(fv) {
+            tl.y = t.y - tl.y;
+            br.y = t.y - br.y;
+        }
+
         switch(rotation) {
 
         case rotate_90:
@@ -965,8 +986,11 @@ namespace
             break;
         }
 
-        tl = vec2::min(tl, br);
-        br = vec2::max(tl, br);
+        vec2 ntl = vec2::min(tl, br);
+        vec2 nbr = vec2::max(tl, br);
+
+        tl = ntl;
+        br = nbr;
 
         LOG_DEBUG(L"Now {:4.0f},{:4.0f}..{:4.0f},{:4.0f} ({:4.0f},{:4.0f})",
                   tl.x,
@@ -976,52 +1000,215 @@ namespace
                   br.x - tl.x,
                   br.y - tl.y);
 
-        return E_FAIL;
+        // 1. Copy region into a texture
 
-        //// 1. Copy region into a texture
+        // TODO (chs): transform the selection by some version of current flip/rotate matrix
 
-        //// TODO (chs): transform the selection by some version of current flip/rotate matrix
+        D3D11_BOX copy_box;
+        copy_box.left = (int)tl.x;
+        copy_box.right = std::min(texture_width, (int)br.x + 1);
+        copy_box.top = (int)tl.y;
+        copy_box.bottom = std::min(texture_height, (int)br.y + 1);
+        copy_box.back = 1;
+        copy_box.front = 0;
 
-        // D3D11_BOX copy_box;
-        // copy_box.left = (int)tl.x;
-        // copy_box.right = std::min(texture_width, (int)br.x + 1);
-        // copy_box.top = (int)tl.y;
-        // copy_box.bottom = std::min(texture_height, (int)br.y + 1);
-        // copy_box.back = 1;
-        // copy_box.front = 0;
+        int w = copy_box.right - copy_box.left;
+        int h = copy_box.bottom - copy_box.top;
 
-        // int w = copy_box.right - copy_box.left;
-        // int h = copy_box.bottom - copy_box.top;
+        if(w < 1 || h < 1) {
+            return E_BOUNDS;
+        }
 
-        // if(w < 1 || h < 1) {
-        //    return E_BOUNDS;
-        //}
+        D3D11_TEXTURE2D_DESC desc;
+        image_texture->GetDesc(&desc);
 
-        // D3D11_TEXTURE2D_DESC desc;
-        // image_texture->GetDesc(&desc);
+        desc.Width = w;
+        desc.Height = h;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        desc.MiscFlags = 0;
 
-        // desc.Width = w;
-        // desc.Height = h;
-        // desc.MipLevels = 1;
-        // desc.ArraySize = 1;
-        // desc.SampleDesc.Count = 1;
-        // desc.SampleDesc.Quality = 0;
-        // desc.Usage = D3D11_USAGE_STAGING;
-        // desc.BindFlags = 0;
-        // desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-        // desc.MiscFlags = 0;
+        ComPtr<ID3D11Texture2D> tex;
+        CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
+        D3D_SET_NAME(tex);
 
-        // ComPtr<ID3D11Texture2D> tex;
-        // CHK_HR(d3d_device->CreateTexture2D(&desc, null, &tex));
-        // D3D_SET_NAME(tex);
+        d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
 
-        // d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
+        d3d_context->Flush();
 
-        // d3d_context->Flush();
+        *texture = tex.Detach();
 
-        //*texture = tex.Detach();
+        return S_OK;
+    }
 
-        // return S_OK;
+    //////////////////////////////////////////////////////////////////////
+
+    matrix get_texture_transform()
+    {
+        matrix m = rotate_matrix[static_cast<uint>(rotation)];
+
+        if(flip_horiz || flip_vert) {
+
+            bool xflip = flip_horiz;
+            bool yflip = flip_vert;
+
+            if(rotation == rotate_90 || rotation == rotate_270) {
+
+                std::swap(xflip, yflip);
+            }
+
+            uint flipper = (xflip ? 1 : 0) + (yflip ? 2 : 0);
+
+            m = XMMatrixMultiply(flip_matrix[flipper], m);
+        }
+        return m;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // draw a rectangle at screen pixel coordinates
+
+    HRESULT draw_rectangle(rect_f const &rc, D3D11_VIEWPORT const &vp)
+    {
+        // get viewport coordinates from pixel coordinates
+
+        float x = rc.x;
+        float y = rc.y;
+        float w = rc.w;
+        float h = rc.h;
+
+        float left = x * 2.0f / vp.Width - 1.0f;
+        float top = y * -2.0f / vp.Height + 1.0f;
+
+        float width = w * 2.0f / vp.Width;
+        float height = h * -2.0f / vp.Height;
+
+        // if rotated 90 or 270, swap some stuff around
+
+        shader.rect = { left, top, width, height };
+
+        // update shader constants
+
+        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+
+        CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
+
+        memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
+
+        d3d_context->Unmap(constant_buffer.Get(), 0);
+
+        // draw a quad
+
+        d3d_context->Draw(4, 0);
+
+        return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // Note, this is synchronous and will block render()
+    // Cannot be called from a different thread
+    // returns a texture which can be mapped and read from
+
+    HRESULT transform_texture(ID3D11Texture2D *source_texture, ID3D11Texture2D **dest_texture)
+    {
+        ComPtr<ID3D11Texture2D> tex_2d;
+        ComPtr<ID3D11RenderTargetView> rtv_2d;
+
+        // get dimensions of source texture
+
+        D3D11_TEXTURE2D_DESC source_desc;
+
+        source_texture->GetDesc(&source_desc);
+
+        // swap w/h if rotated 90/270 degrees
+
+        uint w = source_desc.Width;
+        uint h = source_desc.Height;
+
+        if(rotation == rotate_90 || rotation == rotate_270) {
+            std::swap(w, h);
+        }
+
+        // create staging texture for grabbing it into
+
+        ComPtr<ID3D11Texture2D> staging_texture;
+
+        CD3D11_TEXTURE2D_DESC staging_texture_desc(
+            DXGI_FORMAT_B8G8R8A8_UNORM, w, h, 1, 1, 0, D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_READ);
+
+        CHK_HR(d3d_device->CreateTexture2D(&staging_texture_desc, null, staging_texture.GetAddressOf()));
+
+        // create dest texture and rtv
+
+        CD3D11_TEXTURE2D_DESC texture_desc(DXGI_FORMAT_B8G8R8A8_UNORM,
+                                           w,
+                                           h,
+                                           1,
+                                           1,
+                                           D3D11_BIND_RENDER_TARGET,
+                                           D3D11_USAGE_DEFAULT,
+                                           D3D11_CPU_ACCESS_READ);
+
+        CHK_HR(d3d_device->CreateTexture2D(&texture_desc, null, tex_2d.GetAddressOf()));
+
+        CD3D11_RENDER_TARGET_VIEW_DESC rtv_desc(D3D11_RTV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
+
+        CHK_HR(d3d_device->CreateRenderTargetView(tex_2d.Get(), &rtv_desc, rtv_2d.GetAddressOf()));
+
+        // create srv for source texture
+
+        CD3D11_SHADER_RESOURCE_VIEW_DESC srv_desc(
+            source_texture, D3D11_SRV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
+
+        ComPtr<ID3D11ShaderResourceView> srv;
+        CHK_HR(d3d_device->CreateShaderResourceView(source_texture, &srv_desc, srv.GetAddressOf()));
+
+        // setup query so we know when the copy is finished
+
+        CD3D11_QUERY_DESC query_desc(D3D11_QUERY_EVENT);
+        ComPtr<ID3D11Query> query;
+
+        CHK_HR(d3d_device->CreateQuery(&query_desc, query.GetAddressOf()));
+
+        // copy it
+
+        CD3D11_VIEWPORT viewport(tex_2d.Get(), rtv_2d.Get());
+
+        d3d_context->OMSetRenderTargets(1, rtv_2d.GetAddressOf(), null);
+        d3d_context->RSSetViewports(1, &viewport);
+        d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        d3d_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+        d3d_context->VSSetShader(vertex_shader.Get(), null, 0);
+        d3d_context->PSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+        d3d_context->PSSetShader(copy_texture_shader.Get(), null, 0);
+        d3d_context->PSSetShaderResources(0, 1, srv.GetAddressOf());
+        d3d_context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
+        d3d_context->RSSetState(rasterizer_state.Get());
+        d3d_context->OMSetBlendState(null, null, 0xffffffff);
+
+        shader.texture_transform = get_texture_transform();
+
+        draw_rectangle({ 0, 0, static_cast<float>(w), static_cast<float>(h) }, viewport);
+
+        d3d_context->End(query.Get());
+
+        uint32 query_result;
+
+        while(d3d_context->GetData(query.Get(), &query_result, sizeof(uint32), 0) != S_OK) {
+            Sleep(0);
+        }
+
+        d3d_context->CopyResource(staging_texture.Get(), tex_2d.Get());
+
+        d3d_context->Flush();
+
+        *dest_texture = staging_texture.Detach();
+
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1031,6 +1218,11 @@ namespace
     {
         ComPtr<ID3D11Texture2D> tex;
         CHK_HR(copy_selection_to_texture(tex.GetAddressOf()));
+
+        ComPtr<ID3D11Texture2D> dst;
+        CHK_HR(transform_texture(tex.Get(), dst.GetAddressOf()));
+
+        tex.Attach(dst.Detach());
 
         D3D11_TEXTURE2D_DESC desc;
         tex->GetDesc(&desc);
@@ -1166,6 +1358,7 @@ namespace
 
         // done
 
+        // TODO (chs): localize 'x'
         set_message(std::format(L"{} {}x{}", localize(IDS_COPIED), w, h), 3);
 
         return S_OK;
@@ -1356,8 +1549,8 @@ namespace
 
     void reset_transform()
     {
-        flip_x = false;
-        flip_y = false;
+        flip_horiz = false;
+        flip_vert = false;
         rotation = rotate_0;
         texture_width = actual_texture_width;
         texture_height = actual_texture_height;
@@ -1382,9 +1575,9 @@ namespace
         // flip_x / flip_y are used for drawing the texture
 
         if(flip_type == flip_horizontal) {
-            flip_x = !flip_x;
+            flip_horiz = !flip_horiz;
         } else {
-            flip_y = !flip_y;
+            flip_vert = !flip_vert;
         }
 
         // flip the selection visually
@@ -1561,13 +1754,22 @@ namespace
         CHK_HR(d3d_device->CreatePixelShader(ps_texture_bin, sizeof(ps_texture_bin), null, &texture_shader));
         D3D_SET_NAME(texture_shader);
 
+        CHK_HR(d3d_device->CreatePixelShader(
+            ps_copy_texture_bin, sizeof(ps_copy_texture_bin), null, &copy_texture_shader));
+
+        D3D_SET_NAME(copy_texture_shader);
+
         CHK_HR(d3d_device->CreatePixelShader(ps_stripe_bin, sizeof(ps_stripe_bin), null, &stripe_shader));
         D3D_SET_NAME(stripe_shader);
 
         CD3D11_SAMPLER_DESC sampler_desc(D3D11_DEFAULT);
         sampler_desc.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
-        sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+        sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+        sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+        sampler_desc.BorderColor[0] = 0;
+        sampler_desc.BorderColor[1] = 0;
+        sampler_desc.BorderColor[2] = 0;
+        sampler_desc.BorderColor[3] = 0;
         CHK_HR(d3d_device->CreateSamplerState(&sampler_desc, &sampler_state));
         D3D_SET_NAME(sampler_state);
 
@@ -1740,12 +1942,6 @@ namespace
         CHK_HR(d2d_render_target->CreateSolidColorBrush(D2D1_COLOR_F{ 0, 0, 0, 0.4f }, &text_bg_brush));
 
         return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    HRESULT create_render_texture(int width, int height, ID3D11RenderTargetView **rtv, ID3D11Texture2D **render_texture)
-    {
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2434,13 +2630,14 @@ namespace
 
                     setup_menu_accelerators(popup_menu);
 
-                    popup_menu_active = true;
+                    // insert recent files into the recent files menu entry
 
+                    bool got_recent_files{ true };
                     if(FAILED(recent_files::get_files(recent_files_list))) {
-                        recent_files_list.push_back(std::format(L"<{}>", localize(IDS_SCANNING_RECENT_FILES)));
+                        recent_files_list.push_back(std::format(L"{}", localize(IDS_SCANNING_RECENT_FILES)));
+                        got_recent_files = false;
                     }
 
-                    // insert recent files into the recent files menu entry
                     MENUITEMINFOW dummy_info;
                     mem_clear(&dummy_info);
                     dummy_info.cbSize = sizeof(dummy_info);
@@ -2459,10 +2656,16 @@ namespace
                             recent_info.cch = static_cast<uint>(f.size());
                             recent_info.dwTypeData = f.data();
                             InsertMenuItemW(menu, dummy_info.wID, MF_BYCOMMAND, &recent_info);
+
+                            if(!got_recent_files) {
+                                EnableMenuItem(menu, index, MF_BYCOMMAND | MF_GRAYED);
+                            }
                             index += 1;
                         }
                         DeleteMenu(menu, ID_RECENT_DUMMY, MF_BYCOMMAND);
                     }
+
+                    popup_menu_active = true;
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
                     clear_message();
                     m_timer.reset();
@@ -2743,11 +2946,11 @@ namespace
 
             vec2 texel_pos = vec2::rotate(ts, p, rotation);
 
-            if(flip_x) {
+            if(flip_horiz) {
                 texel_pos.x = ts.x - texel_pos.x;
             }
 
-            if(flip_y) {
+            if(flip_vert) {
                 texel_pos.y = ts.y - texel_pos.y;
             }
 
@@ -2832,45 +3035,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // draw a rectangle at screen pixel coordinates
-
-    HRESULT draw_rectangle(rect_f const &rc)
-    {
-        // get viewport coordinates from pixel coordinates
-
-        float x = rc.x;
-        float y = rc.y;
-        float w = rc.w;
-        float h = rc.h;
-
-        float left = x * 2.0f / window_width - 1.0f;
-        float top = y * -2.0f / window_height + 1.0f;
-
-        float width = w * 2.0f / window_width;
-        float height = h * -2.0f / window_height;
-
-        // if rotated 90 or 270, swap some stuff around
-
-        shader.rect = { left, top, width, height };
-
-        // update shader constants
-
-        D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-
-        CHK_HR(d3d_context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource));
-
-        memcpy(mapped_subresource.pData, &shader, sizeof(shader_const_t));
-
-        d3d_context->Unmap(constant_buffer.Get(), 0);
-
-        // draw a quad
-
-        d3d_context->Draw(4, 0);
-
-        return S_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // render a frame
 
     HRESULT render()
@@ -2906,22 +3070,7 @@ namespace
 
             // setup UV transform based on flip/rotate
 
-            shader.texture_transform = rotate_matrix[static_cast<uint>(rotation)];
-
-            if(flip_x || flip_y) {
-
-                bool xflip = flip_x;
-                bool yflip = flip_y;
-
-                if(rotation == rotate_90 || rotation == rotate_270) {
-
-                    std::swap(xflip, yflip);
-                }
-
-                uint flipper = (xflip ? 1 : 0) + (yflip ? 2 : 0);
-
-                shader.texture_transform = XMMatrixMultiply(flip_matrix[flipper], shader.texture_transform);
-            }
+            shader.texture_transform = get_texture_transform();
 
             // setup checkerboard or background color
 
@@ -2974,7 +3123,7 @@ namespace
 
             d3d_context->OMSetBlendState(null, null, 0xffffffff);
 
-            draw_rectangle(current_rect);
+            draw_rectangle(current_rect, viewport);
 
             // draw selection overlay and selection outline
 
@@ -2997,7 +3146,7 @@ namespace
 
                 shader.colors[0] = color_from_uint32(settings.select_fill_color);
 
-                CHK_HR(draw_rectangle({ tl.x, tl.y, br.x - tl.x, br.y - tl.y }));
+                CHK_HR(draw_rectangle({ tl.x, tl.y, br.x - tl.x, br.y - tl.y }, viewport));
 
                 // then the stripey outline
 
@@ -3018,19 +3167,19 @@ namespace
 
                 // top
                 rect_f horiz{ tl.x - bw, tl.y - bw, (br.x - tl.x) + bw * 2.0f, bw };
-                CHK_HR(draw_rectangle(horiz));
+                CHK_HR(draw_rectangle(horiz, viewport));
 
                 // bottom
                 horiz.y = br.y;
-                CHK_HR(draw_rectangle(horiz));
+                CHK_HR(draw_rectangle(horiz, viewport));
 
                 // left
                 rect_f vert{ vert.x = tl.x - bw, tl.y, bw, br.y - tl.y };
-                CHK_HR(draw_rectangle(vert));
+                CHK_HR(draw_rectangle(vert, viewport));
 
                 // right
                 vert.x = br.x;
-                CHK_HR(draw_rectangle(vert));
+                CHK_HR(draw_rectangle(vert, viewport));
             }
 
             // draw crosshairs
@@ -3062,16 +3211,16 @@ namespace
 
                 // horizontal across the whole screen
                 rect_f horiz{ 0, c.y - hbw, static_cast<float>(window_width), bw };
-                CHK_HR(draw_rectangle(horiz));
+                CHK_HR(draw_rectangle(horiz, viewport));
 
                 // top vertical bit
                 rect_f vert{ c.x - hbw, 0, bw, c.y - hbw };
-                CHK_HR(draw_rectangle(vert));
+                CHK_HR(draw_rectangle(vert, viewport));
 
                 // botton vertical bit
                 vert.y = c.y + hbw;
                 vert.h = window_height - vert.y;
-                CHK_HR(draw_rectangle(vert));
+                CHK_HR(draw_rectangle(vert, viewport));
             }
         }
 
@@ -3300,7 +3449,14 @@ namespace
                 if(SUCCEEDED(dialog::save_file(window, filename, chosen_filename))) {
 
                     image::image_t const &img = current_file->img;
-                    HRESULT hr = image::save(chosen_filename, img.pixels, img.width, img.height, img.row_pitch);
+                    HRESULT hr = image::save(chosen_filename,
+                                             img.pixels,
+                                             img.width,
+                                             img.height,
+                                             img.row_pitch,
+                                             flip_horiz,
+                                             flip_vert,
+                                             rotation);
                     if(FAILED(hr)) {
                         std::wstring msg = std::format(L"{}\r\n\r\n{}\r\n\r\n{}",
                                                        localize(IDS_CANT_SAVE_FILE),
@@ -3497,6 +3653,15 @@ namespace
             return TRUE;
         }
         return FORWARD_WM_SETCURSOR(hwnd, hwndCursor, codeHitTest, msg, DefWindowProcA);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    BOOL OnWindowPosChanging(HWND hwnd, LPWINDOWPOS lpwpos)
+    {
+        lpwpos->cx &= -2;
+        lpwpos->cy &= -2;
+        return 0;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -3953,6 +4118,7 @@ namespace
             HANDLE_MSG(hwnd, WM_COPYDATA, OnCopyData);
             HANDLE_MSG(hwnd, WM_SETCURSOR, OnSetCursor);
             HANDLE_MSG(hwnd, WM_SIZE, OnSize);
+            HANDLE_MSG(hwnd, WM_WINDOWPOSCHANGING, OnWindowPosChanging);
             HANDLE_MSG(hwnd, WM_LBUTTONDOWN, OnLButtonDown);
             HANDLE_MSG(hwnd, WM_RBUTTONDOWN, OnRButtonDown);
             HANDLE_MSG(hwnd, WM_MBUTTONDOWN, OnMButtonDown);

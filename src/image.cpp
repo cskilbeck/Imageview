@@ -171,12 +171,15 @@ namespace
         uint index = 0;
         uint default_index = 0;
 
+        wchar const *sep_outer = L"";
+
         for(auto &n : filters) {
             std::wstring pattern;
             wchar const *sep = L"";
             for(auto &e : n.second) {
 
-                std::wstring ext = std::format(L"{}*{}", sep, e);
+                std::wstring ext = std::format(L"{}*{}", sep_outer, e);
+                sep_outer = L";";
 
                 results.all_extensions.append(ext);
                 pattern.append(ext);
@@ -577,8 +580,16 @@ namespace imageview::image
     // create a WIC memory bitmap in 32bpp BGRA
     // if necessary, interpose a WICFormatConverter
     // then use a WICBitmapEncoder to save the file
+    // also... insert a WICBitmapFlipRotator if necessary
 
-    HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch)
+    HRESULT save(std::wstring const &filename,
+                 byte const *bytes,
+                 uint width,
+                 uint height,
+                 uint pitch,
+                 bool flip_h,
+                 bool flip_v,
+                 rotation_angle_t rotation)
     {
         auto wic = get_wic();
 
@@ -627,6 +638,10 @@ namespace imageview::image
         ComPtr<IPropertyBag2> property_bag;
         CHK_HR(encoder->CreateNewFrame(&frame, &property_bag));
         CHK_HR(frame->Initialize(NULL));
+
+        if(rotation == rotate_90 || rotation == rotate_270) {
+            std::swap(width, height);
+        }
         CHK_HR(frame->SetSize(width, height));
 
         WICPixelFormatGUID pixel_format = src_format;
@@ -648,6 +663,38 @@ namespace imageview::image
                                                 WICBitmapPaletteTypeMedianCut));
 
             bmp_src.Attach(format_converter.Detach());
+        }
+
+        if(flip_h || flip_v || rotation != rotate_0) {
+            ComPtr<IWICBitmapFlipRotator> transformer;
+            CHK_HR(wic->CreateBitmapFlipRotator(transformer.GetAddressOf()));
+            uint options;
+
+            switch(rotation) {
+            case rotate_0:
+                options = WICBitmapTransformRotate0;
+                break;
+            case rotate_90:
+                options = WICBitmapTransformRotate90;
+                // std::swap(flip_h, flip_v);
+                break;
+            case rotate_180:
+                options = WICBitmapTransformRotate180;
+                break;
+            case rotate_270:
+                options = WICBitmapTransformRotate270;
+                // std::swap(flip_h, flip_v);
+                break;
+            }
+            if(flip_h) {
+                options |= WICBitmapTransformFlipHorizontal;
+            }
+            if(flip_v) {
+                options |= WICBitmapTransformFlipVertical;
+            }
+            transformer->Initialize(bmp_src.Get(), static_cast<WICBitmapTransformOptions>(options));
+
+            bmp_src.Attach(transformer.Detach());
         }
 
         CHK_HR(frame->WriteSource(bmp_src.Get(), null));

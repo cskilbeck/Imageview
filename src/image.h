@@ -103,7 +103,14 @@ namespace imageview::image
 
     HRESULT copy_pixels_as_png(byte const *pixels, uint w, uint h);
 
-    HRESULT save(std::wstring const &filename, byte const *bytes, uint width, uint height, uint pitch);
+    HRESULT save(std::wstring const &filename,
+                 byte const *bytes,
+                 uint width,
+                 uint height,
+                 uint pitch,
+                 bool flip_h,
+                 bool flip_v,
+                 rotation_angle_t rotation);
 
     // image transforms
 

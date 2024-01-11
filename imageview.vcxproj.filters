@@ -258,6 +258,9 @@
     <FxCompile Include="shaders\ps_texture.hlsl">
       <Filter>2_shaders</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\ps_copy_texture.hlsl">
+      <Filter>2_shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Font Include="resources\NotoSans-Regular.ttf">
