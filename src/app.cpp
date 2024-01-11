@@ -410,7 +410,13 @@ namespace
     float max_zoom{ 192 };    // max size of 1 pixel
 
     // frame/wall timer for animation
-    timer_t m_timer;
+    timer_t app_timer;
+
+    // timer for flashing when copy
+    timer_t copy_flash_timer;
+
+    // is copy flash active
+    bool copy_flashing;
 
     // when was the selection copied for animating flash
     double copy_timestamp{ 0 };
@@ -483,7 +489,7 @@ namespace
     void set_message(std::wstring const &message, int fade_time)
     {
         current_message = message;
-        message_timestamp = m_timer.wall_time();
+        message_timestamp = app_timer.wall_time();
         message_fade_time = fade_time;
     }
 
@@ -1015,14 +1021,6 @@ namespace
             br = select_current;
         }
 
-        LOG_DEBUG(L"Was {:4.0f},{:4.0f}..{:4.0f},{:4.0f} ({:4.0f},{:4.0f})",
-                  tl.x,
-                  tl.y,
-                  br.x,
-                  br.y,
-                  br.x - tl.x,
-                  br.y - tl.y);
-
         // unfsck the selection rect
 
         bool fh = flip_horiz;
@@ -1066,14 +1064,6 @@ namespace
         tl = ntl;
         br = nbr;
 
-        LOG_DEBUG(L"Now {:4.0f},{:4.0f}..{:4.0f},{:4.0f} ({:4.0f},{:4.0f})",
-                  tl.x,
-                  tl.y,
-                  br.x,
-                  br.y,
-                  br.x - tl.x,
-                  br.y - tl.y);
-
         // 1. Copy region into a texture
 
         // TODO (chs): transform the selection by some version of current flip/rotate matrix
@@ -1113,11 +1103,6 @@ namespace
 
         d3d_context->CopySubresourceRegion(tex.Get(), 0, 0, 0, 0, image_texture.Get(), 0, &copy_box);
 
-        d3d_context->Flush();
-
-        ComPtr<ID3D11Texture2D> tex_2d;
-        ComPtr<ID3D11RenderTargetView> rtv_2d;
-
         // get dimensions of source texture
 
         D3D11_TEXTURE2D_DESC source_desc;
@@ -1144,16 +1129,14 @@ namespace
 
         // create dest texture and rtv
 
-        CD3D11_TEXTURE2D_DESC texture_desc(DXGI_FORMAT_B8G8R8A8_UNORM,
-                                           w,
-                                           h,
-                                           1,
-                                           1,
-                                           D3D11_BIND_RENDER_TARGET,
-                                           D3D11_USAGE_DEFAULT,
-                                           D3D11_CPU_ACCESS_READ);
+        CD3D11_TEXTURE2D_DESC texture_desc(
+            DXGI_FORMAT_B8G8R8A8_UNORM, w, h, 1, 1, D3D11_BIND_RENDER_TARGET, D3D11_USAGE_DEFAULT, 0);
+
+        ComPtr<ID3D11Texture2D> tex_2d;
 
         CHK_HR(d3d_device->CreateTexture2D(&texture_desc, null, tex_2d.GetAddressOf()));
+
+        ComPtr<ID3D11RenderTargetView> rtv_2d;
 
         CD3D11_RENDER_TARGET_VIEW_DESC rtv_desc(D3D11_RTV_DIMENSION_TEXTURE2D, DXGI_FORMAT_B8G8R8A8_UNORM);
 
@@ -1168,10 +1151,10 @@ namespace
 
         // setup query so we know when the copy is finished
 
-        CD3D11_QUERY_DESC query_desc(D3D11_QUERY_EVENT);
-        ComPtr<ID3D11Query> query;
+        // CD3D11_QUERY_DESC query_desc(D3D11_QUERY_EVENT);
+        // ComPtr<ID3D11Query> query;
 
-        CHK_HR(d3d_device->CreateQuery(&query_desc, query.GetAddressOf()));
+        // CHK_HR(d3d_device->CreateQuery(&query_desc, query.GetAddressOf()));
 
         // copy it
 
@@ -1193,17 +1176,15 @@ namespace
 
         draw_rectangle({ 0, 0, static_cast<float>(w), static_cast<float>(h) }, viewport);
 
-        d3d_context->End(query.Get());
+        // d3d_context->End(query.Get());
 
-        uint32 query_result;
+        // uint32 query_result;
 
-        while(d3d_context->GetData(query.Get(), &query_result, sizeof(uint32), 0) != S_OK) {
-            Sleep(0);
-        }
+        // while(d3d_context->GetData(query.Get(), &query_result, sizeof(uint32), 0) != S_OK) {
+        //    // Sleep(0);
+        //}
 
         d3d_context->CopyResource(staging_texture.Get(), tex_2d.Get());
-
-        d3d_context->Flush();
 
         *texture = staging_texture.Detach();
 
@@ -1220,6 +1201,7 @@ namespace
 
         D3D11_TEXTURE2D_DESC desc;
         tex->GetDesc(&desc);
+
         int w = desc.Width;
         int h = desc.Height;
 
@@ -1233,6 +1215,8 @@ namespace
 
         size_t pixel_size = 4llu;
         size_t pixel_buffer_size = pixel_size * (size_t)w * h;
+
+        byte *src = reinterpret_cast<byte *>(mapped_resource.pData);
 
         // create CF_DIBV5 clipformat
 
@@ -1266,7 +1250,6 @@ namespace
 
         // copy into the DIB for the clipboard, swapping R, B channels
         byte *row = pixels;
-        byte *src = reinterpret_cast<byte *>(mapped_resource.pData);
         for(int y = 0; y < h; ++y) {
             uint32 *s = reinterpret_cast<uint32 *>(src);
             uint32 *d = reinterpret_cast<uint32 *>(row);
@@ -1338,22 +1321,40 @@ namespace
 
         // stang them into the clipboard
 
-        CHK_BOOL(OpenClipboard(null));
-        DEFER(CloseClipboard());
+        {
+            CHK_BOOL(OpenClipboard(null));
+            DEFER(CloseClipboard());
 
-        CHK_BOOL(EmptyClipboard());
+            CHK_BOOL(EmptyClipboard());
 
-        CHK_BOOL(SetClipboardData(CF_DIBV5, dibv5_data));
-        CHK_BOOL(SetClipboardData(CF_DIB, dib_data));
+            CHK_BOOL(SetClipboardData(CF_DIBV5, dibv5_data));
+            CHK_BOOL(SetClipboardData(CF_DIB, dib_data));
+        }
 
-        // encode as a png also - required for chrome and many others
+        // encoding a PNG into the clipboard take ages for big images
+        // so do it in a separate thread to avoid an even more massive stall
 
-        CHK_HR(image::copy_pixels_as_png(pixels, w, h));
+        auto pixels_copy = std::make_shared<byte[]>(pixel_buffer_size);
+        memcpy(pixels_copy.get(), pixels, pixel_buffer_size);
 
-        // done
+        std::thread(
+            [](std::shared_ptr<byte[]> pixels_buffer, int w, int h) {
+
+                // returning an error does nothing here but at least it can be logged
+                CHK_HR(image::copy_pixels_as_png(pixels_buffer.get(), w, h));
+                return S_OK;
+
+            },
+            pixels_copy,
+            w,
+            h)
+            .detach();
 
         // TODO (chs): localize 'x'
         set_message(std::format(L"{} {}x{}", localize(IDS_COPIED), w, h), 3);
+
+        copy_flashing = true;
+        copy_flash_timer.reset();
 
         return S_OK;
     }
@@ -1363,8 +1364,8 @@ namespace
 
     HRESULT on_copy()
     {
-        copy_timestamp = m_timer.current();
-        return copy_selection();
+        CHK_HR(copy_selection());
+        return S_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -2662,7 +2663,7 @@ namespace
                     popup_menu_active = true;
                     TrackPopupMenu(popup_menu, TPM_RIGHTBUTTON, screen_pos.x, screen_pos.y, 0, window, null);
                     clear_message();
-                    m_timer.reset();
+                    app_timer.reset();
                     popup_menu_active = false;
                 }
             }
@@ -2994,7 +2995,7 @@ namespace
 
         if(!current_message.empty()) {
 
-            float elapsed = static_cast<float>(m_timer.wall_time() - message_timestamp);
+            float elapsed = static_cast<float>(app_timer.wall_time() - message_timestamp);
 
             float message_alpha{ 0 };
 
@@ -3135,9 +3136,10 @@ namespace
 
             double const select_flash_time = settings.copy_flash_time / 10.0;
 
-            if(copy_timestamp != 0.0) {
+            if(copy_flashing) {
 
-                double since = m_timer.current() - copy_timestamp;
+                copy_flash_timer.update();
+                double since = copy_flash_timer.wall_time();
 
                 if(since <= select_flash_time) {
 
@@ -3147,7 +3149,7 @@ namespace
 
                 } else {
 
-                    copy_timestamp = 0.0;
+                    copy_flashing = false;
                 }
             }
 
@@ -3274,9 +3276,9 @@ namespace
         // TODO (chs): allow crosshairs on another key
         crosshairs_active = current_file != null && (GetKeyState(VK_MENU) & 0x8000) != 0;
 
-        m_timer.update();
+        app_timer.update();
 
-        float delta_t = static_cast<float>(std::min(m_timer.delta(), 0.25));
+        float delta_t = static_cast<float>(std::min(app_timer.delta(), 0.25));
 
         auto lerp = [=](float &a, float &b) {
             float d = b - a;
@@ -3307,7 +3309,8 @@ namespace
 
         // delay showing window until file is loaded (or 1/4 second, whichever comes first)
 
-        if(frame_count > 0 && (m_timer.wall_time() > 0.25 || image_texture.Get() != null) && !IsWindowVisible(window)) {
+        if(frame_count > 0 && (app_timer.wall_time() > 0.25 || image_texture.Get() != null) &&
+           !IsWindowVisible(window)) {
 
             // don't use saved window placement if it wasn't loaded from saved settings
             // (or its in fullscreen mode)
@@ -3701,7 +3704,7 @@ namespace
             if(s_minimized) {
                 s_minimized = false;
                 if(s_in_suspend) {
-                    m_timer.reset();
+                    app_timer.reset();
                 }
                 s_in_suspend = false;
             }
@@ -4071,7 +4074,7 @@ namespace
         case PBT_APMRESUMESUSPEND:
             if(!s_minimized) {
                 if(s_in_suspend) {
-                    m_timer.reset();
+                    app_timer.reset();
                 }
                 s_in_suspend = false;
             }
@@ -4259,7 +4262,7 @@ namespace
 
             reset_transform();
 
-            m_timer.reset();
+            app_timer.reset();
 
             setup_window_text();
 
