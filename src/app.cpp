@@ -3112,7 +3112,15 @@ namespace
 
             d3d_context->OMSetBlendState(null, null, 0xffffffff);
 
-            draw_rectangle(current_rect, viewport);
+            // clamp draw rectangle to whole screen pixels
+
+            rect_f r = current_rect;
+            r.x = std::floor(r.x);
+            r.y = std::floor(r.y);
+            r.w = std::floor(r.w);
+            r.h = std::floor(r.h);
+
+            draw_rectangle(r, viewport);
 
             // draw selection overlay and selection outline
 
@@ -3678,15 +3686,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    BOOL OnWindowPosChanging(HWND hwnd, LPWINDOWPOS lpwpos)
-    {
-        lpwpos->cx &= -2;
-        lpwpos->cy &= -2;
-        return 0;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
     void OnSize(HWND hwnd, UINT state, int cx, int cy)
     {
         if(state == SIZE_MINIMIZED) {
@@ -4139,7 +4138,6 @@ namespace
             HANDLE_MSG(hwnd, WM_COPYDATA, OnCopyData);
             HANDLE_MSG(hwnd, WM_SETCURSOR, OnSetCursor);
             HANDLE_MSG(hwnd, WM_SIZE, OnSize);
-            HANDLE_MSG(hwnd, WM_WINDOWPOSCHANGING, OnWindowPosChanging);
             HANDLE_MSG(hwnd, WM_LBUTTONDOWN, OnLButtonDown);
             HANDLE_MSG(hwnd, WM_RBUTTONDOWN, OnRButtonDown);
             HANDLE_MSG(hwnd, WM_MBUTTONDOWN, OnMButtonDown);
