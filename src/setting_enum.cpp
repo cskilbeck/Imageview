@@ -15,12 +15,15 @@ namespace
         switch(id) {
 
         case IDC_COMBO_SETTING_ENUM: {
-
-            HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
-            int sel = ComboBox_GetCurSel(combo_box);
-            uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
-            get_controller<enum_setting>(hwnd).value = v;
-            post_new_settings();
+            if(codeNotify == CBN_SELCHANGE) {
+                HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
+                int sel = ComboBox_GetCurSel(combo_box);
+                if(sel != CB_ERR) {
+                    uint v = static_cast<uint>(ComboBox_GetItemData(combo_box, sel));
+                    get_controller<enum_setting>(hwnd).value = v;
+                    post_new_settings();
+                }
+            }
         } break;
         }
     }
@@ -85,11 +88,11 @@ namespace imageview::settings_ui
     void enum_setting::setup_controls(HWND hwnd)
     {
         HWND combo_box = GetDlgItem(hwnd, IDC_COMBO_SETTING_ENUM);
-        int index = 0;
         for(auto const &name : enum_names) {
-            ComboBox_AddString(combo_box, localize(name.second).c_str());
-            ComboBox_SetItemData(combo_box, index, name.first);
-            index += 1;
+            int index = ComboBox_AddString(combo_box, localize(name.second).c_str());
+            if(index != CB_ERR && index != CB_ERRSPACE) {
+                ComboBox_SetItemData(combo_box, index, name.first);
+            }
         }
         setting_controller::setup_controls(hwnd);
     }
@@ -98,14 +101,13 @@ namespace imageview::settings_ui
 
     void enum_setting::update_controls()
     {
-        int index = 0;
-        for(auto const &name : enum_names) {
-            if(name.first == value) {
-                HWND combo_box = GetDlgItem(window, IDC_COMBO_SETTING_ENUM);
+        HWND combo_box = GetDlgItem(window, IDC_COMBO_SETTING_ENUM);
+        int count = ComboBox_GetCount(combo_box);
+        for(int index = 0; index < count; ++index) {
+            if(static_cast<uint>(ComboBox_GetItemData(combo_box, index)) == value) {
                 ComboBox_SetCurSel(combo_box, index);
                 break;
             }
-            index += 1;
         }
     }
 

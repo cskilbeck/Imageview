@@ -177,7 +177,7 @@ namespace imageview::file
         // 64k for file info buffer should hold at least a few entries
         std::vector<byte> dir_info(65536);
 
-        auto r = new folder_scan_result();
+        auto r = std::make_unique<folder_scan_result>();
 
         CHK_HR(file::get_full_path(path, r->path));
 
@@ -270,16 +270,16 @@ namespace imageview::file
                 fb = pb->date;
             }
 
-            int64_t diff = fa - fb;
+            int64_t diff = (fa < fb) ? -1 : ((fa > fb) ? 1 : 0);
 
             // if date the same (or name ordering), compare names
             if(diff == 0) {
                 diff = StrCmpLogicalW(pa->name.c_str(), pb->name.c_str());
             }
-            return diff <= 0;
+            return diff < 0;
         });
 
-        *result = r;
+        *result = r.release();
 
         return S_OK;
     }

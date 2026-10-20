@@ -855,13 +855,50 @@ namespace
         return S_OK;
     }
 
+    void reset_zoom(zoom_mode_t mode);
+
+    void update_filename_message()
+    {
+        if(current_file == null) {
+            return;
+        }
+        int fade_time;
+        switch(settings.show_filename) {
+        case show_filename_always:
+            fade_time = 0;
+            break;
+        case show_filename_briefly:
+            fade_time = 5;
+            break;
+        default:
+        case show_filename_never:
+            fade_time = -1;
+            break;
+        }
+
+        if(fade_time >= 0) {
+            std::wstring msg{ std::format(L"{} {}x{}", current_file->filename, texture_width, texture_height) };
+            set_message(msg, fade_time);
+        } else {
+            clear_message();
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////
     // new settings have arrived, update stuff which isn't automatically
     // picked up by the renderer
 
-    void on_new_settings()
+    void on_new_settings(settings_t const &old_settings)
     {
         setup_window_text();
+
+        if(settings.zoom_mode != old_settings.zoom_mode) {
+            reset_zoom(settings.zoom_mode);
+        }
+
+        if(settings.show_filename != old_settings.show_filename) {
+            update_filename_message();
+        }
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -1479,6 +1516,12 @@ namespace
 
     void reset_zoom(zoom_mode_t mode)
     {
+        last_zoom_mode = mode;
+
+        if(texture_width <= 0 || texture_height <= 0) {
+            return;
+        }
+
         float width_factor = static_cast<float>(window_width) / texture_width;
         float height_factor = static_cast<float>(window_height) / texture_height;
 
@@ -1504,7 +1547,6 @@ namespace
         target_rect.x = (window_width - target_rect.w) / 2.0f;
         target_rect.y = (window_height - target_rect.h) / 2.0f;
 
-        last_zoom_mode = mode;
         has_been_zoomed_or_dragged = false;
     }
 
@@ -1546,7 +1588,7 @@ namespace
         rotation = rotate_0;
         texture_width = actual_texture_width;
         texture_height = actual_texture_height;
-        reset_zoom(last_zoom_mode);
+        reset_zoom(settings.zoom_mode);
         current_rect = target_rect;
         clear_selection();
     }
@@ -2276,6 +2318,22 @@ namespace
         default:
             break;
         }
+
+        switch(settings.startup_zoom_mode) {
+        case startup_zoom_mode_option::startup_zoom_shrink_to_fit:
+            settings.zoom_mode = zoom_mode_t::shrink_to_fit;
+            break;
+        case startup_zoom_mode_option::startup_zoom_fit_to_window:
+            settings.zoom_mode = zoom_mode_t::fit_to_window;
+            break;
+        case startup_zoom_mode_option::startup_zoom_one_to_one:
+            settings.zoom_mode = zoom_mode_t::one_to_one;
+            break;
+        case startup_zoom_mode_option::startup_zoom_remember:
+        default:
+            break;
+        }
+        last_zoom_mode = settings.zoom_mode;
 
         if(!settings.fullscreen) {
 
@@ -4178,9 +4236,10 @@ namespace
 
         case app::WM_NEW_SETTINGS: {
             settings_t *new_settings = reinterpret_cast<settings_t *>(lParam);
+            settings_t old_settings = settings;
             settings = *new_settings;
             delete new_settings;
-            on_new_settings();
+            on_new_settings(old_settings);
         } break;
 
         case app::WM_RELAUNCH_AS_ADMIN: {
