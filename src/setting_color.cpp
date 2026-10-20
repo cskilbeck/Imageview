@@ -73,6 +73,13 @@ namespace
                     uint32 new_color{};
                     if(SUCCEEDED(color_from_string(txt, new_color))) {
                         setting.value = new_color;
+                        if(setting.alpha) {
+                            HWND slider = GetDlgItem(hwnd, IDC_SLIDER_SETTING_COLOR);
+                            uint cur_alpha = new_color >> 24;
+                            if(static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0)) != cur_alpha) {
+                                SendMessage(slider, TBM_SETPOS, true, cur_alpha);
+                            }
+                        }
                         InvalidateRect(hwnd, null, true);
                         post_new_settings();
                     }
@@ -110,15 +117,6 @@ namespace imageview::settings_ui
         } else {
             SendMessage(slider, TBM_SETRANGEMAX, false, 255);
             SendMessage(slider, TBM_SETRANGEMIN, false, 0);
-
-            uint cur_alpha = value >> 24;
-
-            uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
-
-            if(current != cur_alpha) {
-                // this will cause the hex text to get updated
-                SendMessage(slider, TBM_SETPOS, true, cur_alpha);
-            }
         }
         SetWindowSubclass(slider, slider_subclass_handler, 0, 0);
 
@@ -129,6 +127,14 @@ namespace imageview::settings_ui
 
     void color_setting::update_controls()
     {
+        if(alpha) {
+            HWND slider = GetDlgItem(window, IDC_SLIDER_SETTING_COLOR);
+            uint cur_alpha = value >> 24;
+            uint current = static_cast<uint>(SendMessage(slider, TBM_GETPOS, 0, 0));
+            if(current != cur_alpha) {
+                SendMessage(slider, TBM_SETPOS, true, cur_alpha);
+            }
+        }
         std::wstring hex;
         if(alpha) {
             hex = color32_to_string(value);

@@ -146,7 +146,7 @@ namespace imageview::dialog
         cc.hwndOwner = window;
         cc.lpCustColors = (LPDWORD)custom_colors;
         cc.lCustData = reinterpret_cast<LPARAM>(title);
-        cc.rgbResult = color;
+        cc.rgbResult = color & 0x00ffffff;
         cc.Flags = CC_FULLOPEN | CC_RGBINIT | CC_ANYCOLOR | CC_ENABLEHOOK;
         cc.lpfnHook = select_color_dialog_hook_proc;
         if(!ChooseColorW(&cc)) {
