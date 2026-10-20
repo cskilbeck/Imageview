@@ -476,6 +476,7 @@ namespace
     };
 
     HRESULT show_image(image::image_file *f);
+    HRESULT update_file_index(image::image_file *f);
 
     //////////////////////////////////////////////////////////////////////
     // set the banner message and how long before it fades out
@@ -592,7 +593,8 @@ namespace
     HRESULT warm_cache()
     {
         // if it's a normal file in the current folder
-        if(current_file != null && !current_file->is_clipboard && current_file->index != -1) {
+        if(current_folder_scan != null && current_file != null && !current_file->is_clipboard &&
+           current_file->index != -1) {
 
             int const num_images_to_cache = 12;
 
@@ -619,7 +621,13 @@ namespace
                                 image::image_file *loser = null;
                                 uint loser_diff = 0;
                                 for(auto const &fl : loaded_files) {
-                                    uint diff = std::abs(fl.second->index - current_file_cursor);
+                                    if(fl.second == current_file) {
+                                        continue;
+                                    }
+                                    uint diff =
+                                        (fl.second->index == -1)
+                                            ? UINT_MAX
+                                            : static_cast<uint>(std::abs(fl.second->index - current_file_cursor));
                                     if(diff > loser_diff) {
                                         loser_diff = diff;
                                         loser = fl.second;
@@ -635,6 +643,7 @@ namespace
 
                                     cache_in_use -= loser->total_size();
                                     loaded_files.erase(loser->filename);
+                                    delete loser;
                                 } else {
                                     break;
                                 }
@@ -683,12 +692,44 @@ namespace
             folder.pop_back();
         }
 
+        // if it's coming from a new folder, kick off a folder scan first
+
+        bool is_new_folder;
+        CHK_HR(file::paths_are_different(current_folder, folder, is_new_folder));
+
+        if(is_new_folder) {
+
+            // tell the scanner thread to scan this new folder
+            // when it's done it will notify main thread with a windows message
+
+            current_folder = folder;
+            current_folder_scan.reset();
+            current_file_cursor = -1;
+
+            for(auto &fl : loaded_files) {
+                fl.second->index = -1;
+            }
+            for(auto &fl : loading_files) {
+                fl.second->index = -1;
+            }
+
+            // sigh, manually marshall the filename for the message, the receiver is responsible for
+            // freeing it
+            wchar *fullpath_buffer = new wchar[fullpath.size() + 1];
+            memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar));
+
+            PostThreadMessageW(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
+        }
+
         // if it's in the cache already, just show it
         // TODO (chs): make this file path compare canonical
 
         auto found = loaded_files.find(fullpath);
         if(found != loaded_files.end()) {
             LOG_DEBUG(L"Already got {}", name);
+            requested_file = null;
+            update_file_index(found->second);
+            current_file_cursor = found->second->index;
             CHK_HR(display_image(found->second));
             CHK_HR(warm_cache());
             return S_OK;
@@ -727,29 +768,6 @@ namespace
 
         PostThreadMessage(file_loader_thread_id, WM_LOAD_FILE, 0, reinterpret_cast<LPARAM>(fl));
 
-        // if it's coming from a new folder
-
-        bool is_new_folder;
-        CHK_HR(file::paths_are_different(current_folder, folder, is_new_folder));
-
-        if(is_new_folder) {
-
-            // if(_stricmp(current_folder.c_str(), folder.c_str()) != 0) {
-
-            // tell the scanner thread to scan this new folder
-            // when it's done it will notify main thread with a windows message
-
-            // TODO(chs): CLEAR THE CACHE HERE....
-
-            current_folder = folder;
-
-            // sigh, manually marshall the filename for the message, the receiver is responsible for
-            // freeing it
-            wchar *fullpath_buffer = new wchar[fullpath.size() + 1];
-            memcpy(fullpath_buffer, fullpath.c_str(), (fullpath.size() + 1) * sizeof(wchar));
-
-            PostThreadMessageW(scanner_thread_id, WM_SCAN_FOLDER, 0, reinterpret_cast<LPARAM>(fullpath_buffer));
-        }
         return S_OK;
     }
 
@@ -2155,7 +2173,10 @@ namespace
         std::wstring folder;
         CHK_HR(file::get_path(f->filename, folder));
 
-        if(_wcsicmp(folder.c_str(), current_folder_scan->path.c_str()) != 0) {
+        bool differ = true;
+        CHK_HR(file::paths_are_different(folder, current_folder_scan->path, differ));
+        if(differ) {
+            f->index = -1;
             return E_CHANGED_STATE;
         }
 
@@ -2173,6 +2194,7 @@ namespace
             }
             id += 1;
         }
+        f->index = -1;
         return E_NOT_SET;
     }
 
@@ -2181,12 +2203,23 @@ namespace
 
     void on_folder_scanned(file::folder_scan_result *scan_result)
     {
+        bool differ = false;
+        if(SUCCEEDED(file::paths_are_different(current_folder, scan_result->path, differ)) && differ) {
+            delete scan_result;
+            return;
+        }
+
         LOG_INFO(L"{} images found in {}", scan_result->files.size(), scan_result->path);
 
         current_folder_scan.reset(scan_result);
 
-        if(current_file != null && current_file->index == -1) {
+        for(auto &fl : loaded_files) {
+            update_file_index(fl.second);
+        }
+
+        if(current_file != null && !current_file->is_clipboard) {
             update_file_index(current_file);
+            current_file_cursor = current_file->index;
         }
 
         warm_cache();
@@ -2223,6 +2256,10 @@ namespace
         LOG_DEBUG(L"LOADED {}", f->filename);
 
         if(FAILED(f->hresult)) {
+            loading_files.erase(f->filename);
+            if(requested_file == f) {
+                requested_file = null;
+            }
             set_message(std::format(L"{} {}", f->filename, windows_error_message(f->hresult)), 5);
             delete f;
             return;
