@@ -1263,6 +1263,12 @@ namespace
             row += w * 4llu;
         }
 
+        // encoding a PNG into the clipboard take ages for big images
+        // so do it in a separate thread to avoid an even more massive stall
+        // copy pixels while dibv5_data is still locked and owned by us
+        auto pixels_copy = std::make_shared<byte[]>(pixel_buffer_size);
+        memcpy(pixels_copy.get(), pixels, pixel_buffer_size);
+
         GlobalUnlock(dibv5_data);
 
         // create CF_DIB clipformat
@@ -1325,14 +1331,11 @@ namespace
             CHK_BOOL(SetClipboardData(CF_DIB, dib_data));
         }
 
-        // encoding a PNG into the clipboard take ages for big images
-        // so do it in a separate thread to avoid an even more massive stall
-
-        auto pixels_copy = std::make_shared<byte[]>(pixel_buffer_size);
-        memcpy(pixels_copy.get(), pixels, pixel_buffer_size);
-
         std::thread(
             [](std::shared_ptr<byte[]> pixels_buffer, int w, int h) {
+
+                (void)CoInitializeEx(null, COINIT_APARTMENTTHREADED);
+                DEFER(CoUninitialize());
 
                 // returning an error does nothing here but at least it can be logged
                 CHK_HR(image::copy_pixels_as_png(pixels_buffer.get(), w, h));

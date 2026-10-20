@@ -347,6 +347,9 @@ namespace imageview::image
 
         GlobalUnlock(hData);
 
+        CHK_BOOL(OpenClipboard(null));
+        DEFER(CloseClipboard());
+
         CHK_BOOL(SetClipboardData(RegisterClipboardFormatW(L"PNG"), hData));
 
         return S_OK;
@@ -486,7 +489,7 @@ namespace imageview::image
             // https://docs.microsoft.com/en-us/windows/win32/api/wincodec/nn-wincodec-iwicbitmapfliprotator
 
             // "IWICBitmapFipRotator requests data on a per-pixel basis, while WIC codecs provide data
-            // on a per-scanline basis. This causes the fliprotator object to exhibit n² behavior if
+            // on a per-scanline basis. This causes the fliprotator object to exhibit nÂ² behavior if
             // there is no buffering. This occurs because each pixel in the transformed image requires
             // an entire scanline to be decoded in the file. It is recommended that you buffer the image
             // using IWICBitmap, or flip/rotate the image using Direct2D."
