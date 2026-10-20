@@ -20,6 +20,80 @@ LANGUAGE LANG_ENGLISH, SUBLANG_NEUTRAL
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Menu
+//
+
+IDR_MENU_POPUP MENU
+BEGIN
+    POPUP "Popup"
+    BEGIN
+        POPUP "File"
+        BEGIN
+            MENUITEM "Open",                        ID_FILE_OPEN
+            POPUP "Open recent"
+            BEGIN
+                MENUITEM "Open file",                   ID_RECENT_DUMMY, GRAYED
+            END
+            MENUITEM "Save",                        ID_FILE_SAVE
+            MENUITEM "Next",                        ID_FILE_NEXT
+            MENUITEM "Previous",                    ID_FILE_PREV
+        END
+        MENUITEM SEPARATOR
+        POPUP "Zoom"
+        BEGIN
+            MENUITEM "1:1",                         ID_ZOOM_1
+            MENUITEM "Fit to window",               ID_ZOOM_FIT
+            MENUITEM "Shrink to fit",               ID_ZOOM_SHRINKTOFIT
+            MENUITEM "Selection",                   ID_ZOOM_SELECTION
+            MENUITEM "Center",                      ID_ZOOM_CENTER
+            MENUITEM "Reset",                       ID_ZOOM_RESET
+        END
+        POPUP "View"
+        BEGIN
+            MENUITEM "Fullscreen",                  ID_VIEW_FULLSCREEN
+            MENUITEM "Alpha",                       ID_VIEW_ALPHA
+            MENUITEM "Set background color",        ID_VIEW_SETBACKGROUNDCOLOR
+            MENUITEM "Set border color",            ID_VIEW_SETBORDERCOLOR
+            MENUITEM "Cycle grid size",             ID_VIEW_GRIDSIZE
+            MENUITEM "Fixed grid",                  ID_VIEW_FIXEDGRID
+        END
+        POPUP "Transform"
+        BEGIN
+            MENUITEM "Rotate clockwise",            ID_ROTATE_CLOCKWISE
+            MENUITEM "Rotate counter clockwise",    ID_ROTATE_COUNTER_CLOCKWISE
+            MENUITEM "Flip Horizontal",             ID_FLIP_HORIZONTAL
+            MENUITEM "Flip Vertical",               ID_FLIP_VERTICAL
+            MENUITEM "Reset",                       ID_RESET_TRANSFORM
+        END
+        POPUP "Select"
+        BEGIN
+            MENUITEM "All",                         ID_SELECT_ALL
+            MENUITEM "None",                        ID_SELECT_NONE
+            MENUITEM "Crop",                        ID_SELECT_CROP
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Copy",                        ID_COPY
+        MENUITEM "Paste",                       ID_PASTE
+        MENUITEM SEPARATOR
+        MENUITEM "Settings",                    ID_FILE_SETTINGS
+        MENUITEM "Exit",                        ID_EXIT
+    END
+END
+
+IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON MENU
+BEGIN
+    POPUP "Popup"
+    BEGIN
+        MENUITEM "Load saved settings",         ID_POPUP_SETTINGS_LOAD_SAVED
+        MENUITEM "Save settings",               ID_POPUP_SETTINGS_SAVE
+        MENUITEM SEPARATOR
+        MENUITEM "Reset to defaults",           ID_POPUP_SETTINGS_RESET_DEFAULT
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // String Table
 //
 
@@ -233,6 +307,69 @@ LANGUAGE LANG_FRENCH, SUBLANG_NEUTRAL
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Menu
+//
+
+IDR_MENU_POPUP MENU
+BEGIN
+    POPUP "Popup"
+    BEGIN
+        POPUP "Le File"
+        BEGIN
+            MENUITEM "Open",                        ID_FILE_OPEN
+            POPUP "Open recent"
+            BEGIN
+                MENUITEM "Open file",                   ID_RECENT_DUMMY, GRAYED
+            END
+            MENUITEM "Save",                        ID_FILE_SAVE
+            MENUITEM "Next",                        ID_FILE_NEXT
+            MENUITEM "Previous",                    ID_FILE_PREV
+        END
+        MENUITEM SEPARATOR
+        POPUP "Zoom"
+        BEGIN
+            MENUITEM "1:1",                         ID_ZOOM_1
+            MENUITEM "Fit to window",               ID_ZOOM_FIT
+            MENUITEM "Shrink to fit",               ID_ZOOM_SHRINKTOFIT
+            MENUITEM "Selection",                   ID_ZOOM_SELECTION
+            MENUITEM "Center",                      ID_ZOOM_CENTER
+            MENUITEM "Reset",                       ID_ZOOM_RESET
+        END
+        POPUP "View"
+        BEGIN
+            MENUITEM "Fullscreen",                  ID_VIEW_FULLSCREEN
+            MENUITEM "Alpha",                       ID_VIEW_ALPHA
+            MENUITEM "Set background color",        ID_VIEW_SETBACKGROUNDCOLOR
+            MENUITEM "Set border color",            ID_VIEW_SETBORDERCOLOR
+            MENUITEM "Cycle grid size",             ID_VIEW_GRIDSIZE
+            MENUITEM "Fixed grid",                  ID_VIEW_FIXEDGRID
+        END
+        POPUP "Transform"
+        BEGIN
+            MENUITEM "Rotate clockwise",            ID_ROTATE_CLOCKWISE
+            MENUITEM "Rotate counter clockwise",    ID_ROTATE_COUNTER_CLOCKWISE
+            MENUITEM "Flip Horizontal",             ID_FLIP_HORIZONTAL
+            MENUITEM "Flip Vertical",               ID_FLIP_VERTICAL
+            MENUITEM "Reset",                       ID_RESET_TRANSFORM
+        END
+        POPUP "Select"
+        BEGIN
+            MENUITEM "All",                         ID_SELECT_ALL
+            MENUITEM "None",                        ID_SELECT_NONE
+            MENUITEM "Crop",                        ID_SELECT_CROP
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Copy",                        ID_COPY
+        MENUITEM "Paste",                       ID_PASTE
+        MENUITEM SEPARATOR
+        MENUITEM "Settings",                    ID_FILE_SETTINGS
+        MENUITEM "Exit",                        ID_EXIT
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // String Table
 //
 
@@ -361,80 +498,6 @@ BEGIN
     "X",            ID_ZOOM_SELECTION,      VIRTKEY, NOINVERT
     "S",            ID_ZOOM_SHRINKTOFIT,    VIRTKEY, NOINVERT
     VK_SPACE,       ID_RESET_TRANSFORM,     VIRTKEY, CONTROL, NOINVERT
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Menu
-//
-
-IDR_MENU_POPUP MENU
-BEGIN
-    POPUP "Popup"
-    BEGIN
-        POPUP "File"
-        BEGIN
-            MENUITEM "Open",                        ID_FILE_OPEN
-            POPUP "Open recent"
-            BEGIN
-                MENUITEM "Open file",                   ID_RECENT_DUMMY, GRAYED
-            END
-            MENUITEM "Save",                        ID_FILE_SAVE
-            MENUITEM "Next",                        ID_FILE_NEXT
-            MENUITEM "Previous",                    ID_FILE_PREV
-        END
-        MENUITEM SEPARATOR
-        POPUP "Zoom"
-        BEGIN
-            MENUITEM "1:1",                         ID_ZOOM_1
-            MENUITEM "Fit to window",               ID_ZOOM_FIT
-            MENUITEM "Shrink to fit",               ID_ZOOM_SHRINKTOFIT
-            MENUITEM "Selection",                   ID_ZOOM_SELECTION
-            MENUITEM "Center",                      ID_ZOOM_CENTER
-            MENUITEM "Reset",                       ID_ZOOM_RESET
-        END
-        POPUP "View"
-        BEGIN
-            MENUITEM "Fullscreen",                  ID_VIEW_FULLSCREEN
-            MENUITEM "Alpha",                       ID_VIEW_ALPHA
-            MENUITEM "Set background color",        ID_VIEW_SETBACKGROUNDCOLOR
-            MENUITEM "Set border color",            ID_VIEW_SETBORDERCOLOR
-            MENUITEM "Cycle grid size",             ID_VIEW_GRIDSIZE
-            MENUITEM "Fixed grid",                  ID_VIEW_FIXEDGRID
-        END
-        POPUP "Tranform"
-        BEGIN
-            MENUITEM "Rotate clockwise",            ID_ROTATE_CLOCKWISE
-            MENUITEM "Rotate counter clockwise",    ID_ROTATE_COUNTER_CLOCKWISE
-            MENUITEM "Flip Horizontal",             ID_FLIP_HORIZONTAL
-            MENUITEM "Flip Vertical",               ID_FLIP_VERTICAL
-            MENUITEM "Reset",                       ID_RESET_TRANSFORM
-        END
-        POPUP "Select"
-        BEGIN
-            MENUITEM "All",                         ID_SELECT_ALL
-            MENUITEM "None",                        ID_SELECT_NONE
-            MENUITEM "Crop",                        ID_SELECT_CROP
-        END
-        MENUITEM SEPARATOR
-        MENUITEM "Copy",                        ID_COPY
-        MENUITEM "Paste",                       ID_PASTE
-        MENUITEM SEPARATOR
-        MENUITEM "Settings",                    ID_FILE_SETTINGS
-        MENUITEM "Exit",                        ID_EXIT
-    END
-END
-
-IDR_MENU_POPUP_SETTINGS_SPLIT_BUTTON MENU
-BEGIN
-    POPUP "Popup"
-    BEGIN
-        MENUITEM "Load saved settings",         ID_POPUP_SETTINGS_LOAD_SAVED
-        MENUITEM "Save settings",               ID_POPUP_SETTINGS_SAVE
-        MENUITEM SEPARATOR
-        MENUITEM "Reset to defaults",           ID_POPUP_SETTINGS_RESET_DEFAULT
-    END
 END
 
 

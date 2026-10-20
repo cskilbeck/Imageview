@@ -4,6 +4,11 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 shader_inc/
+build/
+out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
 
 # User-specific files
 *.rsuser

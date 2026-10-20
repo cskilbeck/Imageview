@@ -117,7 +117,7 @@ namespace
 
     HRESULT update_handler(modify_registry_type mrt, bool *check)
     {
-        // HKCU\Software\Classes\ImageView.file\DefaultIcon = REG_SZ exe_path,1
+        // HKCU\Software\Classes\ImageView.file\DefaultIcon = REG_SZ "exe_path",0
         // HKCU\Software\Classes\ImageView.file\shell\open\command = REG_SZ "exe_path" "%1"
         // HKCU\Software\Classes\{.ext ...}\ImageView.file = REG_SZ empty
 
@@ -148,7 +148,7 @@ namespace
         std::wstring exe_icon_path = std::format(L"{}\\DefaultIcon", exe_path);
 
         std::wstring command_value = std::format(L"\"{}\" \"%1\"", app_filename);
-        std::wstring icon_value = std::format(L"{},1", app_filename);
+        std::wstring icon_value = std::format(L"\"{}\",0", app_filename);
 
         CHK_HR(update_registry_value(mrt, HK, handler_icon_path, L"", icon_value, check));
         CHK_HR(update_registry_value(mrt, HK, handler_command_path, L"", command_value, check));

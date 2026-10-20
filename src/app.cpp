@@ -4321,7 +4321,6 @@ namespace
 
         CHK_HR(imageview::get_is_process_elevated(app::is_elevated));
 
-        // How much does this impact startup time?
         image::init_filetypes();
 
         main_stopwatch.report(L"init_filetypes");

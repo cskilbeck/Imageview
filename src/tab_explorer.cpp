@@ -7,6 +7,14 @@ namespace
 {
     using namespace imageview;
 
+    // these have to be zero and one, in this order
+
+    enum all_current_users_combo_id
+    {
+        current_user = 0,
+        all_users = 1
+    };
+
     //////////////////////////////////////////////////////////////////////
 
     void clear_message(HWND hwnd)
@@ -29,9 +37,6 @@ namespace
 
     void update_controls(HWND dlg)
     {
-        bool elevated = false;
-        get_is_process_elevated(elevated);
-
         uint show_elevate_button = SW_HIDE;
         bool enable_add_remove = true;
 
@@ -39,7 +44,7 @@ namespace
         bool is_installed = true;
         check_filetype_handler(is_installed);
 
-        if(!elevated && ComboBox_GetCurSel(GetDlgItem(dlg, IDC_COMBO_EXPLORER_ALL_USERS)) == 1) {
+        if(!app::is_elevated && ComboBox_GetCurSel(GetDlgItem(dlg, IDC_COMBO_EXPLORER_ALL_USERS)) == all_users) {
 
             show_elevate_button = SW_SHOW;
             enable_add_remove = false;
@@ -57,10 +62,10 @@ namespace
 
     BOOL on_initdialog_explorer(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
-        HWND all_users_combo = GetDlgItem(hwnd, IDC_COMBO_EXPLORER_ALL_USERS);
-        ComboBox_AddString(all_users_combo, localize(IDS_CURRENT_USER).c_str());    // Current User is index 0
-        ComboBox_AddString(all_users_combo, localize(IDS_ALL_USERS).c_str());       // All Users is index 1
-        ComboBox_SetCurSel(all_users_combo, 0);
+        HWND combo = GetDlgItem(hwnd, IDC_COMBO_EXPLORER_ALL_USERS);
+        ComboBox_InsertString(combo, current_user, localize(IDS_CURRENT_USER).c_str());    // Current User is index 0
+        ComboBox_InsertString(combo, all_users, localize(IDS_ALL_USERS).c_str());          // All Users is index 1
+        ComboBox_SetCurSel(combo, 0);
         update_controls(hwnd);
         return false;
     }

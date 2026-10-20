@@ -42,7 +42,7 @@ namespace imageview::file
 
         // create an async file handle
         HANDLE file_handle = CreateFileW(filename.c_str(),
-                                         GENERIC_READ | GENERIC_WRITE,
+                                         GENERIC_READ | FILE_WRITE_ATTRIBUTES,
                                          FILE_SHARE_READ,
                                          null,
                                          OPEN_EXISTING,
@@ -53,10 +53,17 @@ namespace imageview::file
         }
         DEFER(CloseHandle(file_handle));
 
-        FILETIME dummy;
-        dummy.dwLowDateTime = 0xffffffff;
-        dummy.dwHighDateTime = 0xffffffff;
-        CHK_BOOL(SetFileTime(file_handle, null, &dummy, null));
+        // SetFileTime with these values to prevent the 'last accessed' time from being
+        // updated. This is because we may be loading this file into the cache. When the
+        // file is viewed, the last access time is updated explicitly.
+        // See https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfiletime
+
+        FILETIME do_not_update_access_time_magic_values;
+
+        do_not_update_access_time_magic_values.dwLowDateTime = 0xffffffff;
+        do_not_update_access_time_magic_values.dwHighDateTime = 0xffffffff;
+
+        CHK_BOOL(SetFileTime(file_handle, null, &do_not_update_access_time_magic_values, null));
 
         // get the size of the file
         LARGE_INTEGER file_size;

@@ -103,29 +103,24 @@ namespace imageview::recent_files
                         continue;
                     }
 
-                    // can definitely load it, add it to the list
+                    // it's a supported file type, get access time (or fail if file no longer exists)
 
                     FILETIME create_time;
                     FILETIME access_time;
                     FILETIME write_time;
 
                     if(FAILED(file::get_time(full_path, create_time, access_time, write_time))) {
+                        LOG_DEBUG(L"Missing recent file shortcut {}", name);
                         continue;
                     }
+
+                    // ok, it exists, add it to the list of recent files
+
+                    LOG_DEBUG(L"RECENT FILE: {}", name);
 
                     all_files.emplace(full_path, create_time);
 
                 } while(FindNextFileW(f, &find_data));
-
-                for(auto const &ff : all_files) {
-                    SYSTEMTIME system_time;
-                    FileTimeToSystemTime(&ff.file_time, &system_time);
-                    LOG_DEBUG(L"POINTS AT {}, last accessed {}/{}/{}",
-                              ff.file_path,
-                              system_time.wDay,
-                              system_time.wMonth,
-                              system_time.wYear);
-                }
             }
             CoUninitialize();
             SetEvent(recent_files_event);
