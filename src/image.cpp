@@ -176,12 +176,10 @@ namespace
             wchar const *sep = L"";
             for(auto &e : n.second) {
 
-                std::wstring ext = std::format(L"{}*{}", sep_outer, e);
+                results.all_extensions.append(std::format(L"{}*{}", sep_outer, e));
                 sep_outer = L";";
 
-                results.all_extensions.append(ext);
-                pattern.append(ext);
-
+                pattern.append(std::format(L"{}*{}", sep, e));
                 sep = L";";
 
                 // YUCK
@@ -200,20 +198,24 @@ namespace
             results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ r.first.c_str(), r.second.c_str() });
         }
 
-        // add in "All Files" (*.*)
+        if(codec_type == WICDecoder) {
+            // add in "All Files" (*.*)
 
-        static std::wstring all_files = localize(IDS_ALL_FILES);
+            static std::wstring all_files = localize(IDS_ALL_FILES);
 
-        results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ all_files.c_str(), L"*.*" });
+            results.comdlg_filterspecs.emplace_back(COMDLG_FILTERSPEC{ all_files.c_str(), L"*.*" });
 
-        // add in "Image Files" (all supported extensions)
+            // add in "Image Files" (all supported extensions)
 
-        static std::wstring image_files = localize(IDS_IMAGE_FILES);
+            static std::wstring image_files = localize(IDS_IMAGE_FILES);
 
-        results.comdlg_filterspecs.emplace_back(
-            COMDLG_FILTERSPEC{ image_files.c_str(), results.all_extensions.c_str() });
+            results.comdlg_filterspecs.emplace_back(
+                COMDLG_FILTERSPEC{ image_files.c_str(), results.all_extensions.c_str() });
 
-        results.default_index = static_cast<uint>(results.comdlg_filterspecs.size());
+            results.default_index = static_cast<uint>(results.comdlg_filterspecs.size());
+        } else {
+            results.default_index = default_index != 0 ? default_index : 1;
+        }
 
         return S_OK;
     }
@@ -598,6 +600,7 @@ namespace imageview::image
 
         std::wstring extension;
         CHK_HR(file::get_extension(filename, extension));
+        extension = make_lowercase(extension);
 
         auto f = save_filetypes.container_formats.find(extension);
         if(f == save_filetypes.container_formats.end()) {

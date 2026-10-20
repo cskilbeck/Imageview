@@ -20,7 +20,7 @@ namespace imageview
             return { size.x - point.x, size.y - point.y };
 
         case rotation_angle_t::rotate_270:
-            return { size.x - point.y, size.y - point.x };
+            return { size.y - point.y, point.x };
         }
     }
 }

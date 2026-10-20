@@ -2994,18 +2994,27 @@ namespace
 
             vec2 ts = sub_point(texture_size(), { 1, 1 });
 
-            vec2 texel_pos = vec2::rotate(ts, p, rotation);
+            bool fh = flip_horiz;
+            bool fv = flip_vert;
 
-            if(flip_horiz) {
+            if(rotation == rotate_90 || rotation == rotate_270) {
+                std::swap(fh, fv);
+            }
+
+            vec2 texel_pos = p;
+
+            if(fh) {
                 texel_pos.x = ts.x - texel_pos.x;
             }
 
-            if(flip_vert) {
+            if(fv) {
                 texel_pos.y = ts.y - texel_pos.y;
             }
 
+            texel_pos = vec2::rotate(ts, texel_pos, rotation);
+
             byte const *pixel{ null };
-            CHK_HR(current_file->img.get_pixel(static_cast<uint>(texel_pos.x), static_cast<uint>(texel_pos.y), pixel));
+            (void)current_file->img.get_pixel(static_cast<uint>(texel_pos.x), static_cast<uint>(texel_pos.y), pixel);
 
             vec2 half_texel = mul_point(texel_size(), { 0.5f, 0.5f });
             vec2 screen_pos = add_point(texture_to_screen_pos(p), half_texel);
@@ -3550,11 +3559,11 @@ namespace
                     if(FAILED(hr)) {
                         std::wstring msg = std::format(L"{}\r\n\r\n{}\r\n\r\n{}",
                                                        localize(IDS_CANT_SAVE_FILE),
-                                                       filename,
+                                                       chosen_filename,
                                                        windows_error_message(hr));
                         message_box(window, msg, MB_ICONEXCLAMATION);
                     } else {
-                        set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), filename), 5);
+                        set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), chosen_filename), 5);
                     }
                 }
             }
@@ -4291,12 +4300,8 @@ namespace
             if(!f->is_clipboard) {
                 settings.last_file_loaded = f->filename;
 
-                // this will fail with E_ACCESSDENIED if it's on a read-only volume, that's... ok I think?
-                hr = file::set_access_time(f->filename, now);
-                if(FAILED(hr) && hr != E_ACCESSDENIED) {
-                    LOG_ERROR(L"Error setting file last access time: {}", windows_error_message(hr));
-                    return hr;
-                }
+                // best-effort: may fail on read-only files or volumes
+                (void)file::set_access_time(f->filename, now);
             }
 
             image_texture.Attach(new_texture.Detach());

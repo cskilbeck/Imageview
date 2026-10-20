@@ -74,33 +74,50 @@ namespace imageview::dialog
     {
         static uint filetype_index = 0;
 
-        COMDLG_FILTERSPEC *filter_specs = image::load_filetypes.comdlg_filterspecs.data();
+        COMDLG_FILTERSPEC *filter_specs = image::save_filetypes.comdlg_filterspecs.data();
 
-        uint num_filter_specs = static_cast<uint>(image::load_filetypes.comdlg_filterspecs.size());
+        uint num_filter_specs = static_cast<uint>(image::save_filetypes.comdlg_filterspecs.size());
 
-        uint default_index = image::load_filetypes.default_index;
+        uint default_index = image::save_filetypes.default_index;
 
         if(filetype_index != 0) {
             default_index = filetype_index;
         }
 
         std::wstring ext;
+        std::wstring name_only;
+        std::wstring folder_path;
 
-        // this is kind of janky - search for the file extension in the filter specs
+        // search for the file extension in the encoder filter specs
 
-        if(!filename.empty() && filetype_index == 0) {
+        if(!filename.empty()) {
 
+            CHK_HR(file::get_filename(filename, name_only));
+            CHK_HR(file::get_path(filename, folder_path));
             CHK_HR(file::get_extension(filename, ext));
             ext = make_lowercase(ext);
 
+            bool matched_encoder = false;
             for(uint i = 0; i < num_filter_specs; ++i) {
 
                 if(wcsstr(filter_specs[i].pszSpec, ext.c_str()) != null) {
                     default_index = i + 1;
+                    matched_encoder = true;
                     break;
                 }
             }
+            if(!matched_encoder) {
+                ext = L".png";
+                CHK_HR(file::get_barename(filename, name_only));
+                name_only += ext;
+                default_index = image::save_filetypes.default_index;
+            }
         }
+
+        if(ext.empty()) {
+            ext = L".png";
+        }
+        std::wstring default_ext = (ext.front() == L'.') ? ext.substr(1) : ext;
 
         ComPtr<IFileDialog> pfd;
         DWORD dwFlags;
@@ -115,10 +132,16 @@ namespace imageview::dialog
         CHK_HR(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)));
         CHK_HR(pfd->GetOptions(&dwFlags));
         CHK_HR(pfd->SetOptions(dwFlags | options));
-        CHK_HR(pfd->SetFileName(filename.c_str()));
+        if(!folder_path.empty()) {
+            ComPtr<IShellItem> folder_item;
+            if(SUCCEEDED(SHCreateItemFromParsingName(folder_path.c_str(), null, IID_PPV_ARGS(&folder_item)))) {
+                pfd->SetFolder(folder_item.Get());
+            }
+        }
+        CHK_HR(pfd->SetFileName(name_only.c_str()));
         CHK_HR(pfd->SetFileTypes(num_filter_specs, filter_specs));
         CHK_HR(pfd->SetFileTypeIndex(default_index));
-        CHK_HR(pfd->SetDefaultExtension(ext.c_str()));
+        CHK_HR(pfd->SetDefaultExtension(default_ext.c_str()));
         CHK_HR(pfd->SetTitle(title.c_str()));
         CHK_HR(pfd->Show(window));
         CHK_HR(pfd->GetResult(&psiResult));

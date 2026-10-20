@@ -40,14 +40,20 @@ namespace imageview::file
             return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
         }
 
-        // create an async file handle
+        // create an async file handle (try with FILE_WRITE_ATTRIBUTES first so we can preserve
+        // last-access time, falling back to GENERIC_READ for read-only files/locations)
+        DWORD const share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
         HANDLE file_handle = CreateFileW(filename.c_str(),
                                          GENERIC_READ | FILE_WRITE_ATTRIBUTES,
-                                         FILE_SHARE_READ,
+                                         share_mode,
                                          null,
                                          OPEN_EXISTING,
                                          FILE_FLAG_OVERLAPPED,
                                          null);
+        if(file_handle == INVALID_HANDLE_VALUE) {
+            file_handle = CreateFileW(
+                filename.c_str(), GENERIC_READ, share_mode, null, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, null);
+        }
         if(file_handle == INVALID_HANDLE_VALUE) {
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -63,7 +69,7 @@ namespace imageview::file
         do_not_update_access_time_magic_values.dwLowDateTime = 0xffffffff;
         do_not_update_access_time_magic_values.dwHighDateTime = 0xffffffff;
 
-        CHK_BOOL(SetFileTime(file_handle, null, &do_not_update_access_time_magic_values, null));
+        (void)SetFileTime(file_handle, null, &do_not_update_access_time_magic_values, null);
 
         // get the size of the file
         LARGE_INTEGER file_size;

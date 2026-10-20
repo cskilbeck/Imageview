@@ -46,7 +46,7 @@ namespace imageview::image
         HRESULT get_pixel(uint x, uint y, byte const *&pixel) const
         {
             if(x >= width || y >= height) {
-                return ERROR_BAD_ARGUMENTS;
+                return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
             }
             pixel = pixels + row_pitch * y + x * 4llu;
             return S_OK;
