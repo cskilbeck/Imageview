@@ -1593,6 +1593,15 @@ namespace
         clear_selection();
     }
 
+    void normalize_selection()
+    {
+        vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
+        vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
+        select_anchor = tl;
+        select_current = br;
+        selection_size = sub_point(br, tl);
+    }
+
     //////////////////////////////////////////////////////////////////////
 
     void flip(flip_type_t flip_type)
@@ -1616,19 +1625,22 @@ namespace
 
         // flip the selection visually
 
-        switch(select_flip) {
+        if(select_active) {
+            switch(select_flip) {
 
-        case flip_horizontal: {
-            vec2 t = sub_point(texture_size(), { 1, 1 });
-            select_anchor.x = t.x - select_anchor.x;
-            select_current.x = t.x - select_current.x;
-        } break;
+            case flip_horizontal: {
+                vec2 t = sub_point(texture_size(), { 1, 1 });
+                select_anchor.x = t.x - select_anchor.x;
+                select_current.x = t.x - select_current.x;
+            } break;
 
-        case flip_vertical: {
-            vec2 t = sub_point(texture_size(), { 1, 1 });
-            select_anchor.y = t.y - select_anchor.y;
-            select_current.y = t.y - select_current.y;
-        } break;
+            case flip_vertical: {
+                vec2 t = sub_point(texture_size(), { 1, 1 });
+                select_anchor.y = t.y - select_anchor.y;
+                select_current.y = t.y - select_current.y;
+            } break;
+            }
+            normalize_selection();
         }
     }
 
@@ -1656,6 +1668,7 @@ namespace
                 select_anchor = { select_anchor.y, t.x - select_anchor.x };
                 select_current = { select_current.y, t.x - select_current.x };
             }
+            normalize_selection();
         }
 
         // dimensions are swapped for any 90 degree rotation
@@ -2739,11 +2752,7 @@ namespace
                 grabbing_selection = false;
 
                 // when selection is finalized, select_anchor is top left, select_current is bottom right
-                vec2 tl = vec2::floor(vec2::min(select_anchor, select_current));
-                vec2 br = vec2::floor(vec2::max(select_anchor, select_current));
-                select_anchor = tl;
-                select_current = br;
-                selection_size = sub_point(br, tl);
+                normalize_selection();
             }
         }
     }
