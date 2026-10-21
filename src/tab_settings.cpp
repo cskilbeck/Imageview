@@ -209,6 +209,9 @@ namespace
     BOOL on_initdialog_settings_container(HWND hwnd, HWND hwndFocus, LPARAM lParam)
     {
         // create the list of settings controllers
+        for(auto c : controllers) {
+            delete c;
+        }
         controllers.clear();
         section_setting::sections.clear();
 

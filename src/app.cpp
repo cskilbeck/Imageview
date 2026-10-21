@@ -4593,6 +4593,10 @@ namespace
 
             if(PeekMessageW(&msg, null, 0, 0, PM_REMOVE)) {
 
+                if(settings_ui::handle_dialog_message(&msg)) {
+                    continue;
+                }
+
                 if(msg.hwnd != window || !TranslateAcceleratorW(window, hotkeys::accelerators, &msg)) {
 
                     TranslateMessage(&msg);

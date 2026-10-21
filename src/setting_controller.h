@@ -12,6 +12,8 @@ namespace imageview::settings_ui
         {
         }
 
+        virtual ~setting_controller() = default;
+
         // internal name of the setting
         wchar const *internal_name;
 

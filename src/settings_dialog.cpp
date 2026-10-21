@@ -255,12 +255,38 @@ namespace imageview::settings_ui
         if(settings_dlg == null) {
             CHK_NULL(settings_dlg = CreateDialogParamW(
                          app::instance, MAKEINTRESOURCEW(IDD_DIALOG_SETTINGS), null, main_dlgproc, tab_id));
+        } else {
+            HWND tab_ctrl = GetDlgItem(settings_dlg, IDC_SETTINGS_TAB_CONTROL);
+            for(auto t : active_tabs) {
+                if(t->resource_id == tab_id) {
+                    show_current_page(settings_dlg, SW_HIDE);
+                    TabCtrl_SetCurSel(tab_ctrl, t->index);
+                    show_current_page(settings_dlg, SW_SHOW);
+                    break;
+                }
+            }
         }
         ShowWindow(settings_dlg, SW_SHOW);
         BringWindowToTop(settings_dlg);
         SwitchToThisWindow(settings_dlg, true);
 
         return S_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    bool handle_dialog_message(MSG *msg)
+    {
+        if(settings_dlg != null && msg != null) {
+            if(msg->message == WM_KEYDOWN && msg->wParam == VK_ESCAPE &&
+               (msg->hwnd == settings_dlg || IsChild(settings_dlg, msg->hwnd))) {
+                if(SendMessageW(msg->hwnd, CB_GETDROPPEDSTATE, 0, 0) == 0) {
+                    SendMessageW(settings_dlg, WM_COMMAND, MAKEWPARAM(IDCANCEL, 0), 0);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     //////////////////////////////////////////////////////////////////////
