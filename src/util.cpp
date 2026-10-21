@@ -494,14 +494,15 @@ namespace imageview
     {
         SetLastError(0);
 
+        size_t bytes = (string.size() + 1) * sizeof(wchar);
+
         HANDLE handle;
-        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, string.size() * sizeof(wchar)));
+        CHK_NULL(handle = GlobalAlloc(GHND | GMEM_SHARE, bytes));
 
         wchar *buffer;
         CHK_NULL(buffer = reinterpret_cast<wchar *>(GlobalLock(handle)));
-        DEFER(GlobalUnlock(handle));
-
-        memcpy(buffer, string.c_str(), (string.size() + 1) * sizeof(wchar));
+        memcpy(buffer, string.c_str(), bytes);
+        GlobalUnlock(handle);
 
         CHK_BOOL(OpenClipboard(null));
         DEFER(CloseClipboard());
