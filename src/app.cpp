@@ -2724,6 +2724,7 @@ namespace
                 if(x_distance < hover_wide && y_distance < hover_high) {
 
                     HMENU menu = LoadMenu(app::instance, MAKEINTRESOURCE(IDR_MENU_POPUP));
+                    DEFER(DestroyMenu(menu));
                     HMENU popup_menu = GetSubMenu(menu, 0);
                     POINT screen_pos{ click_pos.x, click_pos.y };
                     ClientToScreen(window, &screen_pos);
@@ -2744,7 +2745,7 @@ namespace
                     dummy_info.fMask = MIIM_ID;
                     if(GetMenuItemInfoW(menu, ID_RECENT_DUMMY, MF_BYCOMMAND, &dummy_info) == 0) {
                         log_win32_error(L"GetMenuItemInfoW");
-                    } else {
+                    } else if(!recent_files_list.empty()) {
                         uint index = ID_RECENT_FILE_00;
                         MENUITEMINFOW recent_info;
                         mem_clear(&recent_info);
@@ -3609,6 +3610,9 @@ namespace
                                                        windows_error_message(hr));
                         message_box(window, msg, MB_ICONEXCLAMATION);
                     } else {
+                        FILETIME now;
+                        GetSystemTimeAsFileTime(&now);
+                        recent_files::add(chosen_filename, now);
                         set_message(std::format(L"{} {}", localize(IDS_SAVED_FILE), chosen_filename), 5);
                     }
                 }
@@ -4348,6 +4352,7 @@ namespace
 
                 // best-effort: may fail on read-only files or volumes
                 (void)file::set_access_time(f->filename, now);
+                recent_files::add(f->filename, now);
             }
 
             image_texture.Attach(new_texture.Detach());

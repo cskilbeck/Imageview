@@ -15,13 +15,31 @@ namespace
 
         bool operator<(recent_file_t const &o) const
         {
-            return CompareFileTime(&file_time, &o.file_time) > 0;    // reverse so newest first
+            int cmp = CompareFileTime(&file_time, &o.file_time);
+            if(cmp != 0) {
+                return cmp > 0;    // reverse so newest first
+            }
+            return _wcsicmp(file_path.c_str(), o.file_path.c_str()) < 0;
         };
     };
 
     HANDLE recent_files_event;
     std::mutex recent_files_mutex;
     std::set<recent_file_t> all_files;
+
+    void insert_or_update_recent_file(std::wstring const &full_path, FILETIME const &time)
+    {
+        for(auto it = all_files.begin(); it != all_files.end(); ++it) {
+            if(_wcsicmp(it->file_path.c_str(), full_path.c_str()) == 0) {
+                if(CompareFileTime(&time, &it->file_time) > 0) {
+                    all_files.erase(it);
+                    all_files.emplace(full_path, time);
+                }
+                return;
+            }
+        }
+        all_files.emplace(full_path, time);
+    }
 }
 
 namespace imageview::recent_files
@@ -39,6 +57,8 @@ namespace imageview::recent_files
         std::thread([]() {
 
             (void)CoInitialize(null);
+            DEFER(CoUninitialize());
+            DEFER(SetEvent(recent_files_event));
 
             PWSTR recent_file_path;
 
@@ -60,6 +80,8 @@ namespace imageview::recent_files
                 wild_path, FindExInfoBasic, &find_data, FindExSearchNameMatch, null, FIND_FIRST_EX_LARGE_FETCH);
 
             if(f != INVALID_HANDLE_VALUE) {
+
+                DEFER(FindClose(f));
 
                 do {
 
@@ -91,7 +113,7 @@ namespace imageview::recent_files
                     std::wstring path = std::format(L"{}\\{}", recent_file_path, find_data.cFileName);
 
                     std::wstring full_path;
-                    if(FAILED(file::path_from_shortcut(path, full_path)) && file::exists(full_path)) {
+                    if(FAILED(file::path_from_shortcut(path, full_path)) || !file::exists(full_path)) {
                         continue;
                     }
 
@@ -99,7 +121,7 @@ namespace imageview::recent_files
                         continue;
                     }
 
-                    if(FAILED(image::can_load_file_extension(extension, supported)) && supported) {
+                    if(FAILED(image::can_load_file_extension(extension, supported)) || !supported) {
                         continue;
                     }
 
@@ -114,16 +136,19 @@ namespace imageview::recent_files
                         continue;
                     }
 
-                    // ok, it exists, add it to the list of recent files
+                    // ok, it exists, add it to the list of recent files using the most recent
+                    // of the target file's access time or the shortcut's modification time
 
                     LOG_DEBUG(L"RECENT FILE: {}", name);
 
-                    all_files.emplace(full_path, create_time);
+                    FILETIME recent_time = (CompareFileTime(&access_time, &find_data.ftLastWriteTime) > 0)
+                                               ? access_time
+                                               : find_data.ftLastWriteTime;
+
+                    insert_or_update_recent_file(full_path, recent_time);
 
                 } while(FindNextFileW(f, &find_data));
             }
-            CoUninitialize();
-            SetEvent(recent_files_event);
         })
             .detach();
     }
@@ -133,6 +158,22 @@ namespace imageview::recent_files
     void wait_for_recent_files()
     {
         WaitForSingleObject(recent_files_event, INFINITE);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void add(std::wstring const &filename, FILETIME const &access_time)
+    {
+        if(filename.empty()) {
+            return;
+        }
+
+        {
+            auto rflock = std::lock_guard{ recent_files_mutex };
+            insert_or_update_recent_file(filename, access_time);
+        }
+
+        SHAddToRecentDocs(SHARD_PATHW, filename.c_str());
     }
 
     //////////////////////////////////////////////////////////////////////

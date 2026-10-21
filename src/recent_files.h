@@ -8,7 +8,7 @@ namespace imageview::recent_files
 
     void wait_for_recent_files();
 
-    HRESULT get_files(std::vector<std::wstring> &filenames);
+    void add(std::wstring const &filename, FILETIME const &access_time);
 
-    HRESULT get_full_path(uint index);
+    HRESULT get_files(std::vector<std::wstring> &filenames);
 };
