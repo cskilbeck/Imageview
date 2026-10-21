@@ -99,7 +99,7 @@ namespace
     {
         wchar *ep;
         uint x = std::wcstoul(value.c_str(), &ep, 10);
-        if(ep != value.c_str() || *ep != 0) {
+        if(ep != value.c_str() && *ep == 0) {
             setting = x;
             return S_OK;
         }
@@ -112,7 +112,7 @@ namespace
     {
         wchar *ep;
         int x = std::wcstol(value.c_str(), &ep, 10);
-        if(ep != value.c_str() || *ep != 0) {
+        if(ep != value.c_str() && *ep == 0) {
             setting = x;
             return S_OK;
         }
